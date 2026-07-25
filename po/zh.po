@@ -93,9 +93,9 @@ msgstr ""
 "  yai repo update [名称]\n"
 
 msgid ""
-"  yai repo remove <name-or-pattern>\n"
+"  yai repo remove <name-or-pattern> [--yes]\n"
 msgstr ""
-"  yai repo remove <名称-或-模式>\n"
+"  yai repo remove <名称-或-模式> [--yes]\n"
 
 msgid ""
 "  yai mirror list\n"
@@ -143,9 +143,9 @@ msgstr ""
 "              [--downloader auto|curl|wget|wget2|aria2c]\n"
 
 msgid ""
-"              [--jobs <n>]\n"
+"              [--jobs <n>] [--yes|-y]\n"
 msgstr ""
-"              [--jobs <n>]\n"
+"              [--jobs <n>] [--yes|-y]\n"
 
 msgid ""
 "  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
@@ -163,14 +163,14 @@ msgstr ""
 "  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
 
 msgid ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 msgstr ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 
 msgid ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 msgstr ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 
 msgid ""
 "  yai doctor\n"
@@ -178,9 +178,9 @@ msgstr ""
 "  yai doctor\n"
 
 msgid ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 msgstr ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 
 msgid ""
 "  yai list\n"
@@ -200,14 +200,24 @@ msgstr ""
 "语言：默认跟随系统 locale；设置 YAI_LANG=zh 或 YAI_LANG=en 可强制指定。\n"
 
 msgid ""
-"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+"Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\n"
 msgstr ""
-"包名/id 参数支持加引号的 * 和 ? 通配符，但必须只匹配一个包。\n"
+"包名/id/包源名参数支持加引号的 * 和 ? 通配符；多个匹配项按排序顺序执行。\n"
 
 msgid ""
-"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+"Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n"
 msgstr ""
-"install/download 支持多个目标；--jobs 控制并发任务数。--id/--name 只适用于单个安装。\n"
+"有副作用的命令在匹配数大于 1 时会列出匹配项并确认；使用 --yes/-y 可跳过。零匹配仍会失败。\n"
+
+msgid ""
+"install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n"
+msgstr ""
+"install/download 的多个 argv 目标可并行执行（--jobs）；通配符展开的批次改为顺序执行。\n"
+
+msgid ""
+"--id/--name are single-install only.\n"
+msgstr ""
+"--id/--name 仅适用于单个 install。\n"
 
 msgid " requires a value"
 msgstr " 需要一个值"
@@ -291,9 +301,6 @@ msgstr "包尚未安装："
 msgid "package pattern matched no installed packages: "
 msgstr "包名模式未匹配到已安装的包："
 
-msgid "package pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "包名模式不唯一：{pattern}（匹配到：{matches}）"
-
 msgid "Mode: "
 msgstr "运行模式："
 
@@ -359,6 +366,17 @@ msgstr "repair 失败：找不到可运行模式"
 msgid "repair requires exactly one package id"
 msgstr "repair 恰好需要一个包 id"
 
+msgid "unknown repair option: "
+msgstr "未知的 repair 选项："
+
+msgid "Repair {count} package(s)? [y/N] "
+msgstr "要修复 {count} 个包吗？[y/N] "
+
+msgid ""
+"Repair cancelled\n"
+msgstr ""
+"修复已取消\n"
+
 msgid "Repaired "
 msgstr "已修复 "
 
@@ -379,6 +397,17 @@ msgstr "恢复回滚元数据"
 
 msgid "rollback requires exactly one package id"
 msgstr "rollback 恰好需要一个包 id"
+
+msgid "unknown rollback option: "
+msgstr "未知的 rollback 选项："
+
+msgid "Roll back {count} package(s)? [y/N] "
+msgstr "要回滚 {count} 个包吗？[y/N] "
+
+msgid ""
+"Rollback cancelled\n"
+msgstr ""
+"回滚已取消\n"
 
 msgid "Rolled back "
 msgstr "已回滚 "
@@ -495,6 +524,17 @@ msgstr "正在删除已安装包文件"
 msgid "remove requires exactly one package id"
 msgstr "remove 恰好需要一个包 id"
 
+msgid "unknown remove option: "
+msgstr "未知的 remove 选项："
+
+msgid "Remove {count} package(s)? [y/N] "
+msgstr "要移除 {count} 个包吗？[y/N] "
+
+msgid ""
+"Remove cancelled\n"
+msgstr ""
+"移除已取消\n"
+
 msgid "removing installed package directory"
 msgstr "正在删除已安装包目录"
 
@@ -582,6 +622,17 @@ msgstr "repo 需要子命令：list、add、update 或 remove"
 msgid "repo remove requires a name or pattern"
 msgstr "repo remove 需要名称或模式"
 
+msgid "unknown repo remove option: "
+msgstr "未知的 repo remove 选项："
+
+msgid "Remove {count} repo(s)? [y/N] "
+msgstr "移除 {count} 个包源？[y/N] "
+
+msgid ""
+"Repo remove cancelled\n"
+msgstr ""
+"已取消移除包源\n"
+
 msgid "Removed repo "
 msgstr "已移除包源 "
 
@@ -590,9 +641,6 @@ msgstr "无法删除包源缓存 "
 
 msgid "repo pattern matched no configured repos: "
 msgstr "包源模式未匹配到已配置包源："
-
-msgid "repo pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "包源模式不唯一：{pattern}（匹配：{matches}）"
 
 msgid "unknown repo subcommand: "
 msgstr "未知的 repo 子命令："
@@ -829,6 +877,22 @@ msgstr " 至少需要一个目标"
 msgid "batch install cannot use --id or --name with multiple targets"
 msgstr "批量 install 不能在多个目标时使用 --id 或 --name"
 
+msgid "Download {count} package(s)? [y/N] "
+msgstr "下载 {count} 个包？[y/N] "
+
+msgid "Install {count} package(s)? [y/N] "
+msgstr "安装 {count} 个包？[y/N] "
+
+msgid ""
+"Download cancelled\n"
+msgstr ""
+"已取消下载\n"
+
+msgid ""
+"Install cancelled\n"
+msgstr ""
+"已取消安装\n"
+
 msgid "yai: running "
 msgstr "yai：正在运行 "
 
@@ -845,6 +909,9 @@ msgstr "yai："
 
 msgid "yai: task failed: {command} {target} (exit {code})\n"
 msgstr "yai：任务失败：{command} {target}（退出码 {code}）\n"
+
+msgid "batch stopped after task failure"
+msgstr "任务失败，批处理已停止"
 
 msgid "{failed} of {total} batch task(s) failed"
 msgstr "{failed}/{total} 个批量任务失败"

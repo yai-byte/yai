@@ -52,17 +52,25 @@ void print_package_source_info(const RepoPackage& package) {
         print_package_source_reason(package);
     }
 }
+
+void print_package_info(const RepoPackage& package) {
+    std::cout << tr("Id: ") << package.id << "\n";
+    std::cout << tr("Name: ") << package.name << "\n";
+    std::cout << tr("Summary: ") << package.summary << "\n";
+    std::cout << tr("Homepage: ") << package.homepage << "\n";
+    std::cout << tr("License: ") << package.license << "\n";
+    print_package_source_info(package);
+    if (!package.asset_pattern.empty()) {
+        std::cout << tr("Asset pattern: ") << package.asset_pattern << "\n";
+    }
+}
 } // namespace
 
 void remove_if_exists(const fs::path& path) {
     remove_required(path, tr("removing installed package file"));
 }
 
-void remove_app(int argc, char** argv) {
-    if (argc != 3) {
-        throw std::runtime_error(tr("remove requires exactly one package id"));
-    }
-    const std::string id = resolve_installed_package_id(argv[2]);
+void remove_installed_id(const std::string& id) {
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
         throw std::runtime_error(tr("package is not installed: ") + id);
@@ -75,6 +83,39 @@ void remove_app(int argc, char** argv) {
 
     run_process({"update-desktop-database", paths.desktop.parent_path().string()});
     std::cout << tr("Removed ") << id << "\n";
+}
+
+void remove_app(int argc, char** argv) {
+    bool yes = false;
+    std::string pattern;
+    for (int i = 2; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--yes" || arg == "-y") {
+            yes = true;
+        } else if (pattern.empty() && arg.rfind("--", 0) != 0) {
+            pattern = arg;
+        } else {
+            throw std::runtime_error(tr("unknown remove option: ") + arg);
+        }
+    }
+    if (pattern.empty()) {
+        throw std::runtime_error(tr("remove requires exactly one package id"));
+    }
+
+    const std::vector<std::string> ids = resolve_installed_package_ids(pattern);
+    if (ids.size() > 1) {
+        const std::string prompt = tr_format(
+            "Remove {count} package(s)? [y/N] ",
+            {{"{count}", std::to_string(ids.size())}});
+        if (!confirm_multi_match(prompt, ids, yes)) {
+            std::cout << tr("Remove cancelled\n");
+            return;
+        }
+    }
+
+    for (const std::string& id : ids) {
+        remove_installed_id(id);
+    }
 }
 
 void list_apps() {
@@ -124,18 +165,15 @@ void info_package(int argc, char** argv) {
         throw std::runtime_error(tr("info requires exactly one package id"));
     }
     const std::string id = argv[2];
-    const std::optional<RepoPackage> package = find_repo_package(id);
-    if (!package.has_value()) {
+    const std::vector<RepoPackage> packages = find_repo_packages(id);
+    if (packages.empty()) {
         throw std::runtime_error(tr("package not found in repo index: ") + id);
     }
 
-    std::cout << tr("Id: ") << package->id << "\n";
-    std::cout << tr("Name: ") << package->name << "\n";
-    std::cout << tr("Summary: ") << package->summary << "\n";
-    std::cout << tr("Homepage: ") << package->homepage << "\n";
-    std::cout << tr("License: ") << package->license << "\n";
-    print_package_source_info(*package);
-    if (!package->asset_pattern.empty()) {
-        std::cout << tr("Asset pattern: ") << package->asset_pattern << "\n";
+    for (std::size_t i = 0; i < packages.size(); ++i) {
+        if (i > 0) {
+            std::cout << "\n";
+        }
+        print_package_info(packages[i]);
     }
 }

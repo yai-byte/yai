@@ -93,9 +93,9 @@ msgstr ""
 "  yai repo update [name]\n"
 
 msgid ""
-"  yai repo remove <name-or-pattern>\n"
+"  yai repo remove <name-or-pattern> [--yes]\n"
 msgstr ""
-"  yai repo remove <name-or-pattern>\n"
+"  yai repo remove <name-or-pattern> [--yes]\n"
 
 msgid ""
 "  yai mirror list\n"
@@ -143,9 +143,9 @@ msgstr ""
 "              [--downloader auto|curl|wget|wget2|aria2c]\n"
 
 msgid ""
-"              [--jobs <n>]\n"
+"              [--jobs <n>] [--yes|-y]\n"
 msgstr ""
-"              [--jobs <n>]\n"
+"              [--jobs <n>] [--yes|-y]\n"
 
 msgid ""
 "  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
@@ -163,14 +163,14 @@ msgstr ""
 "  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
 
 msgid ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 msgstr ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 
 msgid ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 msgstr ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 
 msgid ""
 "  yai doctor\n"
@@ -178,9 +178,9 @@ msgstr ""
 "  yai doctor\n"
 
 msgid ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 msgstr ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 
 msgid ""
 "  yai list\n"
@@ -200,14 +200,24 @@ msgstr ""
 "Language: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n"
 
 msgid ""
-"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+"Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\n"
 msgstr ""
-"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+"Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\n"
 
 msgid ""
-"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+"Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n"
 msgstr ""
-"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+"Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n"
+
+msgid ""
+"install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n"
+msgstr ""
+"install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n"
+
+msgid ""
+"--id/--name are single-install only.\n"
+msgstr ""
+"--id/--name are single-install only.\n"
 
 msgid " requires a value"
 msgstr " requires a value"
@@ -291,9 +301,6 @@ msgstr "package is not installed: "
 msgid "package pattern matched no installed packages: "
 msgstr "package pattern matched no installed packages: "
 
-msgid "package pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "package pattern is ambiguous: {pattern} (matches: {matches})"
-
 msgid "Mode: "
 msgstr "Mode: "
 
@@ -359,6 +366,17 @@ msgstr "repair failed: no runnable mode found"
 msgid "repair requires exactly one package id"
 msgstr "repair requires exactly one package id"
 
+msgid "unknown repair option: "
+msgstr "unknown repair option: "
+
+msgid "Repair {count} package(s)? [y/N] "
+msgstr "Repair {count} package(s)? [y/N] "
+
+msgid ""
+"Repair cancelled\n"
+msgstr ""
+"Repair cancelled\n"
+
 msgid "Repaired "
 msgstr "Repaired "
 
@@ -379,6 +397,17 @@ msgstr "restoring rollback metadata"
 
 msgid "rollback requires exactly one package id"
 msgstr "rollback requires exactly one package id"
+
+msgid "unknown rollback option: "
+msgstr "unknown rollback option: "
+
+msgid "Roll back {count} package(s)? [y/N] "
+msgstr "Roll back {count} package(s)? [y/N] "
+
+msgid ""
+"Rollback cancelled\n"
+msgstr ""
+"Rollback cancelled\n"
 
 msgid "Rolled back "
 msgstr "Rolled back "
@@ -495,6 +524,17 @@ msgstr "removing installed package file"
 msgid "remove requires exactly one package id"
 msgstr "remove requires exactly one package id"
 
+msgid "unknown remove option: "
+msgstr "unknown remove option: "
+
+msgid "Remove {count} package(s)? [y/N] "
+msgstr "Remove {count} package(s)? [y/N] "
+
+msgid ""
+"Remove cancelled\n"
+msgstr ""
+"Remove cancelled\n"
+
 msgid "removing installed package directory"
 msgstr "removing installed package directory"
 
@@ -582,6 +622,17 @@ msgstr "repo requires a subcommand: list, add, update, or remove"
 msgid "repo remove requires a name or pattern"
 msgstr "repo remove requires a name or pattern"
 
+msgid "unknown repo remove option: "
+msgstr "unknown repo remove option: "
+
+msgid "Remove {count} repo(s)? [y/N] "
+msgstr "Remove {count} repo(s)? [y/N] "
+
+msgid ""
+"Repo remove cancelled\n"
+msgstr ""
+"Repo remove cancelled\n"
+
 msgid "Removed repo "
 msgstr "Removed repo "
 
@@ -590,9 +641,6 @@ msgstr "failed to remove repo cache "
 
 msgid "repo pattern matched no configured repos: "
 msgstr "repo pattern matched no configured repos: "
-
-msgid "repo pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "repo pattern is ambiguous: {pattern} (matches: {matches})"
 
 msgid "unknown repo subcommand: "
 msgstr "unknown repo subcommand: "
@@ -829,6 +877,22 @@ msgstr " requires at least one target"
 msgid "batch install cannot use --id or --name with multiple targets"
 msgstr "batch install cannot use --id or --name with multiple targets"
 
+msgid "Download {count} package(s)? [y/N] "
+msgstr "Download {count} package(s)? [y/N] "
+
+msgid "Install {count} package(s)? [y/N] "
+msgstr "Install {count} package(s)? [y/N] "
+
+msgid ""
+"Download cancelled\n"
+msgstr ""
+"Download cancelled\n"
+
+msgid ""
+"Install cancelled\n"
+msgstr ""
+"Install cancelled\n"
+
 msgid "yai: running "
 msgstr "yai: running "
 
@@ -845,6 +909,9 @@ msgstr "yai: "
 
 msgid "yai: task failed: {command} {target} (exit {code})\n"
 msgstr "yai: task failed: {command} {target} (exit {code})\n"
+
+msgid "batch stopped after task failure"
+msgstr "batch stopped after task failure"
 
 msgid "{failed} of {total} batch task(s) failed"
 msgstr "{failed} of {total} batch task(s) failed"

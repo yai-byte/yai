@@ -224,7 +224,7 @@ void update_app(int argc, char** argv) {
     }
 
     if (argc == 3) {
-        print_update_preview_row(build_update_preview(resolve_installed_package_id(argv[2])));
+        print_update_previews(build_update_previews(resolve_installed_package_ids(argv[2])));
         return;
     }
 

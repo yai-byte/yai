@@ -78,7 +78,7 @@ std::string unsupported_update_reason(const std::string& source_kind) {
 }
 
 UpdateContext load_update_context(const InstallOptions& options) {
-    const std::string id = resolve_installed_package_id(options.target);
+    const std::string id = options.target;
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
         throw std::runtime_error(tr("package is not installed: ") + id);
@@ -407,5 +407,17 @@ void upgrade_app(int argc, char** argv) {
         return;
     }
 
-    upgrade_installed_target(command.options);
+    const std::vector<std::string> ids = resolve_installed_package_ids(command.options.target);
+    if (ids.size() > 1) {
+        const std::string prompt = yes_no_prompt_text(ids.size());
+        if (!confirm_multi_match(prompt, ids, command.yes)) {
+            std::cout << tr("Upgrade cancelled\n");
+            return;
+        }
+    }
+    for (const std::string& id : ids) {
+        InstallOptions options = command.options;
+        options.target = id;
+        upgrade_installed_target(options);
+    }
 }

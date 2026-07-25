@@ -128,12 +128,7 @@ void repo_update_app(int argc, char** argv) {
     print_repo_update_result(fetched.size());
 }
 
-void repo_remove_app(int argc, char** argv) {
-    if (argc != 4) {
-        throw std::runtime_error(tr("repo remove requires a name or pattern"));
-    }
-
-    const std::string name = resolve_configured_repo_name(argv[3]);
+void remove_one_repo(const std::string& name) {
     std::vector<RepoEntry> entries = load_repo_entries();
     std::vector<RepoEntry> remaining;
     remaining.reserve(entries.size());
@@ -151,6 +146,38 @@ void repo_remove_app(int argc, char** argv) {
     write_repo_entries(remaining);
     remove_repo_cache_if_exists(named_repo_index_path(name));
     std::cout << tr("Removed repo ") << name << "\n";
+}
+
+void repo_remove_app(int argc, char** argv) {
+    bool yes = false;
+    std::string pattern;
+    for (int i = 3; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--yes" || arg == "-y") {
+            yes = true;
+        } else if (pattern.empty() && arg.rfind("--", 0) != 0) {
+            pattern = arg;
+        } else {
+            throw std::runtime_error(tr("unknown repo remove option: ") + arg);
+        }
+    }
+    if (pattern.empty()) {
+        throw std::runtime_error(tr("repo remove requires a name or pattern"));
+    }
+
+    const std::vector<std::string> names = resolve_configured_repo_names(pattern);
+    if (names.size() > 1) {
+        const std::string prompt = tr_format(
+            "Remove {count} repo(s)? [y/N] ",
+            {{"{count}", std::to_string(names.size())}});
+        if (!confirm_multi_match(prompt, names, yes)) {
+            std::cout << tr("Repo remove cancelled\n");
+            return;
+        }
+    }
+    for (const std::string& name : names) {
+        remove_one_repo(name);
+    }
 }
 
 void repo_app(int argc, char** argv) {

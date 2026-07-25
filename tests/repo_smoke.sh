@@ -169,11 +169,17 @@ grep -q "repo not configured: nosuch" "$TMP_HOME/remove-missing.err"
 
 HOME="$TMP_HOME" "$ROOT/yai" repo add alpha "$TMP_HOME/remove-source.json"
 HOME="$TMP_HOME" "$ROOT/yai" repo add abelian "$SOURCE_INDEX"
-if HOME="$TMP_HOME" "$ROOT/yai" repo remove 'a*' 2>"$TMP_HOME/remove-ambiguous.err"; then
-  echo "expected ambiguous repo remove to fail" >&2
+# decline confirm: no change
+printf 'n\n' | HOME="$TMP_HOME" "$ROOT/yai" repo remove 'a*' >"$TMP_HOME/remove-cancel.out" 2>"$TMP_HOME/remove-cancel.err" || true
+grep -q "alpha" <<<"$(HOME="$TMP_HOME" "$ROOT/yai" repo list)"
+grep -q "abelian" <<<"$(HOME="$TMP_HOME" "$ROOT/yai" repo list)"
+HOME="$TMP_HOME" "$ROOT/yai" repo remove 'a*' --yes | tee "$TMP_HOME/remove-multi.out" >/dev/null
+grep -q "Removed repo alpha" "$TMP_HOME/remove-multi.out"
+grep -q "Removed repo abelian" "$TMP_HOME/remove-multi.out"
+if HOME="$TMP_HOME" "$ROOT/yai" repo list | grep -Eq $'^(alpha|abelian)\t'; then
+  echo "expected alpha and abelian removed" >&2
   exit 1
 fi
-grep -q "repo pattern is ambiguous:" "$TMP_HOME/remove-ambiguous.err"
 
 # dropme already removed; pattern should fail with no match
 if HOME="$TMP_HOME" "$ROOT/yai" repo remove 'drop*' 2>"$TMP_HOME/remove-nomatch.err"; then
@@ -182,6 +188,7 @@ if HOME="$TMP_HOME" "$ROOT/yai" repo remove 'drop*' 2>"$TMP_HOME/remove-nomatch.
 fi
 grep -q "repo pattern matched no configured repos:" "$TMP_HOME/remove-nomatch.err"
 
+HOME="$TMP_HOME" "$ROOT/yai" repo add alpha "$TMP_HOME/remove-source.json"
 HOME="$TMP_HOME" "$ROOT/yai" repo remove 'alp*' | grep -q "Removed repo alpha"
 if HOME="$TMP_HOME" "$ROOT/yai" repo list | grep -q $'alpha\t'; then
   echo "expected alpha to be removed via glob" >&2

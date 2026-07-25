@@ -12,6 +12,9 @@ struct BatchCommand {
     std::size_t jobs = 0;
     bool requested = false;
     bool install_identity_explicit = false;
+    bool yes = false;
+    bool expanded_multi = false;
+    bool cancelled = false;
 };
 
 struct BatchResult {
@@ -78,6 +81,11 @@ BatchCommand parse_batch_command(int argc, char** argv) {
             batch.requested = true;
             continue;
         }
+        if (arg == "--yes" || arg == "-y") {
+            batch.yes = true;
+            batch.option_args.push_back(arg);
+            continue;
+        }
         if (batch_option_takes_value(batch.command, arg)) {
             if (++i >= argc) {
                 throw std::runtime_error(arg + tr(" requires a value"));
@@ -97,6 +105,24 @@ BatchCommand parse_batch_command(int argc, char** argv) {
         batch.targets.push_back(arg);
     }
 
+    std::vector<std::string> expanded_targets;
+    for (const std::string& target : batch.targets) {
+        // Only repo-id style globs expand here. URLs (including ?query), GitHub
+        // owner/repo, and local AppImage paths must stay as ordinary targets.
+        if (!has_glob_wildcards(target) || !looks_like_repo_package_target(target)) {
+            expanded_targets.push_back(target);
+            continue;
+        }
+        const std::vector<RepoPackage> packages = find_repo_packages(target);
+        if (packages.size() > 1) {
+            batch.expanded_multi = true;
+        }
+        for (const RepoPackage& package : packages) {
+            expanded_targets.push_back(package.id);
+        }
+    }
+    batch.targets = std::move(expanded_targets);
+
     if (batch.targets.size() > 1) {
         batch.requested = true;
     }
@@ -108,6 +134,22 @@ BatchCommand parse_batch_command(int argc, char** argv) {
     }
     if (batch.command == "install" && batch.targets.size() > 1 && batch.install_identity_explicit) {
         throw std::runtime_error(tr("batch install cannot use --id or --name with multiple targets"));
+    }
+    if (batch.expanded_multi) {
+        const std::string prompt = tr_format(
+            batch.command == "download"
+                ? "Download {count} package(s)? [y/N] "
+                : "Install {count} package(s)? [y/N] ",
+            {{"{count}", std::to_string(batch.targets.size())}});
+        if (!confirm_multi_match(prompt, batch.targets, batch.yes)) {
+            std::cout << (batch.command == "download"
+                              ? tr("Download cancelled\n")
+                              : tr("Install cancelled\n"));
+            batch.cancelled = true;
+            return batch;
+        }
+        batch.jobs = 1;
+        return batch;
     }
     if (batch.jobs == 0) {
         const unsigned int hardware = std::thread::hardware_concurrency();
@@ -134,6 +176,44 @@ void run_batch_command(const BatchCommand& batch) {
               << batch.targets.size() << " " << batch.command
               << tr(" task(s) with ")
               << batch.jobs << tr(" job(s)\n");
+
+    if (batch.expanded_multi) {
+        for (std::size_t i = 0; i < batch.targets.size(); ++i) {
+            const std::string& target = batch.targets[i];
+            ProcessOutput output;
+            try {
+                output = run_process_capture_separate(
+                    batch_child_args(batch, target),
+                    std::nullopt,
+                    {{"YAI_BATCH_CHILD", "1"}});
+            } catch (const std::exception& ex) {
+                output = ProcessOutput{1, "", ex.what()};
+            }
+            std::cerr << "[" << (i + 1) << "/" << batch.targets.size() << "] "
+                      << batch.command << " " << target << "\n";
+            if (!output.stderr_text.empty()) {
+                std::cerr << output.stderr_text;
+                if (output.stderr_text.back() != '\n') {
+                    std::cerr << "\n";
+                }
+            }
+            if (!output.stdout_text.empty()) {
+                std::cout << output.stdout_text;
+                if (output.stdout_text.back() != '\n') {
+                    std::cout << "\n";
+                }
+            }
+            if (output.exit_code != 0) {
+                std::cerr << tr_format(
+                    "yai: task failed: {command} {target} (exit {code})\n",
+                    {{"{command}", batch.command},
+                     {"{target}", target},
+                     {"{code}", std::to_string(output.exit_code)}});
+                throw std::runtime_error(tr("batch stopped after task failure"));
+            }
+        }
+        return;
+    }
 
     std::vector<BatchResult> results(batch.targets.size());
     std::atomic<std::size_t> next{0};
@@ -224,6 +304,9 @@ void dispatch_command(int argc, char** argv) {
     const std::string command = argv[1];
     const BatchCommand batch = parse_batch_command(argc, argv);
     if (batch.requested) {
+        if (batch.cancelled) {
+            return;
+        }
         run_batch_command(batch);
         return;
     }

@@ -14,7 +14,7 @@ void print_usage() {
         << tr("  yai repo list\n")
         << tr("  yai repo add <name> [url-or-path]\n")
         << tr("  yai repo update [name]\n")
-        << tr("  yai repo remove <name-or-pattern>\n")
+        << tr("  yai repo remove <name-or-pattern> [--yes]\n")
         << tr("  yai mirror list\n")
         << tr("  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n")
         << tr("  yai mirror custom <xget-domain-or-template>\n")
@@ -24,26 +24,28 @@ void print_usage() {
         << tr("              [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
-        << tr("              [--jobs <n>]\n")
+        << tr("              [--jobs <n>] [--yes|-y]\n")
         << tr("  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n")
         << tr("              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n")
         << tr("              [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
-        << tr("              [--jobs <n>]\n")
+        << tr("              [--jobs <n>] [--yes|-y]\n")
         << tr("  yai update [id]\n")
         << tr("  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
-        << tr("  yai rollback <id>\n")
-        << tr("  yai repair <id>\n")
+        << tr("  yai rollback <id> [--yes]\n")
+        << tr("  yai repair <id> [--yes]\n")
         << tr("  yai doctor\n")
-        << tr("  yai remove <id>\n")
+        << tr("  yai remove <id> [--yes]\n")
         << tr("  yai list\n")
         << tr("  yai help\n");
     std::cout << tr("\nLanguage: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n");
-    std::cout << tr("Package/id arguments support quoted * and ? patterns when they match exactly one package.\n");
-    std::cout << tr("install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n");
+    std::cout << tr("Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\n");
+    std::cout << tr("Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n");
+    std::cout << tr("install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n");
+    std::cout << tr("--id/--name are single-install only.\n");
 }
 
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option) {
@@ -114,6 +116,10 @@ void validate_mirror_options(const InstallOptions& options) {
 }
 
 bool parse_common_download_option(InstallOptions& options, int argc, char** argv, int& index, const std::string& arg) {
+    if (arg == "--yes" || arg == "-y") {
+        options.yes = true;
+        return true;
+    }
     if (arg == "--arch") {
         parse_arch_option(options, read_option_value(argc, argv, index, arg));
         return true;

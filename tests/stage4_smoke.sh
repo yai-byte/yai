@@ -70,6 +70,17 @@ cat > "$INDEX" <<JSON
         "type": "unavailable",
         "reason": "wildcard ambiguity fixture"
       }
+    },
+    {
+      "id": "repo-delta",
+      "name": "Repository Delta",
+      "summary": "Duplicate id from a merged repo index",
+      "homepage": "https://example.com/repo-delta-duplicate",
+      "license": "Unknown",
+      "source": {
+        "type": "unavailable",
+        "reason": "duplicate id fixture"
+      }
     }
   ]
 }
@@ -84,11 +95,10 @@ fi
 HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" search 'repo-d*' | grep -q "repo-delta"
 HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" info 'repo-dem*' | grep -q "Source: github_release acme/repo-demo"
 HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" info 'repo-dem*' | grep -q "only in info output"
-if HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" info 'repo-d*' 2>"$TMP_HOME/wildcard.err"; then
-  echo "ambiguous repo wildcard unexpectedly succeeded" >&2
-  exit 1
-fi
-grep -q "package pattern is ambiguous: repo-d\\*" "$TMP_HOME/wildcard.err"
+HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" info 'repo-d*' | tee "$TMP_HOME/info-multi.out" >/dev/null
+grep -q "repo-demo" "$TMP_HOME/info-multi.out"
+grep -q "repo-delta" "$TMP_HOME/info-multi.out"
+test "$(grep -c '^Id: repo-delta$' "$TMP_HOME/info-multi.out")" -eq 1
 
 HOME="$TMP_HOME" \
 YAI_REPO_INDEX="$INDEX" \
@@ -175,6 +185,6 @@ if printf '%s\n' "$SEARCH_ZH" | grep -q '\[installed\]'; then
   exit 1
 fi
 
-HOME="$TMP_HOME" "$ROOT/yai" remove 'repo-*'
+HOME="$TMP_HOME" "$ROOT/yai" remove 'repo-*' --yes
 
 echo "stage4 smoke test passed"
