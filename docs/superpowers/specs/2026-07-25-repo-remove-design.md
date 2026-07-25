@@ -33,13 +33,13 @@ std::string resolve_configured_repo_name(const std::string& pattern);
 Behavior:
 
 - Load entries via `load_repo_entries()`.
-- Exact match when the pattern has no glob wildcards (`has_glob_wildcards`).
-- Otherwise collect names matching `glob_match_case_insensitive(pattern, entry.name)`.
-- 0 matches → throw (e.g. `repo pattern matched no configured repos: …` or reuse a clear existing phrasing).
-- \>1 matches → throw with an ambiguous list (comma-separated names).
-- 1 match → return that name.
+- **No wildcards:** run `validate_repo_name(pattern)`, then look for an entry with that exact `name`. Missing → throw `repo not configured: ` + name (same msgid family as `repo update`).
+- **With wildcards:** do not sanitize/validate as a repo id; collect entry names where `glob_match_case_insensitive(pattern, entry.name)` is true.
+  - 0 matches → throw `repo pattern matched no configured repos: ` + pattern
+  - \>1 matches → throw `repo pattern is ambiguous: {pattern} (matches: {matches})` with comma-separated names
+  - 1 match → return that name
 
-`repo remove` must call this helper. Future name-targeted repo subcommands may reuse it; this change does not require rewriting `repo update` in the same patch unless trivial.
+`repo remove` must call this helper. Other repo subcommands need not be rewritten in this change.
 
 ## Removal semantics
 
@@ -63,10 +63,11 @@ Dispatch: extend `repo_app` so `remove` is a recognized subcommand alongside `li
 
 Extend `tests/repo_smoke.sh` (keep `YAI_LANG=en`):
 
-- Add a named source, confirm it appears in `repo list` / search, then `repo remove` that name; list/cache/search no longer expose that source’s packages.
+- Add a named source, confirm it appears in `repo list` / search, then `repo remove` that name; list/cache/search no longer expose that source’s packages; `<name>.json` is gone.
 - Pattern success: a unique glob match removes the intended repo.
-- Pattern failure: no match and ambiguous multi-match both fail.
-- Optional: an app installed from a source remains installed after that source is removed.
+- Pattern failure: no match and ambiguous multi-match both fail (non-zero exit).
+- Exact unknown name fails with `repo not configured`.
+- An app installed from a source remains installed and runnable after that source is removed.
 
 ## Out of scope
 
