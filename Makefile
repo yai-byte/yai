@@ -24,6 +24,7 @@ SRC := \
 	src/process.cpp \
 	src/repo.cpp \
 	src/repo_feed.cpp \
+	src/terminal_color.cpp \
 	src/resolver.cpp \
 	src/resolver_github.cpp \
 	src/resolver_url.cpp \

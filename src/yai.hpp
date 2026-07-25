@@ -234,6 +234,8 @@ std::string format_duration_seconds(double seconds);
 std::size_t display_width(const std::string& value);
 std::string truncate_display_width(const std::string& value, std::size_t max_width);
 std::size_t terminal_width();
+bool stdout_color_enabled();
+std::string color_green(const std::string& text);
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
 double download_progress_recent_speed(
