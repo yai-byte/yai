@@ -170,7 +170,10 @@ void info_package(int argc, char** argv) {
         throw std::runtime_error(tr("package not found in repo index: ") + id);
     }
 
-    for (const RepoPackage& package : packages) {
-        print_package_info(package);
+    for (std::size_t i = 0; i < packages.size(); ++i) {
+        if (i > 0) {
+            std::cout << "\n";
+        }
+        print_package_info(packages[i]);
     }
 }

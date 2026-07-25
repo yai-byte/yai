@@ -185,6 +185,6 @@ if printf '%s\n' "$SEARCH_ZH" | grep -q '\[installed\]'; then
   exit 1
 fi
 
-HOME="$TMP_HOME" "$ROOT/yai" remove 'repo-*'
+HOME="$TMP_HOME" "$ROOT/yai" remove 'repo-*' --yes
 
 echo "stage4 smoke test passed"
