@@ -55,17 +55,44 @@ int main() {
     require(http_validators_empty(empty), "empty check");
     require(!http_validators_empty(stored), "non-empty check");
 
+    const fs::path probe_file = "PROBE_FILE_PATH";
+    {
+        std::ofstream out(probe_file, std::ios::binary);
+        out.write("abcd", 4);
+    }
+
+    HttpValidators stored_size_4;
+    stored_size_4.content_length = "4";
+    UrlFreshnessResult unchanged = probe_url_freshness("file://PROBE_FILE_PATH", stored_size_4);
+    require(unchanged.status == UrlFreshness::Unchanged, "file unchanged");
+    require(unchanged.remote.content_length == "4", "file remote size");
+
+    HttpValidators stored_size_5;
+    stored_size_5.content_length = "5";
+    UrlFreshnessResult changed = probe_url_freshness("file://PROBE_FILE_PATH", stored_size_5);
+    require(changed.status == UrlFreshness::Changed, "file changed");
+
+    HttpValidators stored_empty_size;
+    UrlFreshnessResult unknown = probe_url_freshness("file://PROBE_FILE_PATH", stored_empty_size);
+    require(unknown.status == UrlFreshness::Unknown, "file unknown");
+
     std::cout << "url freshness smoke test passed\n";
     return 0;
 }
 CPP
 
 sed -i "s|HEADERS_PATH|$TMP_DIR/headers.txt|g" "$TMP_DIR/url_freshness_test.cpp"
+sed -i "s|PROBE_FILE_PATH|$TMP_DIR/probe.bin|g" "$TMP_DIR/url_freshness_test.cpp"
 
 g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   -o "$TMP_DIR/url_freshness_test" \
   "$TMP_DIR/url_freshness_test.cpp" \
   "$ROOT/src/url_freshness.cpp" \
+  "$ROOT/src/resolver_url.cpp" \
+  "$ROOT/src/repo_feed.cpp" \
+  "$ROOT/src/repo.cpp" \
+  "$ROOT/src/json.cpp" \
+  "$ROOT/src/cli_download.cpp" \
   "$ROOT/src/core.cpp" \
   "$ROOT/src/i18n.cpp" \
   "$ROOT/src/arch.cpp" \

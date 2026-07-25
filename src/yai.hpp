@@ -255,9 +255,16 @@ enum class UrlFreshness {
     Error,
 };
 
+struct UrlFreshnessResult {
+    UrlFreshness status;
+    std::string detail;
+    HttpValidators remote;
+};
+
 bool http_validators_empty(const HttpValidators& v);
 HttpValidators parse_http_validators_from_headers(const fs::path& headers);
 UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpValidators& remote);
+UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidators& stored);
 
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
@@ -313,6 +320,7 @@ void parse_downloader_option(InstallOptions& options, const std::string& value);
 void validate_mirror_options(const InstallOptions& options);
 InstallOptions parse_install_options(int argc, char** argv);
 InstallOptions parse_download_options(int argc, char** argv);
+bool executable_available(const std::string& name);
 void download_file(const std::string& url, const fs::path& target, const std::string& downloader);
 constexpr int kFetchTextDefaultTimeoutMs = 15000;
 constexpr int kFetchTextSpeculativeTimeoutMs = 5000;
