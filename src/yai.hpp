@@ -140,6 +140,7 @@ struct ProcessResult {
     int exit_code = 1;
     std::string output;
     bool timed_out = false;
+    bool output_limit_exceeded = false;
 };
 
 struct ProcessOutput {
@@ -226,7 +227,8 @@ ProcessResult run_process_capture_timeout(
     const std::vector<std::string>& args,
     int timeout_ms,
     const std::optional<fs::path>& cwd = std::nullopt,
-    const std::vector<std::pair<std::string, std::string>>& env = {});
+    const std::vector<std::pair<std::string, std::string>>& env = {},
+    std::size_t max_output_bytes = 0);
 std::string format_byte_count(std::uintmax_t bytes);
 std::string format_duration_seconds(double seconds);
 std::size_t display_width(const std::string& value);
@@ -287,7 +289,16 @@ void validate_mirror_options(const InstallOptions& options);
 InstallOptions parse_install_options(int argc, char** argv);
 InstallOptions parse_download_options(int argc, char** argv);
 void download_file(const std::string& url, const fs::path& target, const std::string& downloader);
+constexpr int kFetchTextDefaultTimeoutMs = 15000;
+constexpr int kFetchTextSpeculativeTimeoutMs = 5000;
+constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
+
 std::string fetch_text(const std::string& url);
+std::string fetch_text(const std::string& url, int timeout_ms);
+std::string fetch_text_limited(
+    const std::string& url,
+    int timeout_ms,
+    std::uintmax_t max_bytes);
 std::string json_unescape_string(const std::string& value);
 std::optional<std::string> json_string_after(const std::string& text, std::size_t key_pos);
 std::optional<std::string> json_find_string(const std::string& text, const std::string& key);

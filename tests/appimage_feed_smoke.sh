@@ -19,6 +19,7 @@ DOWNLOAD_PAGE="$TMP_HOME/downloads.html"
 REDDIT_PAGE="$TMP_HOME/reddit.com/downloads.html"
 MUSESCORE_CATALOG_PAGE="$TMP_HOME/appimage.github.io/MuseScore/index.html"
 MUSESCORE_HOME_PAGE="$TMP_HOME/musescore.org/index.html"
+MUSESCORE_DISCOVERY_PAGE="$TMP_HOME/musescore.org/download.html"
 MUSESCORE_DOWNLOAD_PAGE="$TMP_HOME/musescore.org/downloads.html"
 MUSESCORE_LANDING_PAGE="$TMP_HOME/musescore.org/en/download/musescore-x86_64.AppImage"
 
@@ -123,10 +124,17 @@ HTML
 
 cat > "$MUSESCORE_HOME_PAGE" <<'HTML'
 <!doctype html>
-<html><body><p>MuseScore official site</p></body></html>
+<html><body>
+<p>MuseScore official site</p>
+</body></html>
 HTML
 
 mkdir -p "$(dirname "$MUSESCORE_LANDING_PAGE")"
+cat > "$MUSESCORE_DISCOVERY_PAGE" <<'HTML'
+<!doctype html>
+<html><body><a href="downloads.html">Download MuseScore</a></body></html>
+HTML
+
 cat > "$MUSESCORE_DOWNLOAD_PAGE" <<'HTML'
 <!doctype html>
 <html><body><a href="en/download/musescore-x86_64.AppImage">Download MuseScore AppImage</a></body></html>
@@ -238,11 +246,34 @@ HOME="$TMP_HOME" "$ROOT/yai" install direct-feed-app
 HOME="$TMP_HOME" "$TMP_HOME/.local/bin/direct-feed-app" | grep -q "direct feed app"
 HOME="$TMP_HOME" "$ROOT/yai" remove direct-feed-app
 
-HOME="$TMP_HOME" "$ROOT/yai" install no-github-app 2>"$TMP_HOME/website_install.err"
+REAL_CURL="$(command -v curl)"
+FAKE_BIN="$TMP_HOME/fake-bin"
+mkdir -p "$FAKE_BIN"
+cat > "$FAKE_BIN/curl" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$TMP_HOME/website-curl.log"
+if [[ "\$*" == *"$MUSESCORE_DOWNLOAD_PAGE"* &&
+      " \$* " == *" --max-time 5"* &&
+      ! -e "$TMP_HOME/speculative-download-failed" ]]; then
+  touch "$TMP_HOME/speculative-download-failed"
+  exit 28
+fi
+exec "$REAL_CURL" "\$@"
+SH
+chmod +x "$FAKE_BIN/curl"
+
+PATH="$FAKE_BIN:$PATH" HOME="$TMP_HOME" "$ROOT/yai" install no-github-app 2>"$TMP_HOME/website_install.err"
+test -s "$TMP_HOME/website-curl.log"
 grep -q "website search for no-github-app" "$TMP_HOME/website_install.err"
 grep -q "website search selected" "$TMP_HOME/website_install.err"
 grep -q "after checking 3 page(s), queued 3, skipped 1" "$TMP_HOME/website_install.err"
 grep -q "WebsiteFeed-x86_64.AppImage" "$TMP_HOME/website_install.err"
+while IFS= read -r curl_args; do
+  if [[ " $curl_args " != *" -o "* && " $curl_args " != *" --output "* ]]; then
+    echo "website search full-text-fetched AppImage candidate" >&2
+    exit 1
+  fi
+done < <(grep -F "$ORIGINAL_ROOT/$WEBSITE_ASSET" "$TMP_HOME/website-curl.log" || true)
 if grep -q "checking website page" "$TMP_HOME/website_install.err"; then
   echo "website search printed per-page progress while stderr was redirected" >&2
   exit 1
@@ -296,9 +327,34 @@ grep -Fq "\"download_url\": \"file://$ORIGINAL_ROOT/$MUSESCORE_ASSET\"" "$TMP_HO
 HOME="$TMP_HOME" "$TMP_HOME/.local/bin/musescore-direct" | grep -q "musescore app"
 HOME="$TMP_HOME" "$ROOT/yai" remove musescore-direct
 
-HOME="$TMP_HOME" "$ROOT/yai" install musescore 2>"$TMP_HOME/musescore_install.err"
+: > "$TMP_HOME/website-curl.log"
+PATH="$FAKE_BIN:$PATH" HOME="$TMP_HOME" "$ROOT/yai" install musescore 2>"$TMP_HOME/musescore_install.err"
 grep -q "website search selected" "$TMP_HOME/musescore_install.err"
 grep -q "MuseScore-x86_64.AppImage" "$TMP_HOME/musescore_install.err"
+test -e "$TMP_HOME/speculative-download-failed"
+grep -F "$MUSESCORE_DOWNLOAD_PAGE" "$TMP_HOME/website-curl.log" | grep -q -- '--max-time 5'
+grep -F "$MUSESCORE_DOWNLOAD_PAGE" "$TMP_HOME/website-curl.log" | grep -q -- '--max-time 15'
+landing_probe_seen=false
+while IFS= read -r curl_args; do
+  if [[ " $curl_args " == *" -o "* || " $curl_args " == *" --output "* ]]; then
+    continue
+  fi
+  landing_probe_seen=true
+  if [[ " $curl_args " != *" --max-filesize "* && " $curl_args " != *" -r "* ]]; then
+    echo "website search used an uncapped MuseScore landing probe" >&2
+    exit 1
+  fi
+done < <(grep -F "$MUSESCORE_LANDING_PAGE" "$TMP_HOME/website-curl.log" || true)
+if [[ "$landing_probe_seen" != true ]]; then
+  echo "website search did not record a capped MuseScore landing probe" >&2
+  exit 1
+fi
+while IFS= read -r curl_args; do
+  if [[ " $curl_args " != *" -o "* && " $curl_args " != *" --output "* ]]; then
+    echo "website search full-text-fetched MuseScore AppImage asset" >&2
+    exit 1
+  fi
+done < <(grep -F "$ORIGINAL_ROOT/$MUSESCORE_ASSET" "$TMP_HOME/website-curl.log" || true)
 if grep -q "curl:" "$TMP_HOME/musescore_install.err"; then
   echo "curl errors leaked into install status" >&2
   exit 1

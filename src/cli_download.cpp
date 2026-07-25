@@ -432,18 +432,69 @@ void download_file(const std::string& url, const fs::path& target, const std::st
     throw std::runtime_error(tr("all selected downloaders failed: ") + last_error);
 }
 
-std::string fetch_text(const std::string& url) {
-    const ProcessResult result = run_process_capture({
+namespace {
+
+int curl_max_time_seconds(int timeout_ms) {
+    if (timeout_ms <= 0) {
+        return 1;
+    }
+    return (timeout_ms + 999) / 1000;
+}
+
+std::vector<std::string> fetch_text_curl_args(
+    const std::string& url,
+    int timeout_ms,
+    std::optional<std::uintmax_t> max_bytes) {
+    std::vector<std::string> args = {
         "curl",
         "--fail",
         "--location",
         "--silent",
         "--show-error",
+        "--max-time",
+        std::to_string(curl_max_time_seconds(timeout_ms)),
         "--header",
         "Accept: application/vnd.github+json",
-        url,
-    });
-    if (result.exit_code != 0) {
+    };
+    if (max_bytes.has_value() && *max_bytes > 0) {
+        args.push_back("--max-filesize");
+        args.push_back(std::to_string(*max_bytes));
+        if (!is_file_url(url)) {
+            args.push_back("-r");
+            args.push_back("0-" + std::to_string(*max_bytes - 1));
+        }
+    }
+    args.push_back(url);
+    return args;
+}
+
+}  // namespace
+
+std::string fetch_text(const std::string& url) {
+    return fetch_text(url, kFetchTextDefaultTimeoutMs);
+}
+
+std::string fetch_text(const std::string& url, int timeout_ms) {
+    return fetch_text_limited(url, timeout_ms, 0);
+}
+
+std::string fetch_text_limited(
+    const std::string& url,
+    int timeout_ms,
+    std::uintmax_t max_bytes) {
+    const std::optional<std::uintmax_t> limit =
+        max_bytes == 0 ? std::nullopt : std::optional<std::uintmax_t>{max_bytes};
+    const ProcessResult result = run_process_capture_timeout(
+        fetch_text_curl_args(url, timeout_ms, limit),
+        timeout_ms + 2000,
+        std::nullopt,
+        {},
+        static_cast<std::size_t>(max_bytes));
+    if (result.output_limit_exceeded) {
+        throw std::runtime_error(
+            tr("failed to fetch ") + url + tr(": response exceeded maximum size"));
+    }
+    if (result.timed_out || result.exit_code != 0) {
         throw std::runtime_error(tr("failed to fetch ") + url + tr(": ") + result.output);
     }
     return result.output;

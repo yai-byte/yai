@@ -866,7 +866,7 @@ MVP 暂不做：
 - 导入 AppImage feed 时，`description` 会提取为短 `summary`，不会把完整长描述写入仓库索引。
 - 读取 AppImage feed 时，会把包含 GitHub 链接的条目转换为 yai schema v1 的 `github_release` 包源。
 - 读取 AppImage feed 时，包含直接 `.AppImage` 下载链接的条目会转换为 `direct_url` 包源。
-- 读取 AppImage feed 时，缺少 GitHub 和直接下载链接但有官网链接的条目会转换为 `website_page` 包源，安装时会在官网的下载相关页面中搜索 AppImage。
+- 读取 AppImage feed 时，缺少 GitHub 和直接下载链接但有官网链接的条目会转换为 `website_page` 包源，安装时会在官网的下载相关页面中搜索 AppImage；搜索可能并行抓取少量同站页面，并使用较短超时以便死链快速失败，探测 HTML 落地页时不会下载完整 AppImage 文件体。
 - 如果 feed 给出的 `website_page` 实际是 AppImageHub/AppImage catalog 详情页，而不是真实项目官网，官网搜索只允许从该 catalog 页跟随一个明显匹配当前包名的链接进入项目官网；进入后再把该官网域名作为允许域继续搜索下载页。
 - 官网搜索只跟随当前包官网、同站下载页、内置可信下载提示域，以及上述 catalog 到官网的跳转；普通 GitHub 页面、Reddit、论坛、Discord、Twitter/X、Facebook、YouTube 等非官方下载页面一律跳过。
 - `.AppImage` 候选文件必须来自允许域，或 URL / 文件名明显匹配当前包名；其它项目域名上的 AppImage 不作为候选。

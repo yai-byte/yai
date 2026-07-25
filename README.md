@@ -229,7 +229,10 @@ release or direct asset are kept as `website_page`; installing them searches
 likely download pages for an AppImage. If the feed URL is an AppImageHub/AppImage
 catalog page instead of the real project website, yai may follow one
 package-name-matching link from that catalog page to the project site, then
-keeps later crawling inside that project's allowed hosts. In an interactive
+keeps later crawling inside that project's allowed hosts. During discovery,
+yai may fetch a few same-host pages in parallel with short timeouts so dead
+links fail fast, and it does not download full AppImage bodies while probing
+HTML landing pages. In an interactive
 terminal, that website search updates one status line in place. When stderr is
 redirected, yai writes only a short start line and final summary instead of
 every checked URL. Website search follows only the package website, same-site

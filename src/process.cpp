@@ -144,6 +144,7 @@ enum class ReadOutputResult {
     Data,
     End,
     RetryLater,
+    LimitExceeded,
 };
 
 ReadOutputResult read_output_chunk(
@@ -151,9 +152,15 @@ ReadOutputResult read_output_chunk(
     std::string& output,
     bool nonblocking,
     const char* buffer,
-    ssize_t count) {
+    ssize_t count,
+    std::size_t max_output_bytes) {
     if (count > 0) {
-        output.append(buffer, static_cast<std::size_t>(count));
+        const std::size_t chunk_size = static_cast<std::size_t>(count);
+        if (max_output_bytes > 0 && chunk_size > max_output_bytes - output.size()) {
+            output.append(buffer, max_output_bytes - output.size());
+            return ReadOutputResult::LimitExceeded;
+        }
+        output.append(buffer, chunk_size);
         return ReadOutputResult::Data;
     }
     if (count == 0) {
@@ -166,23 +173,35 @@ ReadOutputResult read_output_chunk(
     throw std::runtime_error(std::string(tr("read failed: ")) + std::strerror(errno));
 }
 
-void append_output_until_stop(int fd, std::string& output, bool nonblocking) {
+bool append_output_until_stop(
+    int fd,
+    std::string& output,
+    bool nonblocking,
+    std::size_t max_output_bytes = 0) {
     char buffer[4096];
     while (true) {
         const ssize_t count = read(fd, buffer, sizeof(buffer));
-        const ReadOutputResult result = read_output_chunk(fd, output, nonblocking, buffer, count);
+        const ReadOutputResult result =
+            read_output_chunk(fd, output, nonblocking, buffer, count, max_output_bytes);
+        if (result == ReadOutputResult::LimitExceeded) {
+            return true;
+        }
         if (result == ReadOutputResult::RetryLater && !nonblocking) {
             continue;
         }
         if (result != ReadOutputResult::Data) {
-            break;
+            return false;
         }
     }
 }
 
-void append_available_output(int fd, std::string& output, pid_t pid) {
+bool append_available_output(
+    int fd,
+    std::string& output,
+    pid_t pid,
+    std::size_t max_output_bytes = 0) {
     try {
-        append_output_until_stop(fd, output, true);
+        return append_output_until_stop(fd, output, true, max_output_bytes);
     } catch (const std::exception&) {
         kill_and_reap(pid);
         throw;
@@ -190,7 +209,7 @@ void append_available_output(int fd, std::string& output, pid_t pid) {
 }
 
 void append_blocking_output(int fd, std::string& output) {
-    append_output_until_stop(fd, output, false);
+    (void)append_output_until_stop(fd, output, false);
 }
 
 void terminate_for_timeout(pid_t pid, int& status) {
@@ -328,7 +347,8 @@ ProcessResult run_process_capture_timeout(
     const std::vector<std::string>& args,
     int timeout_ms,
     const std::optional<fs::path>& cwd,
-    const std::vector<std::pair<std::string, std::string>>& env) {
+    const std::vector<std::pair<std::string, std::string>>& env,
+    std::size_t max_output_bytes) {
     if (args.empty()) {
         return ProcessResult{1, ""};
     }
@@ -353,7 +373,11 @@ ProcessResult run_process_capture_timeout(
     // Nonblocking reads keep a GUI AppImage probe from hanging forever: collect
     // whatever output exists, poll waitpid, and only then enforce the timeout.
     while (true) {
-        append_available_output(pipefd[0], output, pid);
+        if (append_available_output(pipefd[0], output, pid, max_output_bytes)) {
+            close_fd_best_effort(pipefd[0]);
+            kill_and_reap(pid);
+            return ProcessResult{128, output, false, true};
+        }
 
         const pid_t wait_result = waitpid_nointr(pid, &status, WNOHANG);
         if (wait_result == pid) {
@@ -373,7 +397,10 @@ ProcessResult run_process_capture_timeout(
         elapsed_ms += step_ms;
     }
 
-    append_available_output(pipefd[0], output, pid);
+    if (append_available_output(pipefd[0], output, pid, max_output_bytes)) {
+        close_fd_best_effort(pipefd[0]);
+        return ProcessResult{128, output, timed_out, true};
+    }
     close_fd_required(pipefd[0], tr("captured process output"));
 
     if (timed_out) {
