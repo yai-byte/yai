@@ -101,6 +101,14 @@ void print_repo_update_result(std::size_t count) {
         {{"{count}", std::to_string(count)}});
 }
 
+void remove_repo_cache_if_exists(const fs::path& path) {
+    std::error_code ec;
+    fs::remove(path, ec);
+    if (ec) {
+        throw std::runtime_error(tr("failed to remove repo cache ") + path.string() + tr(": ") + ec.message());
+    }
+}
+
 } // namespace
 
 void repo_update_app(int argc, char** argv) {
@@ -135,13 +143,13 @@ void repo_remove_app(int argc, char** argv) {
         }
     }
 
-    write_repo_entries(remaining);
-    remove_if_exists(named_repo_index_path(name));
     if (remaining.empty()) {
         write_empty_repo_index();
     } else {
         rebuild_repo_index_from_cached_files(remaining);
     }
+    write_repo_entries(remaining);
+    remove_repo_cache_if_exists(named_repo_index_path(name));
     std::cout << tr("Removed repo ") << name << "\n";
 }
 
