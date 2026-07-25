@@ -127,4 +127,25 @@ test ! -e "$TMP_HOME/.local/share/yai/apps/pack-b"
 test -f "$DOWNLOAD_DIR/down-a.AppImage"
 test -f "$DOWNLOAD_DIR/down-b.AppImage"
 
+# Unique-match repo globs must stay on the single-target path (no multi confirm).
+printf 'n\n' | HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+  "$ROOT/yai" install 'pack-a*' >"$TMP_HOME/install-unique.out" 2>"$TMP_HOME/install-unique.err" || true
+! grep -Fq "Install 1 package(s)? [y/N] " "$TMP_HOME/install-unique.err"
+! grep -Fq "Install 2 package(s)? [y/N] " "$TMP_HOME/install-unique.err"
+! grep -q "yai: running " "$TMP_HOME/install-unique.err"
+
+# URL query strings (?...) are not repo-id globs.
+QUERY_URL="file://$ASSET_DIR/PackA.AppImage?token=1"
+set +e
+HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+  "$ROOT/yai" download "$QUERY_URL" -y \
+  >"$TMP_HOME/url-query.out" 2>"$TMP_HOME/url-query.err"
+query_rc=$?
+set -e
+! grep -q "package pattern matched no repo packages" "$TMP_HOME/url-query.err"
+if [[ "$query_rc" -ne 0 ]]; then
+  # Local file:// may reject ?query on open; any non-glob failure is acceptable.
+  ! grep -q "package pattern matched no repo packages" "$TMP_HOME/url-query.out"
+fi
+
 echo "wildcard multi smoke passed"

@@ -107,12 +107,13 @@ BatchCommand parse_batch_command(int argc, char** argv) {
 
     std::vector<std::string> expanded_targets;
     for (const std::string& target : batch.targets) {
-        if (!has_glob_wildcards(target)) {
+        // Only repo-id style globs expand here. URLs (including ?query), GitHub
+        // owner/repo, and local AppImage paths must stay as ordinary targets.
+        if (!has_glob_wildcards(target) || !looks_like_repo_package_target(target)) {
             expanded_targets.push_back(target);
             continue;
         }
         const std::vector<RepoPackage> packages = find_repo_packages(target);
-        batch.requested = true;
         if (packages.size() > 1) {
             batch.expanded_multi = true;
         }
