@@ -147,17 +147,40 @@ RepairResult repair_installed_package(const std::string& id) {
 }
 
 void repair_app(int argc, char** argv) {
-    if (argc != 3) {
+    if (argc < 3 || std::string(argv[2]) == "--yes" || std::string(argv[2]) == "-y") {
         throw std::runtime_error(tr("repair requires exactly one package id"));
     }
+    if (argc > 4) {
+        throw std::runtime_error(tr("unknown repair option: ") + argv[4]);
+    }
 
-    const std::string id = resolve_installed_package_id(argv[2]);
-    const RepairResult repair = repair_installed_package(id);
+    bool yes = false;
+    if (argc == 4) {
+        const std::string option = argv[3];
+        if (option != "--yes" && option != "-y") {
+            throw std::runtime_error(tr("unknown repair option: ") + option);
+        }
+        yes = true;
+    }
 
-    std::cout << tr("Repaired ") << id << "\n";
-    print_mode_line(repair.mode);
-    if (repair.fuse_error_detected) {
-        print_fuse_fallback_line();
+    const std::vector<std::string> ids = resolve_installed_package_ids(argv[2]);
+    if (ids.size() > 1) {
+        const std::string prompt = tr_format(
+            "Repair {count} package(s)? [y/N] ",
+            {{"{count}", std::to_string(ids.size())}});
+        if (!confirm_multi_match(prompt, ids, yes)) {
+            std::cout << tr("Repair cancelled\n");
+            return;
+        }
+    }
+
+    for (const std::string& id : ids) {
+        const RepairResult repair = repair_installed_package(id);
+        std::cout << tr("Repaired ") << id << "\n";
+        print_mode_line(repair.mode);
+        if (repair.fuse_error_detected) {
+            print_fuse_fallback_line();
+        }
     }
 }
 
@@ -206,11 +229,35 @@ void restore_previous_version(const std::string& id) {
 }
 
 void rollback_app(int argc, char** argv) {
-    if (argc != 3) {
+    if (argc < 3 || std::string(argv[2]) == "--yes" || std::string(argv[2]) == "-y") {
         throw std::runtime_error(tr("rollback requires exactly one package id"));
     }
+    if (argc > 4) {
+        throw std::runtime_error(tr("unknown rollback option: ") + argv[4]);
+    }
 
-    const std::string id = resolve_installed_package_id(argv[2]);
-    restore_previous_version(id);
-    std::cout << tr("Rolled back ") << id << "\n";
+    bool yes = false;
+    if (argc == 4) {
+        const std::string option = argv[3];
+        if (option != "--yes" && option != "-y") {
+            throw std::runtime_error(tr("unknown rollback option: ") + option);
+        }
+        yes = true;
+    }
+
+    const std::vector<std::string> ids = resolve_installed_package_ids(argv[2]);
+    if (ids.size() > 1) {
+        const std::string prompt = tr_format(
+            "Rollback {count} package(s)? [y/N] ",
+            {{"{count}", std::to_string(ids.size())}});
+        if (!confirm_multi_match(prompt, ids, yes)) {
+            std::cout << tr("Rollback cancelled\n");
+            return;
+        }
+    }
+
+    for (const std::string& id : ids) {
+        restore_previous_version(id);
+        std::cout << tr("Rolled back ") << id << "\n";
+    }
 }

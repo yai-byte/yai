@@ -163,14 +163,14 @@ msgstr ""
 "  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
 
 msgid ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 msgstr ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 
 msgid ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 msgstr ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 
 msgid ""
 "  yai doctor\n"
@@ -178,9 +178,9 @@ msgstr ""
 "  yai doctor\n"
 
 msgid ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 msgstr ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 
 msgid ""
 "  yai list\n"
@@ -291,9 +291,6 @@ msgstr "包尚未安装："
 msgid "package pattern matched no installed packages: "
 msgstr "包名模式未匹配到已安装的包："
 
-msgid "package pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "包名模式不唯一：{pattern}（匹配到：{matches}）"
-
 msgid "Mode: "
 msgstr "运行模式："
 
@@ -359,6 +356,17 @@ msgstr "repair 失败：找不到可运行模式"
 msgid "repair requires exactly one package id"
 msgstr "repair 恰好需要一个包 id"
 
+msgid "unknown repair option: "
+msgstr "未知的 repair 选项："
+
+msgid "Repair {count} package(s)? [y/N] "
+msgstr "要修复 {count} 个包吗？[y/N] "
+
+msgid ""
+"Repair cancelled\n"
+msgstr ""
+"修复已取消\n"
+
 msgid "Repaired "
 msgstr "已修复 "
 
@@ -379,6 +387,17 @@ msgstr "恢复回滚元数据"
 
 msgid "rollback requires exactly one package id"
 msgstr "rollback 恰好需要一个包 id"
+
+msgid "unknown rollback option: "
+msgstr "未知的 rollback 选项："
+
+msgid "Rollback {count} package(s)? [y/N] "
+msgstr "要回滚 {count} 个包吗？[y/N] "
+
+msgid ""
+"Rollback cancelled\n"
+msgstr ""
+"回滚已取消\n"
 
 msgid "Rolled back "
 msgstr "已回滚 "
@@ -494,6 +513,17 @@ msgstr "正在删除已安装包文件"
 
 msgid "remove requires exactly one package id"
 msgstr "remove 恰好需要一个包 id"
+
+msgid "unknown remove option: "
+msgstr "未知的 remove 选项："
+
+msgid "Remove {count} package(s)? [y/N] "
+msgstr "要移除 {count} 个包吗？[y/N] "
+
+msgid ""
+"Remove cancelled\n"
+msgstr ""
+"移除已取消\n"
 
 msgid "removing installed package directory"
 msgstr "正在删除已安装包目录"

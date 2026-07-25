@@ -70,11 +70,7 @@ void remove_if_exists(const fs::path& path) {
     remove_required(path, tr("removing installed package file"));
 }
 
-void remove_app(int argc, char** argv) {
-    if (argc != 3) {
-        throw std::runtime_error(tr("remove requires exactly one package id"));
-    }
-    const std::string id = resolve_installed_package_id(argv[2]);
+void remove_installed_id(const std::string& id) {
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
         throw std::runtime_error(tr("package is not installed: ") + id);
@@ -87,6 +83,39 @@ void remove_app(int argc, char** argv) {
 
     run_process({"update-desktop-database", paths.desktop.parent_path().string()});
     std::cout << tr("Removed ") << id << "\n";
+}
+
+void remove_app(int argc, char** argv) {
+    if (argc < 3 || std::string(argv[2]) == "--yes" || std::string(argv[2]) == "-y") {
+        throw std::runtime_error(tr("remove requires exactly one package id"));
+    }
+    if (argc > 4) {
+        throw std::runtime_error(tr("unknown remove option: ") + argv[4]);
+    }
+
+    bool yes = false;
+    if (argc == 4) {
+        const std::string option = argv[3];
+        if (option != "--yes" && option != "-y") {
+            throw std::runtime_error(tr("unknown remove option: ") + option);
+        }
+        yes = true;
+    }
+
+    const std::vector<std::string> ids = resolve_installed_package_ids(argv[2]);
+    if (ids.size() > 1) {
+        const std::string prompt = tr_format(
+            "Remove {count} package(s)? [y/N] ",
+            {{"{count}", std::to_string(ids.size())}});
+        if (!confirm_multi_match(prompt, ids, yes)) {
+            std::cout << tr("Remove cancelled\n");
+            return;
+        }
+    }
+
+    for (const std::string& id : ids) {
+        remove_installed_id(id);
+    }
 }
 
 void list_apps() {

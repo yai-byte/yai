@@ -35,10 +35,10 @@ void print_usage() {
         << tr("  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
-        << tr("  yai rollback <id>\n")
-        << tr("  yai repair <id>\n")
+        << tr("  yai rollback <id> [--yes]\n")
+        << tr("  yai repair <id> [--yes]\n")
         << tr("  yai doctor\n")
-        << tr("  yai remove <id>\n")
+        << tr("  yai remove <id> [--yes]\n")
         << tr("  yai list\n")
         << tr("  yai help\n");
     std::cout << tr("\nLanguage: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n");

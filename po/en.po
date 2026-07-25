@@ -163,14 +163,14 @@ msgstr ""
 "  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
 
 msgid ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 msgstr ""
-"  yai rollback <id>\n"
+"  yai rollback <id> [--yes]\n"
 
 msgid ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 msgstr ""
-"  yai repair <id>\n"
+"  yai repair <id> [--yes]\n"
 
 msgid ""
 "  yai doctor\n"
@@ -178,9 +178,9 @@ msgstr ""
 "  yai doctor\n"
 
 msgid ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 msgstr ""
-"  yai remove <id>\n"
+"  yai remove <id> [--yes]\n"
 
 msgid ""
 "  yai list\n"
@@ -291,9 +291,6 @@ msgstr "package is not installed: "
 msgid "package pattern matched no installed packages: "
 msgstr "package pattern matched no installed packages: "
 
-msgid "package pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "package pattern is ambiguous: {pattern} (matches: {matches})"
-
 msgid "Mode: "
 msgstr "Mode: "
 
@@ -359,6 +356,17 @@ msgstr "repair failed: no runnable mode found"
 msgid "repair requires exactly one package id"
 msgstr "repair requires exactly one package id"
 
+msgid "unknown repair option: "
+msgstr "unknown repair option: "
+
+msgid "Repair {count} package(s)? [y/N] "
+msgstr "Repair {count} package(s)? [y/N] "
+
+msgid ""
+"Repair cancelled\n"
+msgstr ""
+"Repair cancelled\n"
+
 msgid "Repaired "
 msgstr "Repaired "
 
@@ -379,6 +387,17 @@ msgstr "restoring rollback metadata"
 
 msgid "rollback requires exactly one package id"
 msgstr "rollback requires exactly one package id"
+
+msgid "unknown rollback option: "
+msgstr "unknown rollback option: "
+
+msgid "Rollback {count} package(s)? [y/N] "
+msgstr "Rollback {count} package(s)? [y/N] "
+
+msgid ""
+"Rollback cancelled\n"
+msgstr ""
+"Rollback cancelled\n"
 
 msgid "Rolled back "
 msgstr "Rolled back "
@@ -494,6 +513,17 @@ msgstr "removing installed package file"
 
 msgid "remove requires exactly one package id"
 msgstr "remove requires exactly one package id"
+
+msgid "unknown remove option: "
+msgstr "unknown remove option: "
+
+msgid "Remove {count} package(s)? [y/N] "
+msgstr "Remove {count} package(s)? [y/N] "
+
+msgid ""
+"Remove cancelled\n"
+msgstr ""
+"Remove cancelled\n"
 
 msgid "removing installed package directory"
 msgstr "removing installed package directory"
