@@ -22,6 +22,7 @@ Requires a C++17 compiler and `curl`. AppImage downloads can also use `aria2c`,
 ./yai repo list
 ./yai repo add <name> [url-or-path]
 ./yai repo update [name]
+./yai repo remove <name-or-pattern>
 ./yai mirror list
 ./yai mirror use <ghfast|chengc|fastgit|yylx|llkk>
 ./yai mirror custom <xget-domain-or-template>
@@ -205,7 +206,10 @@ Repository commands manage `~/.local/share/yai/repos/repos.conf`.
 `~/.local/share/yai/repos/<name>.json`, and rebuilds the default
 `index.json`. `repo update` refreshes all configured repos, while
 `repo update <name>` refreshes one configured repo. Both rebuild the combined
-index from cached repo files.
+index from cached repo files. `repo remove <name-or-pattern>` drops a configured
+repo, deletes its cache file, and rebuilds `index.json` without uninstalling
+apps. Name/pattern arguments follow the same single-match `*`/`?` rules as
+other side-effect commands.
 
 The AppImage project feed can be used directly:
 

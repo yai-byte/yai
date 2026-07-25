@@ -14,6 +14,7 @@ void print_usage() {
         << tr("  yai repo list\n")
         << tr("  yai repo add <name> [url-or-path]\n")
         << tr("  yai repo update [name]\n")
+        << tr("  yai repo remove <name-or-pattern>\n")
         << tr("  yai mirror list\n")
         << tr("  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n")
         << tr("  yai mirror custom <xget-domain-or-template>\n")

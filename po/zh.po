@@ -93,6 +93,11 @@ msgstr ""
 "  yai repo update [名称]\n"
 
 msgid ""
+"  yai repo remove <name-or-pattern>\n"
+msgstr ""
+"  yai repo remove <名称-或-模式>\n"
+
+msgid ""
 "  yai mirror list\n"
 msgstr ""
 "  yai mirror list\n"
@@ -568,8 +573,20 @@ msgid ""
 msgstr ""
 "尚未配置包源\n"
 
-msgid "repo requires a subcommand: list, add, or update"
-msgstr "repo 需要子命令：list、add 或 update"
+msgid "repo requires a subcommand: list, add, update, or remove"
+msgstr "repo 需要子命令：list、add、update 或 remove"
+
+msgid "repo remove requires a name or pattern"
+msgstr "repo remove 需要名称或模式"
+
+msgid "Removed repo "
+msgstr "已移除包源 "
+
+msgid "repo pattern matched no configured repos: "
+msgstr "包源模式未匹配到已配置包源："
+
+msgid "repo pattern is ambiguous: {pattern} (matches: {matches})"
+msgstr "包源模式不唯一：{pattern}（匹配：{matches}）"
 
 msgid "unknown repo subcommand: "
 msgstr "未知的 repo 子命令："

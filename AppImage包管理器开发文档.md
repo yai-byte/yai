@@ -860,6 +860,7 @@ MVP 暂不做：
 - `yai repo list` 会列出已配置包源、源地址和本地缓存状态。
 - `yai repo update` 会刷新所有已配置包源并合并生成 `~/.local/share/yai/repos/index.json`。
 - `yai repo update <name>` 会只刷新指定包源，再用所有已缓存包源合并生成 `~/.local/share/yai/repos/index.json`。
+- `yai repo remove <name>` 或模式参数会移除已配置包源、删除对应缓存 JSON，并重建 `index.json`；不会卸载已安装应用。
 - 包源配置保存在 `~/.local/share/yai/repos/repos.conf`，每个包源缓存为 `~/.local/share/yai/repos/<name>.json`。
 - `yai repo add appimage` 会使用内置地址 `https://appimage.github.io/feed.json`，直接接入 AppImage 项目公开 feed。
 - 导入 AppImage feed 时，`description` 会提取为短 `summary`，不会把完整长描述写入仓库索引。
@@ -874,7 +875,6 @@ MVP 暂不做：
 
 阶段四暂不做：
 
-- 当前仅支持包源添加、列表和刷新；删除包源放到后续阶段。
 - 不实现完整 JSON 语义解析，只解析阶段四 schema v1 需要的字段。
 - 不实现社区仓库同步、签名校验、SHA256 校验或包源审核。
 - 不支持依赖解析、分类浏览、分页搜索或多仓库优先级。
