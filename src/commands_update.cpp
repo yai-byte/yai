@@ -43,10 +43,14 @@ InstallOptions update_resolution_options(const UpdateContext& context) {
 }
 
 bool update_source_identity_changed(const UpdateContext& context, const ResolvedSource& source) {
+    // Index URL change is enough for upgradable (basename/version may match).
+    if (source.source_url != context.source_url) {
+        return true;
+    }
     if (!source.version.empty() && !context.current_version.empty()) {
         return source.version != context.current_version;
     }
-    return source.source_url != context.source_url;
+    return false;
 }
 
 ResolvedSource resolve_repo_update_source(const UpdateContext& context) {

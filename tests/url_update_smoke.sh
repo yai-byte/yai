@@ -130,6 +130,77 @@ fi
 grep -q $'\tupgradable\t' "$TMP_HOME/repo_same.out"
 grep -q 'download verification required' "$TMP_HOME/repo_same.out"
 
+# --- repo_direct_url: index URL change with same basename → upgradable ---
+# Install from path A; repoint index to path B with the same filename so
+# version identity matches but source_url differs (no size change needed).
+URL_CHANGE_DIR_A="$ORIGINAL_ROOT/url-change-a"
+URL_CHANGE_DIR_B="$ORIGINAL_ROOT/url-change-b"
+mkdir -p "$URL_CHANGE_DIR_A" "$URL_CHANGE_DIR_B"
+URL_CHANGE_ASSET_A="$URL_CHANGE_DIR_A/SameName-x86_64.AppImage"
+URL_CHANGE_ASSET_B="$URL_CHANGE_DIR_B/SameName-x86_64.AppImage"
+write_appimage "$URL_CHANGE_ASSET_A" "urlchg-v1"
+cp -a "$URL_CHANGE_ASSET_A" "$URL_CHANGE_ASSET_B"
+
+cat > "$INDEX" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-20T00:00:00Z",
+  "packages": [
+    {
+      "id": "url-change-direct",
+      "name": "URL Change Direct",
+      "summary": "Index URL change with same basename",
+      "homepage": "https://example.com/url-change-direct",
+      "license": "Unknown",
+      "source": {
+        "type": "direct_url",
+        "url": "file://$URL_CHANGE_ASSET_A"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TMP_HOME" \
+YAI_REPO_INDEX="$INDEX" \
+"$ROOT/yai" install url-change-direct
+
+URL_CHANGE_META="$TMP_HOME/.local/share/yai/apps/url-change-direct/metadata.json"
+grep -q '"source_kind": "repo_direct_url"' "$URL_CHANGE_META"
+grep -Fq "\"source_url\": \"file://$URL_CHANGE_ASSET_A\"" "$URL_CHANGE_META"
+
+cat > "$INDEX" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-20T00:00:00Z",
+  "packages": [
+    {
+      "id": "url-change-direct",
+      "name": "URL Change Direct",
+      "summary": "Index URL change with same basename",
+      "homepage": "https://example.com/url-change-direct",
+      "license": "Unknown",
+      "source": {
+        "type": "direct_url",
+        "url": "file://$URL_CHANGE_ASSET_B"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TMP_HOME" \
+YAI_REPO_INDEX="$INDEX" \
+"$ROOT/yai" update url-change-direct > "$TMP_HOME/repo_url_change.out"
+
+grep -q $'\tupgradable\t' "$TMP_HOME/repo_url_change.out"
+grep -Fq "file://$URL_CHANGE_ASSET_B" "$TMP_HOME/repo_url_change.out"
+if grep -q $'\tcurrent\t' "$TMP_HOME/repo_url_change.out"; then
+  echo "index URL change with same basename must not report current" >&2
+  cat "$TMP_HOME/repo_url_change.out" >&2
+  exit 1
+fi
+
 # --- Task 5: upgrade execution (gated until Task 5) ---
 # HOME="$TMP_HOME" "$ROOT/yai" upgrade url-updatable
 # HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" upgrade same-url-direct
