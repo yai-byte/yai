@@ -88,6 +88,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   -o "$TMP_DIR/url_freshness_test" \
   "$TMP_DIR/url_freshness_test.cpp" \
   "$ROOT/src/url_freshness.cpp" \
+  "$ROOT/src/appimage.cpp" \
   "$ROOT/src/resolver_url.cpp" \
   "$ROOT/src/repo_feed.cpp" \
   "$ROOT/src/repo.cpp" \

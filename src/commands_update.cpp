@@ -106,6 +106,46 @@ void print_update_preview_row(const UpdatePreviewResult& result) {
               << result.reason << "\n";
 }
 
+UpdatePreviewResult preview_from_url_freshness(
+    const std::string& id,
+    const std::string& current_version,
+    const std::string& latest_version,
+    const std::string& candidate_url,
+    const fs::path& metadata) {
+    if (candidate_url.empty()) {
+        return UpdatePreviewResult{id, current_version, "", "error", "missing update source URL"};
+    }
+
+    const UrlFreshnessResult probe =
+        probe_url_freshness(candidate_url, validators_from_metadata(metadata));
+    switch (probe.status) {
+    case UrlFreshness::Unchanged:
+        return UpdatePreviewResult{
+            id,
+            current_version,
+            latest_version,
+            "current",
+            tr("already up to date")};
+    case UrlFreshness::Changed:
+        return UpdatePreviewResult{
+            id,
+            current_version,
+            latest_version,
+            "upgradable",
+            tr("remote content changed")};
+    case UrlFreshness::Unknown:
+        return UpdatePreviewResult{
+            id,
+            current_version,
+            latest_version,
+            "upgradable",
+            tr("download verification required")};
+    case UrlFreshness::Error:
+        return UpdatePreviewResult{id, current_version, "", "error", probe.detail};
+    }
+    return UpdatePreviewResult{id, current_version, "", "error", probe.detail};
+}
+
 UpdatePreviewResult build_update_preview(const std::string& id) {
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
@@ -117,9 +157,15 @@ UpdatePreviewResult build_update_preview(const std::string& id) {
     const std::string current_version = metadata_value(metadata, "version").value_or("");
     const std::string name = metadata_value(metadata, "name").value_or(id);
     const std::string source_url = metadata_value(metadata, "source_url").value_or("");
+    const std::string download_url = metadata_value(metadata, "download_url").value_or("");
     const std::string github_owner = metadata_value(metadata, "github_owner").value_or("");
     const std::string github_repo = metadata_value(metadata, "github_repo").value_or("");
     const std::string installed_arch = metadata_value(metadata, "arch").value_or(current_arch());
+
+    if (source_kind == "url") {
+        const std::string candidate = !source_url.empty() ? source_url : download_url;
+        return preview_from_url_freshness(id, current_version, current_version, candidate, metadata);
+    }
 
     if (source_kind == "repo_direct_url" || source_kind == "repo_website_page") {
         try {
@@ -135,20 +181,30 @@ UpdatePreviewResult build_update_preview(const std::string& id) {
                 github_repo,
                 installed_arch};
             ResolvedSource source = resolve_repo_update_source(context);
-            if (!update_source_identity_changed(context, source)) {
+            if (update_source_identity_changed(context, source)) {
                 return UpdatePreviewResult{
                     id,
                     current_version,
                     source.version,
-                    "current",
-                    tr("already up to date")};
+                    "upgradable",
+                    tr("source: ") + source.source_url};
+            }
+            if (source_kind == "repo_direct_url") {
+                const std::string candidate =
+                    !source.source_url.empty() ? source.source_url : source_url;
+                return preview_from_url_freshness(
+                    id,
+                    current_version,
+                    source.version,
+                    candidate,
+                    metadata);
             }
             return UpdatePreviewResult{
                 id,
                 current_version,
                 source.version,
-                "upgradable",
-                tr("source: ") + source.source_url};
+                "current",
+                tr("already up to date")};
         } catch (const std::exception& ex) {
             return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
         }

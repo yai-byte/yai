@@ -102,6 +102,14 @@ UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpVal
     return UrlFreshness::Unchanged;
 }
 
+HttpValidators validators_from_metadata(const fs::path& metadata) {
+    HttpValidators v;
+    v.etag = metadata_value(metadata, "http_etag").value_or("");
+    v.last_modified = metadata_value(metadata, "http_last_modified").value_or("");
+    v.content_length = metadata_value(metadata, "http_content_length").value_or("");
+    return v;
+}
+
 UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidators& stored) {
     if (is_file_url(url)) {
         const fs::path path = file_url_path(url);

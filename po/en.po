@@ -493,6 +493,12 @@ msgstr "Upgrade {count} package(s)? [y/N] "
 msgid "already up to date"
 msgstr "already up to date"
 
+msgid "remote content changed"
+msgstr "remote content changed"
+
+msgid "download verification required"
+msgstr "download verification required"
+
 msgid "source: "
 msgstr "source: "
 

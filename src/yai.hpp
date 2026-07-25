@@ -268,6 +268,7 @@ bool http_validators_empty(const HttpValidators& v);
 HttpValidators parse_http_validators_from_headers(const fs::path& headers);
 UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpValidators& remote);
 UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidators& stored);
+HttpValidators validators_from_metadata(const fs::path& metadata);
 
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
