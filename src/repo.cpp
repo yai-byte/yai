@@ -273,7 +273,14 @@ std::vector<RepoPackage> find_repo_packages(const std::string& id) {
 
     std::vector<RepoPackage> matches;
     for (const RepoPackage& package : packages) {
-        if (glob_match_case_insensitive(id, package.id)) {
+        if (!glob_match_case_insensitive(id, package.id)) {
+            continue;
+        }
+        const bool already_matched = std::any_of(
+            matches.begin(),
+            matches.end(),
+            [&package](const RepoPackage& match) { return match.id == package.id; });
+        if (!already_matched) {
             matches.push_back(package);
         }
     }

@@ -70,6 +70,17 @@ cat > "$INDEX" <<JSON
         "type": "unavailable",
         "reason": "wildcard ambiguity fixture"
       }
+    },
+    {
+      "id": "repo-delta",
+      "name": "Repository Delta",
+      "summary": "Duplicate id from a merged repo index",
+      "homepage": "https://example.com/repo-delta-duplicate",
+      "license": "Unknown",
+      "source": {
+        "type": "unavailable",
+        "reason": "duplicate id fixture"
+      }
     }
   ]
 }
@@ -87,6 +98,7 @@ HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" info 'repo-dem*' | grep -q 
 HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" info 'repo-d*' | tee "$TMP_HOME/info-multi.out" >/dev/null
 grep -q "repo-demo" "$TMP_HOME/info-multi.out"
 grep -q "repo-delta" "$TMP_HOME/info-multi.out"
+test "$(grep -c '^Id: repo-delta$' "$TMP_HOME/info-multi.out")" -eq 1
 
 HOME="$TMP_HOME" \
 YAI_REPO_INDEX="$INDEX" \
