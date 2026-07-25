@@ -210,7 +210,12 @@ bool looks_like_repo_package_target(const std::string& value);
 bool looks_like_local_appimage_target(const std::string& value);
 bool has_glob_wildcards(const std::string& value);
 bool glob_match_case_insensitive(const std::string& pattern, const std::string& value);
+std::vector<std::string> resolve_installed_package_ids(const std::string& pattern);
 std::string resolve_installed_package_id(const std::string& pattern);
+bool confirm_multi_match(
+    const std::string& prompt,
+    const std::vector<std::string>& matches,
+    bool yes);
 std::string url_encode(const std::string& value);
 std::string replace_all(std::string value, const std::string& from, const std::string& to);
 bool output_has_fuse_error(const std::string& output);
@@ -344,6 +349,7 @@ void write_repo_entries(const std::vector<RepoEntry>& entries);
 std::string validate_repo_name(const std::string& value);
 std::string validate_repo_location(const std::string& value);
 void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries);
+std::vector<RepoPackage> find_repo_packages(const std::string& pattern);
 std::optional<RepoPackage> find_repo_package(const std::string& id);
 bool contains_case_insensitive(const std::string& value, const std::string& needle);
 bool package_matches_keyword(const RepoPackage& package, const std::string& keyword);
@@ -477,6 +483,7 @@ void repo_add_app(int argc, char** argv);
 void repo_update_app(int argc, char** argv);
 void repo_remove_app(int argc, char** argv);
 void repo_app(int argc, char** argv);
+std::vector<std::string> resolve_configured_repo_names(const std::string& pattern);
 std::string resolve_configured_repo_name(const std::string& pattern);
 void mirror_list_app(int argc);
 void mirror_use_app(int argc, char** argv);

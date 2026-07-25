@@ -2,26 +2,13 @@
 
 // Shared helpers used by multiple command-family translation units.
 
-namespace {
-std::string command_match_list(const std::vector<std::string>& values) {
-    std::string out;
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        if (i > 0) {
-            out += ", ";
-        }
-        out += values[i];
-    }
-    return out;
-}
-} // namespace
-
-std::string resolve_installed_package_id(const std::string& pattern) {
+std::vector<std::string> resolve_installed_package_ids(const std::string& pattern) {
     if (!has_glob_wildcards(pattern)) {
         const std::string id = sanitize_id(pattern);
         if (!metadata_exists(paths_for(id))) {
             throw std::runtime_error(tr("package is not installed: ") + id);
         }
-        return id;
+        return {id};
     }
 
     const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
@@ -50,12 +37,35 @@ std::string resolve_installed_package_id(const std::string& pattern) {
     if (matches.empty()) {
         throw std::runtime_error(tr("package pattern matched no installed packages: ") + pattern);
     }
+    return matches;
+}
+
+std::string resolve_installed_package_id(const std::string& pattern) {
+    const std::vector<std::string> matches = resolve_installed_package_ids(pattern);
     if (matches.size() > 1) {
-        throw std::runtime_error(tr_format(
-            "package pattern is ambiguous: {pattern} (matches: {matches})",
-            {{"{pattern}", pattern}, {"{matches}", command_match_list(matches)}}));
+        throw std::runtime_error(tr("multi-match pattern requires list resolver"));
     }
     return matches.front();
+}
+
+bool confirm_multi_match(
+    const std::string& prompt,
+    const std::vector<std::string>& matches,
+    bool yes) {
+    for (const std::string& match : matches) {
+        std::cerr << match << "\n";
+    }
+    if (yes) {
+        return true;
+    }
+    std::cerr << prompt;
+    std::string answer;
+    if (!std::getline(std::cin, answer)) {
+        std::cerr << "\n";
+        return false;
+    }
+    answer = to_lower(trim(answer));
+    return answer == "y" || answer == "yes";
 }
 
 void print_mode_line(const std::string& mode) {

@@ -4,7 +4,6 @@
 // configuration. AppImage feed normalization lives in repo_feed.cpp.
 
 std::string repo_index_json_from_package_objects(const std::vector<std::string>& packages);
-std::string package_match_list(const std::vector<RepoPackage>& packages);
 
 fs::path repo_index_path() {
     const char* env = std::getenv("YAI_REPO_INDEX");
@@ -207,13 +206,13 @@ std::string validate_repo_location(const std::string& value) {
     return fs::absolute(value).lexically_normal().string();
 }
 
-std::string resolve_configured_repo_name(const std::string& pattern) {
+std::vector<std::string> resolve_configured_repo_names(const std::string& pattern) {
     const std::vector<RepoEntry> entries = load_repo_entries();
     if (!has_glob_wildcards(pattern)) {
         const std::string name = validate_repo_name(pattern);
         for (const RepoEntry& entry : entries) {
             if (entry.name == name) {
-                return name;
+                return {name};
             }
         }
         throw std::runtime_error(tr("repo not configured: ") + name);
@@ -231,17 +230,13 @@ std::string resolve_configured_repo_name(const std::string& pattern) {
     if (matches.empty()) {
         throw std::runtime_error(tr("repo pattern matched no configured repos: ") + pattern);
     }
+    return matches;
+}
+
+std::string resolve_configured_repo_name(const std::string& pattern) {
+    const std::vector<std::string> matches = resolve_configured_repo_names(pattern);
     if (matches.size() > 1) {
-        std::string listed;
-        for (std::size_t i = 0; i < matches.size(); ++i) {
-            if (i > 0) {
-                listed += ", ";
-            }
-            listed += matches[i];
-        }
-        throw std::runtime_error(tr_format(
-            "repo pattern is ambiguous: {pattern} (matches: {matches})",
-            {{"{pattern}", pattern}, {"{matches}", listed}}));
+        throw std::runtime_error(tr("multi-match pattern requires list resolver"));
     }
     return matches.front();
 }
@@ -265,15 +260,15 @@ void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries)
     write_text_file(repos_dir_path() / "index.json", repo_index_json_from_package_objects(packages));
 }
 
-std::optional<RepoPackage> find_repo_package(const std::string& id) {
+std::vector<RepoPackage> find_repo_packages(const std::string& id) {
     const std::vector<RepoPackage> packages = load_repo_packages();
-    for (const RepoPackage& package : packages) {
-        if (package.id == id) {
-            return package;
-        }
-    }
     if (!has_glob_wildcards(id)) {
-        return std::nullopt;
+        for (const RepoPackage& package : packages) {
+            if (package.id == id) {
+                return {package};
+            }
+        }
+        return {};
     }
 
     std::vector<RepoPackage> matches;
@@ -282,30 +277,23 @@ std::optional<RepoPackage> find_repo_package(const std::string& id) {
             matches.push_back(package);
         }
     }
+    std::sort(
+        matches.begin(),
+        matches.end(),
+        [](const RepoPackage& a, const RepoPackage& b) { return a.id < b.id; });
     if (matches.empty()) {
         throw std::runtime_error(tr("package pattern matched no repo packages: ") + id);
     }
-    if (matches.size() > 1) {
-        throw std::runtime_error(tr_format(
-            "package pattern is ambiguous: {pattern} (matches: {matches})",
-            {{"{pattern}", id}, {"{matches}", package_match_list(matches)}}));
-    }
-    return matches.front();
+    return matches;
 }
 
-std::string package_match_list(const std::vector<RepoPackage>& packages) {
-    std::vector<std::string> ids;
-    for (const RepoPackage& package : packages) {
-        ids.push_back(package.id);
+std::optional<RepoPackage> find_repo_package(const std::string& id) {
+    const std::vector<RepoPackage> matches = find_repo_packages(id);
+    if (matches.empty()) {
+        return std::nullopt;
     }
-    std::sort(ids.begin(), ids.end());
-
-    std::string out;
-    for (std::size_t i = 0; i < ids.size(); ++i) {
-        if (i > 0) {
-            out += ", ";
-        }
-        out += ids[i];
+    if (matches.size() > 1) {
+        throw std::runtime_error(tr("internal error: use find_repo_packages for multi-match"));
     }
-    return out;
+    return matches.front();
 }

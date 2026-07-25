@@ -52,6 +52,18 @@ void print_package_source_info(const RepoPackage& package) {
         print_package_source_reason(package);
     }
 }
+
+void print_package_info(const RepoPackage& package) {
+    std::cout << tr("Id: ") << package.id << "\n";
+    std::cout << tr("Name: ") << package.name << "\n";
+    std::cout << tr("Summary: ") << package.summary << "\n";
+    std::cout << tr("Homepage: ") << package.homepage << "\n";
+    std::cout << tr("License: ") << package.license << "\n";
+    print_package_source_info(package);
+    if (!package.asset_pattern.empty()) {
+        std::cout << tr("Asset pattern: ") << package.asset_pattern << "\n";
+    }
+}
 } // namespace
 
 void remove_if_exists(const fs::path& path) {
@@ -124,18 +136,12 @@ void info_package(int argc, char** argv) {
         throw std::runtime_error(tr("info requires exactly one package id"));
     }
     const std::string id = argv[2];
-    const std::optional<RepoPackage> package = find_repo_package(id);
-    if (!package.has_value()) {
+    const std::vector<RepoPackage> packages = find_repo_packages(id);
+    if (packages.empty()) {
         throw std::runtime_error(tr("package not found in repo index: ") + id);
     }
 
-    std::cout << tr("Id: ") << package->id << "\n";
-    std::cout << tr("Name: ") << package->name << "\n";
-    std::cout << tr("Summary: ") << package->summary << "\n";
-    std::cout << tr("Homepage: ") << package->homepage << "\n";
-    std::cout << tr("License: ") << package->license << "\n";
-    print_package_source_info(*package);
-    if (!package->asset_pattern.empty()) {
-        std::cout << tr("Asset pattern: ") << package->asset_pattern << "\n";
+    for (const RepoPackage& package : packages) {
+        print_package_info(package);
     }
 }
