@@ -504,6 +504,9 @@ msgstr "Removed "
 msgid "search requires exactly one keyword"
 msgstr "search requires exactly one keyword"
 
+msgid "[installed]"
+msgstr "[installed]"
+
 msgid "Reason: "
 msgstr "Reason: "
 

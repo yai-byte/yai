@@ -504,6 +504,9 @@ msgstr "已移除 "
 msgid "search requires exactly one keyword"
 msgstr "search 恰好需要一个关键词"
 
+msgid "[installed]"
+msgstr "[已安装]"
+
 msgid "Reason: "
 msgstr "原因："
 

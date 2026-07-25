@@ -81,10 +81,16 @@ void search_packages(int argc, char** argv) {
     }
     const std::string keyword = argv[2];
     for (const RepoPackage& package : load_repo_packages()) {
-        if (package_matches_keyword(package, keyword)) {
-            std::cout << package.id << "\t" << package.name << "\t"
-                      << search_summary(package.summary) << "\n";
+        if (!package_matches_keyword(package, keyword)) {
+            continue;
         }
+        std::string line = package.id + "\t" + package.name + "\t" + search_summary(package.summary);
+        if (metadata_exists(paths_for(package.id))) {
+            line += " ";
+            line += tr("[installed]");
+            line = color_green(line);
+        }
+        std::cout << line << "\n";
     }
 }
 
