@@ -200,9 +200,9 @@ msgstr ""
 "语言：默认跟随系统 locale；设置 YAI_LANG=zh 或 YAI_LANG=en 可强制指定。\n"
 
 msgid ""
-"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+"Package/id arguments support quoted * and ? patterns; supported commands may apply to multiple matches.\n"
 msgstr ""
-"包名/id 参数支持加引号的 * 和 ? 通配符，但必须只匹配一个包。\n"
+"包名/id 参数支持加引号的 * 和 ? 通配符；支持的命令可作用于多个匹配项。\n"
 
 msgid ""
 "install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
@@ -391,7 +391,7 @@ msgstr "rollback 恰好需要一个包 id"
 msgid "unknown rollback option: "
 msgstr "未知的 rollback 选项："
 
-msgid "Rollback {count} package(s)? [y/N] "
+msgid "Roll back {count} package(s)? [y/N] "
 msgstr "要回滚 {count} 个包吗？[y/N] "
 
 msgid ""

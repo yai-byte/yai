@@ -200,9 +200,9 @@ msgstr ""
 "Language: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n"
 
 msgid ""
-"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+"Package/id arguments support quoted * and ? patterns; supported commands may apply to multiple matches.\n"
 msgstr ""
-"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+"Package/id arguments support quoted * and ? patterns; supported commands may apply to multiple matches.\n"
 
 msgid ""
 "install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
@@ -391,8 +391,8 @@ msgstr "rollback requires exactly one package id"
 msgid "unknown rollback option: "
 msgstr "unknown rollback option: "
 
-msgid "Rollback {count} package(s)? [y/N] "
-msgstr "Rollback {count} package(s)? [y/N] "
+msgid "Roll back {count} package(s)? [y/N] "
+msgstr "Roll back {count} package(s)? [y/N] "
 
 msgid ""
 "Rollback cancelled\n"

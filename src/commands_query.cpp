@@ -86,23 +86,23 @@ void remove_installed_id(const std::string& id) {
 }
 
 void remove_app(int argc, char** argv) {
-    if (argc < 3 || std::string(argv[2]) == "--yes" || std::string(argv[2]) == "-y") {
+    bool yes = false;
+    std::string pattern;
+    for (int i = 2; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--yes" || arg == "-y") {
+            yes = true;
+        } else if (pattern.empty() && arg.rfind("--", 0) != 0) {
+            pattern = arg;
+        } else {
+            throw std::runtime_error(tr("unknown remove option: ") + arg);
+        }
+    }
+    if (pattern.empty()) {
         throw std::runtime_error(tr("remove requires exactly one package id"));
     }
-    if (argc > 4) {
-        throw std::runtime_error(tr("unknown remove option: ") + argv[4]);
-    }
 
-    bool yes = false;
-    if (argc == 4) {
-        const std::string option = argv[3];
-        if (option != "--yes" && option != "-y") {
-            throw std::runtime_error(tr("unknown remove option: ") + option);
-        }
-        yes = true;
-    }
-
-    const std::vector<std::string> ids = resolve_installed_package_ids(argv[2]);
+    const std::vector<std::string> ids = resolve_installed_package_ids(pattern);
     if (ids.size() > 1) {
         const std::string prompt = tr_format(
             "Remove {count} package(s)? [y/N] ",

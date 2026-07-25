@@ -42,7 +42,7 @@ void print_usage() {
         << tr("  yai list\n")
         << tr("  yai help\n");
     std::cout << tr("\nLanguage: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n");
-    std::cout << tr("Package/id arguments support quoted * and ? patterns when they match exactly one package.\n");
+    std::cout << tr("Package/id arguments support quoted * and ? patterns; supported commands may apply to multiple matches.\n");
     std::cout << tr("install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n");
 }
 
