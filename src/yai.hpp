@@ -242,6 +242,23 @@ std::string truncate_display_width(const std::string& value, std::size_t max_wid
 std::size_t terminal_width();
 bool stdout_color_enabled();
 std::string color_green(const std::string& text);
+struct HttpValidators {
+    std::string etag;
+    std::string last_modified;
+    std::string content_length;
+};
+
+enum class UrlFreshness {
+    Unchanged,
+    Changed,
+    Unknown,
+    Error,
+};
+
+bool http_validators_empty(const HttpValidators& v);
+HttpValidators parse_http_validators_from_headers(const fs::path& headers);
+UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpValidators& remote);
+
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
 double download_progress_recent_speed(
