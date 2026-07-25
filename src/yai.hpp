@@ -1,0 +1,469 @@
+#pragma once
+
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <cerrno>
+#include <cctype>
+#include <chrono>
+#include <csignal>
+#include <ctime>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <atomic>
+#include <fcntl.h>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <optional>
+#include <regex>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <system_error>
+#include <thread>
+#include <utility>
+#include <vector>
+
+namespace fs = std::filesystem;
+
+struct InstallOptions {
+    // Normalized CLI input shared by install, update, and download paths. It is
+    // parsed once at the boundary so later code can focus on resolving and
+    // staging sources instead of argv shape.
+    std::string target;
+    std::string id;
+    std::string name;
+    std::string target_arch;
+    std::string download_strategy = "direct";
+    std::string mirror_template;
+    std::string downloader = "auto";
+    bool id_explicit = false;
+    bool name_explicit = false;
+    bool arch_explicit = false;
+    bool download_explicit = false;
+    bool mirror_template_explicit = false;
+    bool downloader_explicit = false;
+};
+
+struct GitHubReleaseAsset {
+    std::string name;
+    std::string url;
+};
+
+struct GitHubRelease {
+    std::string owner;
+    std::string repo;
+    std::string tag;
+    GitHubReleaseAsset asset;
+};
+
+struct ResolvedSource {
+    // Boundary object between source resolution and file staging. Resolvers fill
+    // the trusted upstream identity and selected asset; installers and download
+    // commands only consume this shape.
+    std::string source_kind = "url";
+    std::string id;
+    std::string name;
+    std::string version;
+    std::string arch;
+    std::string source_url;
+    std::string download_url;
+    std::string github_owner;
+    std::string github_repo;
+    std::string github_asset;
+};
+
+struct RepoPackage {
+    // Canonical package record loaded from a schema-v1 repo index. AppImage feed
+    // entries are normalized into this form before search, info, or install code
+    // sees them.
+    std::string id;
+    std::string name;
+    std::string summary;
+    std::string homepage;
+    std::string license;
+    std::string source_type;
+    std::string source_owner;
+    std::string source_repo;
+    std::string source_url;
+    std::string source_reason;
+    std::string asset_pattern;
+};
+
+struct RepoEntry {
+    std::string name;
+    std::string location;
+};
+
+struct NetworkConfig {
+    // Stored network preference for GitHub Release assets. Mirror settings change
+    // the transport URL only; they do not change the upstream source metadata or
+    // the package trust boundary.
+    bool exists = false;
+    bool prompted = false;
+    std::string provider = "direct";
+    std::string download_strategy = "direct";
+    std::string mirror_template;
+};
+
+struct MirrorProvider {
+    // Built-in mirror template description used to rewrite public GitHub Release
+    // downloads when the user opts into a proxy strategy.
+    std::string name;
+    std::string mirror_template;
+    std::string description;
+};
+
+
+struct InstallPaths {
+    // Every installed artifact for an id is derived here, which keeps install,
+    // repair, remove, upgrade, and rollback operating on the same filesystem
+    // layout.
+    fs::path app_dir;
+    fs::path appimage;
+    fs::path extracted_dir;
+    fs::path wrapper;
+    fs::path desktop;
+    fs::path metadata;
+    fs::path legacy_metadata;
+};
+
+struct ProcessResult {
+    // Captured child-process status plus merged stdout/stderr. Runtime probes use
+    // timed_out to distinguish a still-running GUI launch from a failed command.
+    int exit_code = 1;
+    std::string output;
+    bool timed_out = false;
+};
+
+struct ProcessOutput {
+    int exit_code = 1;
+    std::string stdout_text;
+    std::string stderr_text;
+};
+
+struct DownloadProgressSample {
+    std::chrono::steady_clock::time_point time;
+    std::uintmax_t downloaded = 0;
+};
+
+struct DownloadProgressState {
+    std::vector<DownloadProgressSample> samples;
+    std::optional<std::chrono::steady_clock::time_point> last_progress_time;
+    double bytes_per_second = 0.0;
+};
+
+struct RepairResult {
+    // Runtime-mode probe result propagated to command code so it can write the
+    // matching wrapper and tell users when FUSE caused a fallback.
+    std::string mode;
+    bool fuse_error_detected = false;
+    std::string detail;
+};
+
+struct DesktopSource {
+    fs::path root;
+    bool cleanup = false;
+};
+
+enum class Language {
+    English,
+    Chinese,
+};
+
+
+extern const char* APPIMAGE_FEED_URL;
+
+std::optional<std::string> env_string(const char* name);
+std::string ascii_lower(std::string value);
+Language current_language();
+bool use_chinese();
+std::string tr(const std::string& msgid);
+std::string tr_format(
+    const std::string& msgid,
+    const std::vector<std::pair<std::string, std::string>>& replacements);
+std::string home_dir();
+fs::path expand_home_path(const std::string& path);
+fs::path config_dir_path();
+fs::path network_config_path();
+fs::path github_blocklist_path();
+bool contains_line_break(const std::string& value);
+std::string trim(std::string value);
+std::string basename_from_url(const std::string& url);
+std::string strip_appimage_suffix(std::string value);
+std::string sanitize_id(const std::string& value);
+std::string shell_escape_double_quoted(const std::string& value);
+std::string desktop_escape(const std::string& value);
+std::string to_lower(std::string value);
+bool has_url_scheme(const std::string& value);
+bool looks_like_github_repo(const std::string& value);
+bool looks_like_repo_package_target(const std::string& value);
+bool looks_like_local_appimage_target(const std::string& value);
+bool has_glob_wildcards(const std::string& value);
+bool glob_match_case_insensitive(const std::string& pattern, const std::string& value);
+std::string resolve_installed_package_id(const std::string& pattern);
+std::string url_encode(const std::string& value);
+std::string replace_all(std::string value, const std::string& from, const std::string& to);
+bool output_has_fuse_error(const std::string& output);
+int run_process(const std::vector<std::string>& args);
+ProcessResult run_process_capture(
+    const std::vector<std::string>& args,
+    const std::optional<fs::path>& cwd = std::nullopt,
+    const std::vector<std::pair<std::string, std::string>>& env = {});
+ProcessOutput run_process_capture_separate(
+    const std::vector<std::string>& args,
+    const std::optional<fs::path>& cwd = std::nullopt,
+    const std::vector<std::pair<std::string, std::string>>& env = {});
+ProcessResult run_process_capture_timeout(
+    const std::vector<std::string>& args,
+    int timeout_ms,
+    const std::optional<fs::path>& cwd = std::nullopt,
+    const std::vector<std::pair<std::string, std::string>>& env = {});
+std::string format_byte_count(std::uintmax_t bytes);
+std::string format_duration_seconds(double seconds);
+std::size_t display_width(const std::string& value);
+std::string truncate_display_width(const std::string& value, std::size_t max_width);
+std::size_t terminal_width();
+std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
+std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
+double download_progress_recent_speed(
+    DownloadProgressState& state,
+    const std::chrono::steady_clock::time_point& now,
+    std::uintmax_t downloaded);
+std::string progress_bar(
+    std::optional<std::uintmax_t> total,
+    std::uintmax_t downloaded,
+    std::size_t width,
+    int tick);
+void render_download_progress(
+    const fs::path& part,
+    const fs::path& headers,
+    const std::chrono::steady_clock::time_point& start,
+    int tick,
+    std::size_t& last_width,
+    DownloadProgressState& state);
+void clear_download_progress(std::size_t& last_width);
+ProcessResult run_process_capture_download_progress(
+    const std::vector<std::string>& args,
+    const fs::path& part,
+    const fs::path& headers);
+std::string normalize_arch(const std::string& value);
+bool is_supported_arch(const std::string& value);
+std::string supported_arch_list();
+std::string current_arch();
+void ensure_directory(const fs::path& path);
+void remove_required(const fs::path& path, const std::string& context);
+void remove_all_required(const fs::path& path, const std::string& context);
+bool remove_best_effort(const fs::path& path);
+bool remove_all_best_effort(const fs::path& path);
+void write_executable_file(const fs::path& path, const std::string& content);
+void write_text_file(const fs::path& path, const std::string& content);
+std::string read_text_file(const fs::path& path);
+void copy_file_overwrite(const fs::path& from, const fs::path& to);
+std::vector<MirrorProvider> built_in_mirror_providers();
+std::optional<MirrorProvider> mirror_provider_by_name(const std::string& name);
+bool template_has_placeholder(const std::string& value);
+std::string normalize_custom_mirror_template(std::string value);
+std::optional<std::string> key_value_file_value(const fs::path& file, const std::string& key);
+NetworkConfig load_network_config();
+void write_network_config(const NetworkConfig& config);
+std::string china_network_disclaimer();
+InstallPaths paths_for(const std::string& id);
+void print_usage();
+std::string read_option_value(int argc, char** argv, int& index, const std::string& option);
+void parse_arch_option(InstallOptions& options, const std::string& value);
+void parse_download_strategy_option(InstallOptions& options, const std::string& value);
+void parse_mirror_template_option(InstallOptions& options, const std::string& value);
+void parse_downloader_option(InstallOptions& options, const std::string& value);
+void validate_mirror_options(const InstallOptions& options);
+InstallOptions parse_install_options(int argc, char** argv);
+InstallOptions parse_download_options(int argc, char** argv);
+void download_file(const std::string& url, const fs::path& target, const std::string& downloader);
+std::string fetch_text(const std::string& url);
+std::string json_unescape_string(const std::string& value);
+std::optional<std::string> json_string_after(const std::string& text, std::size_t key_pos);
+std::optional<std::string> json_find_string(const std::string& text, const std::string& key);
+std::vector<std::string> json_find_all_strings(const std::string& text, const std::string& key);
+std::optional<std::size_t> json_value_start_after_key(const std::string& text, const std::string& key);
+std::optional<std::string> json_extract_balanced(
+    const std::string& text,
+    std::size_t start,
+    char open_ch,
+    char close_ch);
+std::optional<std::string> json_find_object(const std::string& text, const std::string& key);
+std::optional<std::string> json_find_array(const std::string& text, const std::string& key);
+std::optional<int> json_find_int(const std::string& text, const std::string& key);
+std::vector<std::string> json_top_level_objects(const std::string& array_text);
+fs::path repo_index_path();
+fs::path repos_dir_path();
+fs::path repo_config_path();
+fs::path named_repo_index_path(const std::string& name);
+std::string json_escape_string(const std::string& value);
+std::string collapse_whitespace(const std::string& value);
+std::string html_to_plain_text(const std::string& value);
+std::string current_utc_timestamp();
+std::string load_repo_index_text();
+RepoPackage parse_repo_package(const std::string& object_text);
+std::vector<RepoPackage> load_repo_packages();
+std::vector<std::string> repo_package_objects_from_index(const std::string& index_text);
+std::optional<std::string> github_repo_from_link(std::string value);
+std::optional<std::string> appimage_feed_github_repo(const std::string& item_text);
+std::optional<std::string> appimage_feed_homepage(const std::string& item_text);
+std::string appimage_catalog_page_url(const std::string& name);
+std::string strip_unexpanded_url_placeholder(std::string url);
+std::optional<std::string> appimage_feed_direct_download_url(const std::string& item_text);
+std::string yai_package_object_from_appimage_feed_item(
+    const std::string& item_text,
+    const std::string& id);
+std::string normalize_appimage_feed_index(const std::string& feed_text);
+std::string normalize_repo_source_index(const std::string& index_text);
+std::string load_repo_source_text(const std::string& location);
+std::vector<RepoEntry> load_repo_entries();
+void write_repo_entries(const std::vector<RepoEntry>& entries);
+std::string validate_repo_name(const std::string& value);
+std::string validate_repo_location(const std::string& value);
+void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries);
+std::optional<RepoPackage> find_repo_package(const std::string& id);
+bool contains_case_insensitive(const std::string& value, const std::string& needle);
+bool package_matches_keyword(const RepoPackage& package, const std::string& keyword);
+int appimage_asset_score(const std::string& asset_name, const std::string& arch);
+std::string github_api_base();
+bool github_repo_matches_local_blocklist(const std::string& repo_target);
+bool github_repo_matches_builtin_blocklist(const std::string& repo_target);
+void enforce_github_release_policy(const std::string& owner, const std::string& repo);
+GitHubRelease resolve_github_latest(
+    const std::string& repo_target,
+    const std::string& asset_pattern = "",
+    const std::string& arch = "");
+std::string mirror_url_for(const std::string& mirror_template, const ResolvedSource& source);
+std::string download_with_strategy(
+    const ResolvedSource& source,
+    const InstallOptions& options,
+    const fs::path& target);
+std::string strip_url_fragment_query(std::string value);
+std::string url_origin(const std::string& url);
+std::string url_host(const std::string& url);
+bool is_file_url(const std::string& url);
+bool is_appimage_catalog_url(const std::string& url);
+std::string url_directory(const std::string& url);
+std::string resolve_href_url(const std::string& base_url, std::string href);
+std::vector<std::string> html_href_urls(const std::string& html, const std::string& base_url);
+bool is_kde_stable_download_url(const std::string& url);
+bool is_appimage_download_url(const std::string& url);
+bool vector_contains(const std::vector<std::string>& values, const std::string& value);
+bool package_name_matches_url(const RepoPackage& package, const std::string& url);
+std::vector<std::string> official_download_hint_urls(const RepoPackage& package);
+void add_allowed_host(std::vector<std::string>& hosts, const std::string& url);
+std::vector<std::string> allowed_website_hosts(
+    const RepoPackage& package,
+    const std::vector<std::string>& hint_urls);
+bool host_matches_allowed(const std::string& host, const std::vector<std::string>& allowed_hosts);
+bool is_allowed_website_url(
+    const std::string& url,
+    const RepoPackage& package,
+    const std::vector<std::string>& allowed_hosts,
+    bool allow_package_name_match);
+bool should_follow_download_page(
+    const std::string& url,
+    const RepoPackage& package,
+    const std::vector<std::string>& allowed_hosts,
+    bool allow_package_name_match);
+bool is_allowed_appimage_candidate(
+    const std::string& url,
+    const RepoPackage& package,
+    const std::vector<std::string>& allowed_hosts);
+std::string best_appimage_url_from_candidates(
+    const std::vector<std::string>& candidates,
+    const std::string& arch = "");
+bool file_looks_like_html(const fs::path& path);
+std::string appimage_url_from_download_landing_html(
+    const std::string& html,
+    const std::string& base_url,
+    const std::string& arch = "");
+std::string appimage_url_from_download_landing_page(
+    const fs::path& path,
+    const std::string& base_url,
+    const std::string& arch = "");
+std::string truncate_status_text(const std::string& value, std::size_t max_size);
+std::string resolve_website_appimage_download(
+    const RepoPackage& package,
+    const std::string& arch = "");
+std::string stage_appimage_source(
+    const ResolvedSource& source,
+    const InstallOptions& options,
+    const fs::path& target);
+ResolvedSource resolve_install_source(const InstallOptions& options);
+bool source_uses_github_release_download(const ResolvedSource& source);
+NetworkConfig prompt_china_network_config();
+NetworkConfig prompt_github_release_proxy_for_this_download(NetworkConfig config);
+InstallOptions apply_network_config_to_options(
+    const InstallOptions& options,
+    const ResolvedSource& source);
+std::optional<std::string> metadata_value(const fs::path& file, const std::string& key);
+fs::path readable_metadata_path(const InstallPaths& paths);
+bool metadata_exists(const InstallPaths& paths);
+std::string sha256_file(const fs::path& path);
+bool has_image_extension(const fs::path& path);
+int path_depth(const fs::path& path);
+std::optional<fs::path> find_upstream_desktop_file(const fs::path& root);
+fs::path desktop_temp_dir(const InstallPaths& paths);
+std::optional<DesktopSource> desktop_source_from_appimage(const InstallPaths& paths);
+void cleanup_desktop_source(const InstallPaths& paths, const DesktopSource& source);
+std::optional<fs::path> find_icon_by_name(const fs::path& root, const std::string& icon_name);
+std::optional<fs::path> find_first_icon(const fs::path& root);
+std::optional<fs::path> install_desktop_icon(
+    const InstallPaths& paths,
+    const fs::path& root,
+    const std::string& icon_name);
+std::string desktop_key_base(const std::string& key);
+bool is_safe_upstream_desktop_key(const std::string& key);
+std::optional<std::string> read_desktop_icon_name(const fs::path& desktop_file);
+void write_wrapper(const InstallPaths& paths, const std::string& mode);
+void chmod_user_executable(const fs::path& path);
+RepairResult extract_appimage(const InstallPaths& paths);
+RepairResult detect_run_mode(const InstallPaths& paths);
+std::optional<std::string> render_upstream_desktop_entry(
+    const InstallPaths& paths,
+    const std::string& name,
+    const fs::path& root,
+    const fs::path& desktop_file);
+void write_desktop_entry(const InstallPaths& paths, const std::string& name);
+void write_metadata(
+    const InstallPaths& paths,
+    const ResolvedSource& source,
+    const std::string& mode);
+void print_mode_line(const std::string& mode);
+void print_fuse_fallback_line();
+void download_app(int argc, char** argv);
+void install_app(int argc, char** argv);
+RepairResult repair_installed_package(const std::string& id);
+void repair_app(int argc, char** argv);
+fs::path previous_version_dir(const InstallPaths& paths);
+void save_previous_version(const InstallPaths& paths);
+void restore_previous_version(const std::string& id);
+void rollback_app(int argc, char** argv);
+void cleanup_update_candidate(const InstallPaths& candidate_paths);
+void update_app(int argc, char** argv);
+void upgrade_app(int argc, char** argv);
+void remove_if_exists(const fs::path& path);
+void remove_app(int argc, char** argv);
+void list_apps();
+void search_packages(int argc, char** argv);
+void info_package(int argc, char** argv);
+void repo_list_app(int argc);
+void repo_add_app(int argc, char** argv);
+void repo_update_app(int argc, char** argv);
+void repo_app(int argc, char** argv);
+void mirror_list_app(int argc);
+void mirror_use_app(int argc, char** argv);
+void mirror_custom_app(int argc, char** argv);
+void mirror_off_app(int argc);
+void mirror_app(int argc, char** argv);
+void doctor_app_files(int& warnings);
+void doctor_app(int argc);

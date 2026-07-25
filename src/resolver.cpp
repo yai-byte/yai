@@ -1,0 +1,338 @@
+#include "yai.hpp"
+
+// Install-source dispatch: package match helpers, staging, resolve_install_source
+// routing, and interactive network/mirror prompts. GitHub, URL/HTML, and website
+// crawl implementations live in resolver_github.cpp, resolver_url.cpp, and
+// resolver_website.cpp.
+
+bool contains_case_insensitive(const std::string& value, const std::string& needle) {
+    return to_lower(value).find(to_lower(needle)) != std::string::npos;
+}
+
+bool package_matches_keyword(const RepoPackage& package, const std::string& keyword) {
+    if (has_glob_wildcards(keyword)) {
+        return glob_match_case_insensitive(keyword, package.id) ||
+               glob_match_case_insensitive(keyword, package.name) ||
+               glob_match_case_insensitive(keyword, package.summary);
+    }
+    return keyword.empty() ||
+           contains_case_insensitive(package.id, keyword) ||
+           contains_case_insensitive(package.name, keyword) ||
+           contains_case_insensitive(package.summary, keyword);
+}
+
+namespace {
+
+std::string install_arch_for_options(const InstallOptions& options) {
+    return options.target_arch.empty() ? current_arch() : normalize_arch(options.target_arch);
+}
+
+ResolvedSource with_install_arch(ResolvedSource source, const InstallOptions& options) {
+    // --arch is only an asset-selection hint persisted for future update. It does
+    // not imply that yai can run a non-native AppImage on this host.
+    source.arch = install_arch_for_options(options);
+    return source;
+}
+
+}  // namespace
+
+std::string stage_appimage_source(
+    const ResolvedSource& source,
+    const InstallOptions& options,
+    const fs::path& target) {
+    // Staging is shared by install, update, and download. It copies local files
+    // or downloads remote sources to the caller-supplied target; command code
+    // decides whether to chmod, probe, or write desktop/metadata artifacts.
+    if (source.source_kind == "local_path") {
+        copy_file_overwrite(source.source_url, target);
+        return source.source_url;
+    }
+
+    ResolvedSource current_source = source;
+    for (int redirects = 0; redirects < 3; ++redirects) {
+        const std::string downloaded_url = download_with_strategy(current_source, options, target);
+        const std::string landing_appimage_url =
+            appimage_url_from_download_landing_page(target, downloaded_url, options.target_arch);
+        if (landing_appimage_url.empty()) {
+            if (file_looks_like_html(target)) {
+                const bool removed = remove_best_effort(target);
+                if (!removed) {
+                    std::cerr << tr("yai: warning: failed to clean downloaded HTML landing page\n");
+                }
+                throw std::runtime_error(tr("downloaded URL returned an HTML page instead of an AppImage: ") + downloaded_url);
+            }
+            return downloaded_url;
+        }
+        if (landing_appimage_url == downloaded_url) {
+            return downloaded_url;
+        }
+
+        std::cerr << tr("yai: downloaded an AppImage landing page; following embedded AppImage link\n");
+        const bool removed = remove_best_effort(target);
+        if (!removed) {
+            std::cerr << tr("yai: warning: failed to clean downloaded HTML landing page before following AppImage link\n");
+        }
+        current_source.source_url = landing_appimage_url;
+        current_source.download_url = landing_appimage_url;
+    }
+
+    throw std::runtime_error(tr("too many nested AppImage landing pages: ") + current_source.source_url);
+}
+
+namespace {
+
+ResolvedSource resolve_local_install_source(const InstallOptions& options) {
+    const fs::path local_path = options.target;
+    if (!fs::exists(local_path)) {
+        throw std::runtime_error(tr("local AppImage file does not exist: ") + options.target);
+    }
+    if (!fs::is_regular_file(local_path)) {
+        throw std::runtime_error(tr("local AppImage target is not a file: ") + options.target);
+    }
+
+    const std::string base = local_path.filename().string();
+    ResolvedSource source;
+    source.source_kind = "local_path";
+    source.id = options.id.empty() ? sanitize_id(strip_appimage_suffix(base)) : options.id;
+    source.name = options.name.empty() ? strip_appimage_suffix(base) : options.name;
+    source.source_url = fs::absolute(local_path).lexically_normal().string();
+    source.download_url = source.source_url;
+    return with_install_arch(source, options);
+}
+
+ResolvedSource source_from_github_release(
+    const InstallOptions& options,
+    const GitHubRelease& release,
+    const std::string& source_kind,
+    const std::string& id,
+    const std::string& name) {
+    // Keep source_url pointed at the upstream release asset. download_url may
+    // later differ if a mirror succeeds, but update decisions still need the
+    // original owner/repo/tag/asset identity.
+    ResolvedSource source;
+    source.source_kind = source_kind;
+    source.id = id;
+    source.name = name;
+    source.version = release.tag;
+    source.source_url = release.asset.url;
+    source.download_url = release.asset.url;
+    source.github_owner = release.owner;
+    source.github_repo = release.repo;
+    source.github_asset = release.asset.name;
+    return with_install_arch(source, options);
+}
+
+ResolvedSource resolve_github_install_source(const InstallOptions& options) {
+    const GitHubRelease release = resolve_github_latest(options.target, "", options.target_arch);
+    return source_from_github_release(
+        options,
+        release,
+        "github_release",
+        options.id.empty() ? sanitize_id(release.repo) : options.id,
+        options.name.empty() ? release.repo : options.name);
+}
+
+std::string repo_source_id(const InstallOptions& options, const RepoPackage& package) {
+    return options.id_explicit ? options.id : sanitize_id(package.id);
+}
+
+std::string repo_source_name(const InstallOptions& options, const RepoPackage& package) {
+    return options.name_explicit ? options.name : package.name;
+}
+
+ResolvedSource repo_direct_url_source(const InstallOptions& options, const RepoPackage& package) {
+    ResolvedSource source;
+    source.source_kind = "repo_direct_url";
+    source.id = repo_source_id(options, package);
+    source.name = repo_source_name(options, package);
+    source.version = basename_from_url(package.source_url);
+    source.source_url = package.source_url;
+    source.download_url = package.source_url;
+    return with_install_arch(source, options);
+}
+
+void throw_unavailable_repo_source(const RepoPackage& package) {
+    throw std::runtime_error(
+        tr("package is listed but has no installable AppImage source: ") +
+        package.id +
+        (package.source_reason.empty() ? "" : tr(" (") + package.source_reason + tr(")")));
+}
+
+ResolvedSource repo_website_page_source(const InstallOptions& options, const RepoPackage& package) {
+    const std::string download_url = resolve_website_appimage_download(package, options.target_arch);
+    ResolvedSource source;
+    source.source_kind = "repo_website_page";
+    source.id = repo_source_id(options, package);
+    source.name = repo_source_name(options, package);
+    source.version = basename_from_url(download_url);
+    source.source_url = download_url;
+    source.download_url = download_url;
+    return with_install_arch(source, options);
+}
+
+ResolvedSource repo_github_release_source(const InstallOptions& options, const RepoPackage& package) {
+    const GitHubRelease release = resolve_github_latest(
+        package.source_owner + "/" + package.source_repo,
+        package.asset_pattern,
+        options.target_arch);
+    return source_from_github_release(
+        options,
+        release,
+        "repo_github_release",
+        repo_source_id(options, package),
+        repo_source_name(options, package));
+}
+
+ResolvedSource resolve_repo_package_install_source(const InstallOptions& options, const RepoPackage& package) {
+    if (package.source_type == "direct_url") {
+        return repo_direct_url_source(options, package);
+    }
+    if (package.source_type == "unavailable") {
+        throw_unavailable_repo_source(package);
+    }
+    if (package.source_type == "website_page") {
+        return repo_website_page_source(options, package);
+    }
+    return repo_github_release_source(options, package);
+}
+
+ResolvedSource resolve_repo_package_install_source(const InstallOptions& options) {
+    const std::optional<RepoPackage> package = find_repo_package(options.target);
+    if (!package.has_value()) {
+        throw std::runtime_error(tr("package not found in repo index: ") + options.target);
+    }
+    return resolve_repo_package_install_source(options, *package);
+}
+
+ResolvedSource resolve_url_install_source(const InstallOptions& options) {
+    const std::string base = basename_from_url(options.target);
+    ResolvedSource source;
+    source.source_kind = "url";
+    source.id = options.id.empty() ? sanitize_id(strip_appimage_suffix(base)) : options.id;
+    source.name = options.name.empty() ? strip_appimage_suffix(base) : options.name;
+    source.source_url = options.target;
+    source.download_url = options.target;
+    return with_install_arch(source, options);
+}
+
+}  // namespace
+
+ResolvedSource resolve_install_source(const InstallOptions& options) {
+    // Resolution order matters: a local AppImage named owner/repo-like or
+    // package-like should still be installed as a file path before network or
+    // repo lookups are attempted.
+    if (looks_like_local_appimage_target(options.target)) {
+        return resolve_local_install_source(options);
+    }
+    if (looks_like_github_repo(options.target)) {
+        return resolve_github_install_source(options);
+    }
+    if (looks_like_repo_package_target(options.target)) {
+        return resolve_repo_package_install_source(options);
+    }
+    return resolve_url_install_source(options);
+}
+
+bool source_uses_github_release_download(const ResolvedSource& source) {
+    return !source.github_owner.empty() ||
+           to_lower(source.source_url).find("github.com/") != std::string::npos;
+}
+
+NetworkConfig prompt_china_network_config() {
+    // The prompt configures a convenience proxy for public GitHub Release
+    // downloads. It does not rewrite repository ownership, source_kind, or other
+    // metadata fields used for future update decisions.
+    NetworkConfig config;
+    config.exists = true;
+    config.prompted = true;
+    config.provider = "direct";
+    config.download_strategy = "direct";
+
+    std::cout << tr("China network optimization\n");
+    std::cout << china_network_disclaimer() << "\n\n";
+    std::cout << tr("GitHub direct download is the default. Enable a third-party proxy for public GitHub Release downloads? [y/N] ");
+
+    std::string answer;
+    std::getline(std::cin, answer);
+    answer = to_lower(trim(answer));
+    if (answer != "y" && answer != "yes") {
+        write_network_config(config);
+        return config;
+    }
+
+    std::cout << tr("Choose a proxy provider:\n");
+    const std::vector<MirrorProvider> providers = built_in_mirror_providers();
+    for (std::size_t i = 0; i < providers.size(); ++i) {
+        std::cout << "  " << (i + 1) << ". " << providers[i].name << " - " << tr(providers[i].description) << "\n";
+    }
+    std::cout << "  " << (providers.size() + 1)
+              << tr(". custom - enter an Xget domain or template\n");
+    std::cout << tr("Choice [1-") << (providers.size() + 1) << "]: ";
+
+    std::string choice_text;
+    std::getline(std::cin, choice_text);
+    const int choice = std::atoi(choice_text.c_str());
+    if (choice >= 1 && static_cast<std::size_t>(choice) <= providers.size()) {
+        const MirrorProvider provider = providers[static_cast<std::size_t>(choice - 1)];
+        config.provider = provider.name;
+        config.download_strategy = "mirror_first";
+        config.mirror_template = provider.mirror_template;
+    } else if (choice == static_cast<int>(providers.size() + 1)) {
+        std::cout << tr("Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): ");
+        std::string custom;
+        std::getline(std::cin, custom);
+        config.provider = "custom";
+        config.download_strategy = "mirror_first";
+        config.mirror_template = normalize_custom_mirror_template(custom);
+    } else {
+        config.provider = "direct";
+        config.download_strategy = "direct";
+    }
+
+    write_network_config(config);
+    return config;
+}
+
+NetworkConfig prompt_github_release_proxy_for_this_download(NetworkConfig config) {
+    if (!config.exists || config.provider == "direct" || config.mirror_template.empty()) {
+        return prompt_china_network_config();
+    }
+
+    std::cout << tr_format(
+        "Use proxy {provider} for this GitHub Release download? [Y/n] ",
+        {{"{provider}", config.provider}});
+    std::string answer;
+    std::getline(std::cin, answer);
+    answer = to_lower(trim(answer));
+    if (answer == "n" || answer == "no") {
+        NetworkConfig direct;
+        direct.exists = true;
+        direct.prompted = true;
+        direct.provider = "direct";
+        direct.download_strategy = "direct";
+        return direct;
+    }
+    config.download_strategy = "mirror_first";
+    return config;
+}
+
+InstallOptions apply_network_config_to_options(
+    const InstallOptions& options,
+    const ResolvedSource& source) {
+    InstallOptions effective = options;
+    if (!source_uses_github_release_download(source) ||
+        options.download_explicit ||
+        options.mirror_template_explicit) {
+        return effective;
+    }
+
+    NetworkConfig config = load_network_config();
+    if (!env_string("YAI_BATCH_CHILD").has_value() && isatty(STDIN_FILENO)) {
+        config = prompt_github_release_proxy_for_this_download(config);
+    }
+    if (config.download_strategy != "direct" && !config.mirror_template.empty()) {
+        effective.download_strategy = "mirror_first";
+        effective.mirror_template = config.mirror_template;
+    }
+    return effective;
+}

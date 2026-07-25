@@ -1,0 +1,371 @@
+#include "yai.hpp"
+
+// URL/HTML parsing helpers for AppImage candidate discovery.
+
+std::string strip_url_fragment_query(std::string value) {
+    const std::size_t fragment = value.find('#');
+    if (fragment != std::string::npos) {
+        value.erase(fragment);
+    }
+    const std::size_t query = value.find('?');
+    if (query != std::string::npos) {
+        value.erase(query);
+    }
+    return value;
+}
+
+std::string url_origin(const std::string& url) {
+    const std::size_t scheme = url.find("://");
+    if (scheme == std::string::npos) {
+        return "";
+    }
+    const std::size_t host_start = scheme + 3;
+    const std::size_t path_start = url.find('/', host_start);
+    return path_start == std::string::npos ? url : url.substr(0, path_start);
+}
+
+std::string url_host(const std::string& url) {
+    const std::size_t scheme = url.find("://");
+    if (scheme == std::string::npos) {
+        return "";
+    }
+    const std::size_t host_start = scheme + 3;
+    const std::size_t path_start = url.find('/', host_start);
+    std::string host = url.substr(
+        host_start,
+        path_start == std::string::npos ? std::string::npos : path_start - host_start);
+    const std::size_t at = host.find('@');
+    if (at != std::string::npos) {
+        host.erase(0, at + 1);
+    }
+    const std::size_t colon = host.find(':');
+    if (colon != std::string::npos) {
+        host.erase(colon);
+    }
+    host = to_lower(host);
+    if (host.rfind("www.", 0) == 0) {
+        host.erase(0, 4);
+    }
+    return host;
+}
+
+bool is_file_url(const std::string& url) {
+    return to_lower(url).rfind("file://", 0) == 0;
+}
+
+bool is_appimage_catalog_url(const std::string& url) {
+    const std::string host = url_host(url);
+    if (host == "appimage.github.io" ||
+        host == "appimagehub.com" ||
+        host == "appimagehub.org") {
+        return true;
+    }
+
+    const std::string lower = to_lower(strip_url_fragment_query(url));
+    return lower.find("/appimage.github.io/") != std::string::npos ||
+           lower.find("/appimagehub/") != std::string::npos;
+}
+
+std::string url_directory(const std::string& url) {
+    const std::string clean = strip_url_fragment_query(url);
+    const std::size_t slash = clean.find_last_of('/');
+    if (slash == std::string::npos) {
+        return clean + "/";
+    }
+    return clean.substr(0, slash + 1);
+}
+
+std::string resolve_href_url(const std::string& base_url, std::string href) {
+    href = trim(replace_all(href, "&amp;", "&"));
+    if (href.empty() ||
+        href.find('{') != std::string::npos ||
+        href.find('}') != std::string::npos ||
+        href.rfind("mailto:", 0) == 0 ||
+        href.rfind("javascript:", 0) == 0) {
+        return "";
+    }
+    if (has_url_scheme(href)) {
+        return href;
+    }
+    if (href.rfind("//", 0) == 0) {
+        const std::size_t scheme = base_url.find("://");
+        const std::string base_scheme = scheme == std::string::npos ? "https" : base_url.substr(0, scheme);
+        return base_scheme + ":" + href;
+    }
+    if (href.front() == '/') {
+        if (base_url.rfind("file://", 0) == 0) {
+            return "file://" + href;
+        }
+        return url_origin(base_url) + href;
+    }
+    return url_directory(base_url) + href;
+}
+
+std::vector<std::string> html_href_urls(const std::string& html, const std::string& base_url) {
+    std::vector<std::string> urls;
+    const std::regex href_regex(R"(href\s*=\s*["']([^"']+)["'])", std::regex::icase);
+    for (std::sregex_iterator it(html.begin(), html.end(), href_regex), end; it != end; ++it) {
+        const std::string url = resolve_href_url(base_url, (*it)[1].str());
+        if (!url.empty()) {
+            urls.push_back(url);
+        }
+    }
+    return urls;
+}
+
+bool is_kde_stable_download_url(const std::string& url) {
+    const std::string lower = to_lower(strip_url_fragment_query(url));
+    return lower.find("download.kde.org/stable/kdenlive/") != std::string::npos ||
+           lower.find("download.kde.org/stable/krita/") != std::string::npos;
+}
+
+bool is_appimage_download_url(const std::string& url) {
+    const std::string lower = to_lower(strip_url_fragment_query(url));
+    return lower.size() >= 9 &&
+           lower.compare(lower.size() - 9, 9, ".appimage") == 0;
+}
+
+namespace {
+
+std::vector<std::string> html_appimage_urls(const std::string& html, const std::string& base_url) {
+    std::vector<std::string> urls;
+    for (const std::string& link : html_href_urls(html, base_url)) {
+        if (is_appimage_download_url(link)) {
+            urls.push_back(link);
+        }
+    }
+
+    const std::regex value_regex(R"(value\s*=\s*["']([^"']+)["'])", std::regex::icase);
+    for (std::sregex_iterator it(html.begin(), html.end(), value_regex), end; it != end; ++it) {
+        const std::string url = resolve_href_url(base_url, (*it)[1].str());
+        if (is_appimage_download_url(url)) {
+            urls.push_back(url);
+        }
+    }
+    return urls;
+}
+
+} // namespace
+
+bool vector_contains(const std::vector<std::string>& values, const std::string& value) {
+    for (const std::string& item : values) {
+        if (item == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool package_name_matches_url(const RepoPackage& package, const std::string& url) {
+    const std::string lower = to_lower(url);
+    if (!package.id.empty() && lower.find(to_lower(package.id)) != std::string::npos) {
+        return true;
+    }
+    const std::string name_id = sanitize_id(package.name);
+    return !name_id.empty() && lower.find(to_lower(name_id)) != std::string::npos;
+}
+
+std::vector<std::string> official_download_hint_urls(const RepoPackage& package) {
+    // Curated hints are seeded before generic homepage crawling for projects
+    // whose real AppImage is known to live on a dedicated download host or page.
+    const std::string id = to_lower(package.id);
+    const std::string name = to_lower(package.name);
+    std::vector<std::string> urls;
+    if (id.find("kdenlive") != std::string::npos || name.find("kdenlive") != std::string::npos) {
+        urls.push_back("https://kdenlive.org/en/download/");
+        urls.push_back("https://download.kde.org/stable/kdenlive/");
+    }
+    if (id.find("krita") != std::string::npos || name.find("krita") != std::string::npos) {
+        urls.push_back("https://krita.org/en/download/");
+        urls.push_back("https://download.kde.org/stable/krita/");
+    }
+    if (id.find("gimp") != std::string::npos || name.find("gimp") != std::string::npos) {
+        urls.push_back("https://www.gimp.org/downloads/");
+    }
+    return urls;
+}
+
+void add_allowed_host(std::vector<std::string>& hosts, const std::string& url) {
+    const std::string host = url_host(url);
+    if (!host.empty() && !vector_contains(hosts, host)) {
+        hosts.push_back(host);
+    }
+}
+
+std::vector<std::string> allowed_website_hosts(
+    const RepoPackage& package,
+    const std::vector<std::string>& hint_urls) {
+    // Website-page crawling is intentionally domain bounded: start from the feed
+    // source, declared homepage, and built-in official download hints. The only
+    // dynamic expansion is the catalog-to-project bridge below, and only when the
+    // URL visibly matches the package name.
+    std::vector<std::string> hosts;
+    add_allowed_host(hosts, strip_unexpanded_url_placeholder(package.source_url));
+    add_allowed_host(hosts, strip_unexpanded_url_placeholder(package.homepage));
+    for (const std::string& url : hint_urls) {
+        add_allowed_host(hosts, url);
+    }
+    return hosts;
+}
+
+bool host_matches_allowed(const std::string& host, const std::vector<std::string>& allowed_hosts) {
+    for (const std::string& allowed : allowed_hosts) {
+        if (host == allowed ||
+            (host.size() > allowed.size() &&
+             host.compare(host.size() - allowed.size(), allowed.size(), allowed) == 0 &&
+             host[host.size() - allowed.size() - 1] == '.')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_allowed_website_url(
+    const std::string& url,
+    const RepoPackage& package,
+    const std::vector<std::string>& allowed_hosts,
+    bool allow_package_name_match) {
+    if (is_file_url(url)) {
+        return true;
+    }
+    const std::string host = url_host(url);
+    return !host.empty() &&
+           (host_matches_allowed(host, allowed_hosts) ||
+            (allow_package_name_match && package_name_matches_url(package, url)));
+}
+
+bool should_follow_download_page(
+    const std::string& url,
+    const RepoPackage& package,
+    const std::vector<std::string>& allowed_hosts,
+    bool allow_package_name_match) {
+    // A website_page source is not permission to crawl the wider web. Reject
+    // discussion/social hosts, ordinary GitHub HTML pages, assets from unrelated
+    // domains, and static resources so catalog noise cannot become a candidate
+    // source.
+    const std::string lower = to_lower(strip_url_fragment_query(url));
+    if (lower.empty() ||
+        !is_allowed_website_url(url, package, allowed_hosts, allow_package_name_match) ||
+        lower.find("github.com/") != std::string::npos ||
+        (lower.find("appimage.github.io/") != std::string::npos &&
+         !package_name_matches_url(package, lower)) ||
+        lower.find("bugs.") != std::string::npos ||
+        lower.find("bugtracker") != std::string::npos ||
+        lower.find("donat") != std::string::npos ||
+        lower.find("docs") != std::string::npos ||
+        lower.find("forum") != std::string::npos ||
+        lower.find("reddit.com") != std::string::npos ||
+        lower.find("old.reddit.com") != std::string::npos ||
+        lower.find("lemmy.") != std::string::npos ||
+        lower.find("discord.") != std::string::npos ||
+        lower.find("twitter.com") != std::string::npos ||
+        lower.find("x.com") != std::string::npos ||
+        lower.find("facebook.com") != std::string::npos ||
+        lower.find("youtube.com") != std::string::npos ||
+        lower.find(".css") != std::string::npos ||
+        lower.find(".js") != std::string::npos ||
+        lower.find(".png") != std::string::npos ||
+        lower.find(".jpg") != std::string::npos ||
+        lower.find(".jpeg") != std::string::npos ||
+        lower.find(".svg") != std::string::npos) {
+        return false;
+    }
+    if (is_kde_stable_download_url(lower)) {
+        return true;
+    }
+    if ((lower.find("www.gimp.org/") != std::string::npos ||
+         lower.find("krita.org/") != std::string::npos ||
+         lower.find("kdenlive.org/") != std::string::npos) &&
+        lower.find("download") == std::string::npos &&
+        lower.find("linux") == std::string::npos &&
+        lower.find("appimage") == std::string::npos) {
+        return false;
+    }
+    if (allow_package_name_match && package_name_matches_url(package, lower)) {
+        return true;
+    }
+    return lower.find("download") != std::string::npos ||
+           lower.find("linux") != std::string::npos ||
+           lower.find("appimage") != std::string::npos;
+}
+
+bool is_allowed_appimage_candidate(
+    const std::string& url,
+    const RepoPackage& package,
+    const std::vector<std::string>& allowed_hosts) {
+    // A candidate must be both an AppImage-looking URL and inside the allowed
+    // project/hint host set, except for the controlled package-name catalog
+    // bridge handled by is_allowed_website_url.
+    return is_appimage_download_url(url) &&
+           is_allowed_website_url(url, package, allowed_hosts, true);
+}
+
+std::string best_appimage_url_from_candidates(
+    const std::vector<std::string>& candidates,
+    const std::string& arch) {
+    const std::string effective_arch = arch.empty() ? current_arch() : normalize_arch(arch);
+    int best_score = -1;
+    std::string best_url;
+    for (const std::string& url : candidates) {
+        if (!is_appimage_download_url(url)) {
+            continue;
+        }
+        const int score = appimage_asset_score(basename_from_url(url), effective_arch);
+        if (score > best_score) {
+            best_score = score;
+            best_url = url;
+        }
+    }
+    if (best_score < 0) {
+        return "";
+    }
+    return best_url;
+}
+
+bool file_looks_like_html(const fs::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        return false;
+    }
+    std::string prefix(512, '\0');
+    in.read(prefix.data(), static_cast<std::streamsize>(prefix.size()));
+    prefix.resize(static_cast<std::size_t>(in.gcount()));
+    prefix = to_lower(trim(prefix));
+    return prefix.rfind("<!doctype html", 0) == 0 ||
+           prefix.rfind("<html", 0) == 0 ||
+           prefix.find("<html") != std::string::npos;
+}
+
+namespace {
+
+bool text_looks_like_html(std::string text) {
+    if (text.size() > 512) {
+        text.resize(512);
+    }
+    text = to_lower(trim(text));
+    return text.rfind("<!doctype html", 0) == 0 ||
+           text.rfind("<html", 0) == 0 ||
+           text.find("<html") != std::string::npos;
+}
+
+} // namespace
+
+std::string appimage_url_from_download_landing_html(
+    const std::string& html,
+    const std::string& base_url,
+    const std::string& arch) {
+    if (!text_looks_like_html(html)) {
+        return "";
+    }
+    return best_appimage_url_from_candidates(html_appimage_urls(html, base_url), arch);
+}
+
+std::string appimage_url_from_download_landing_page(
+    const fs::path& path,
+    const std::string& base_url,
+    const std::string& arch) {
+    if (!file_looks_like_html(path)) {
+        return "";
+    }
+    return appimage_url_from_download_landing_html(read_text_file(path), base_url, arch);
+}

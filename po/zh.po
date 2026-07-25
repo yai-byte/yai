@@ -1,0 +1,1008 @@
+# yai Simplified Chinese translations
+# Generated from source msgids; edit msgstr values only.
+
+msgid "preparing desktop extract temp directory"
+msgstr "准备桌面文件解压临时目录"
+
+msgid "failed to stat "
+msgstr "无法 stat "
+
+msgid ": "
+msgstr "："
+
+msgid "failed to chmod "
+msgstr "无法 chmod "
+
+msgid "preparing extract temp directory"
+msgstr "准备解压临时目录"
+
+msgid "preparing extracted AppImage directory"
+msgstr "准备解压后的 AppImage 目录"
+
+msgid "failed to move extracted AppImage into place: "
+msgstr "无法将解压后的 AppImage 移动到位："
+
+msgid ""
+"yai: probing direct AppImage mode\n"
+msgstr ""
+"yai：正在探测直接运行模式\n"
+
+msgid ""
+"yai: selected direct AppImage mode\n"
+msgstr ""
+"yai：已选择直接运行模式\n"
+
+msgid ""
+"yai: direct mode reported a FUSE problem; trying extract-and-run mode\n"
+msgstr ""
+"yai：直接运行模式报告 FUSE 问题，正在尝试 extract-and-run 模式\n"
+
+msgid ""
+"yai: direct mode did not pass runtime probe; trying extract-and-run mode\n"
+msgstr ""
+"yai：直接运行模式未通过探测，正在尝试 extract-and-run 模式\n"
+
+msgid ""
+"yai: probing extract-and-run AppImage mode\n"
+msgstr ""
+"yai：正在探测 extract-and-run 模式\n"
+
+msgid ""
+"yai: selected extract-and-run AppImage mode\n"
+msgstr ""
+"yai：已选择 extract-and-run 模式\n"
+
+msgid ""
+"yai: extract-and-run mode did not pass runtime probe; extracting AppImage\n"
+msgstr ""
+"yai：extract-and-run 模式未通过探测，正在解压 AppImage\n"
+
+msgid ""
+"yai: selected extracted AppRun mode\n"
+msgstr ""
+"yai：已选择解压后的 AppRun 模式\n"
+
+msgid ""
+"Usage:\n"
+msgstr ""
+"用法：\n"
+
+msgid ""
+"  yai search <keyword>\n"
+msgstr ""
+"  yai search <关键词>\n"
+
+msgid ""
+"  yai info <package>\n"
+msgstr ""
+"  yai info <包名>\n"
+
+msgid ""
+"  yai repo list\n"
+msgstr ""
+"  yai repo list\n"
+
+msgid ""
+"  yai repo add <name> [url-or-path]\n"
+msgstr ""
+"  yai repo add <名称> [url-或-路径]\n"
+
+msgid ""
+"  yai repo update [name]\n"
+msgstr ""
+"  yai repo update [名称]\n"
+
+msgid ""
+"  yai mirror list\n"
+msgstr ""
+"  yai mirror list\n"
+
+msgid ""
+"  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n"
+msgstr ""
+"  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n"
+
+msgid ""
+"  yai mirror custom <xget-domain-or-template>\n"
+msgstr ""
+"  yai mirror custom <xget-域名-或-模板>\n"
+
+msgid ""
+"  yai mirror off\n"
+msgstr ""
+"  yai mirror off\n"
+
+msgid ""
+"  yai download <package|url|owner/repo> [...]\n"
+msgstr ""
+"  yai download <包名|url|owner/repo> [...]\n"
+
+msgid ""
+"              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n"
+msgstr ""
+"              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n"
+
+msgid ""
+"              [--download direct|mirror_first|direct_first]\n"
+msgstr ""
+"              [--download direct|mirror_first|direct_first]\n"
+
+msgid ""
+"              [--mirror-template <template>]\n"
+msgstr ""
+"              [--mirror-template <模板>]\n"
+
+msgid ""
+"              [--downloader auto|curl|wget|wget2|aria2c]\n"
+msgstr ""
+"              [--downloader auto|curl|wget|wget2|aria2c]\n"
+
+msgid ""
+"              [--jobs <n>]\n"
+msgstr ""
+"              [--jobs <n>]\n"
+
+msgid ""
+"  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
+msgstr ""
+"  yai install <包名|路径|url|owner/repo> [...] [--id <id>] [--name <名称>]\n"
+
+msgid ""
+"  yai update [id]\n"
+msgstr ""
+"  yai update [id]\n"
+
+msgid ""
+"  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
+msgstr ""
+"  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
+
+msgid ""
+"  yai rollback <id>\n"
+msgstr ""
+"  yai rollback <id>\n"
+
+msgid ""
+"  yai repair <id>\n"
+msgstr ""
+"  yai repair <id>\n"
+
+msgid ""
+"  yai doctor\n"
+msgstr ""
+"  yai doctor\n"
+
+msgid ""
+"  yai remove <id>\n"
+msgstr ""
+"  yai remove <id>\n"
+
+msgid ""
+"  yai list\n"
+msgstr ""
+"  yai list\n"
+
+msgid ""
+"  yai help\n"
+msgstr ""
+"  yai help\n"
+
+msgid ""
+"\n"
+"Language: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n"
+msgstr ""
+"\n"
+"语言：默认跟随系统 locale；设置 YAI_LANG=zh 或 YAI_LANG=en 可强制指定。\n"
+
+msgid ""
+"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+msgstr ""
+"包名/id 参数支持加引号的 * 和 ? 通配符，但必须只匹配一个包。\n"
+
+msgid ""
+"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+msgstr ""
+"install/download 支持多个目标；--jobs 控制并发任务数。--id/--name 只适用于单个安装。\n"
+
+msgid " requires a value"
+msgstr " 需要一个值"
+
+msgid "--arch must be "
+msgstr "--arch 必须是 "
+
+msgid "--download must be direct, mirror_first, or direct_first"
+msgstr "--download 必须是 direct、mirror_first 或 direct_first"
+
+msgid "--downloader must be "
+msgstr "--downloader 必须是 "
+
+msgid "--mirror-template is required when using a mirror download strategy"
+msgstr "使用镜像下载策略时必须提供 --mirror-template"
+
+msgid "install arguments must not contain line breaks"
+msgstr "install 参数不能包含换行"
+
+msgid "download arguments must not contain line breaks"
+msgstr "download 参数不能包含换行"
+
+msgid "install requires a URL or owner/repo target"
+msgstr "install 需要 URL 或 owner/repo 目标"
+
+msgid "unknown install option: "
+msgstr "未知的 install 选项："
+
+msgid "download requires a URL, package, or owner/repo target"
+msgstr "download 需要 URL、包名或 owner/repo 目标"
+
+msgid "unknown download option: "
+msgstr "未知的 download 选项："
+
+msgid "no supported downloader is available; install curl, wget, wget2, or aria2c"
+msgstr "没有可用的下载器；请安装 curl、wget、wget2 或 aria2c"
+
+msgid "requested downloader is not available: "
+msgstr "请求的下载器不可用："
+
+msgid "unsupported downloader: "
+msgstr "不支持的下载器："
+
+msgid ""
+"yai: warning: failed to clean temporary download files\n"
+msgstr ""
+"yai：警告：清理临时下载文件失败\n"
+
+msgid " failed with exit code "
+msgstr " 失败，退出码 "
+
+msgid "preparing temporary download file"
+msgstr "准备临时下载文件"
+
+msgid "preparing temporary download headers"
+msgstr "准备临时下载响应头文件"
+
+msgid "preparing temporary aria2 state"
+msgstr "准备临时 aria2 状态文件"
+
+msgid ""
+"yai: warning: failed to clean temporary download metadata\n"
+msgstr ""
+"yai：警告：清理临时下载元数据失败\n"
+
+msgid "failed to move downloaded file into place: "
+msgstr "无法将下载文件移动到位："
+
+msgid "yai: downloader failed, trying next: "
+msgstr "yai：下载器失败，尝试下一个："
+
+msgid "all selected downloaders failed: "
+msgstr "所有选定的下载器都失败了："
+
+msgid "failed to fetch "
+msgstr "无法获取 "
+
+msgid "package is not installed: "
+msgstr "包尚未安装："
+
+msgid "package pattern matched no installed packages: "
+msgstr "包名模式未匹配到已安装的包："
+
+msgid "package pattern is ambiguous: {pattern} (matches: {matches})"
+msgstr "包名模式不唯一：{pattern}（匹配到：{matches}）"
+
+msgid "Mode: "
+msgstr "运行模式："
+
+msgid ""
+"FUSE problem detected; yai selected a fallback mode.\n"
+msgstr ""
+"检测到 FUSE 问题；yai 已选择回退运行模式。\n"
+
+msgid "download does not accept local AppImage paths"
+msgstr "download 不接受本地 AppImage 路径"
+
+msgid "download target already exists: "
+msgstr "下载目标已存在："
+
+msgid "Using GitHub Release proxy strategy: "
+msgstr "正在使用 GitHub Release 代理策略："
+
+msgid "Upstream: "
+msgstr "上游地址："
+
+msgid "Downloading "
+msgstr "正在下载 "
+
+msgid "Downloaded to: "
+msgstr "已下载到："
+
+msgid "Installing local AppImage "
+msgstr "正在安装本地 AppImage "
+
+msgid "failed to find a runnable AppImage mode"
+msgstr "找不到可运行的 AppImage 模式"
+
+msgid "Installed "
+msgstr "已安装 "
+
+msgid "GitHub release: "
+msgstr "GitHub Release："
+
+msgid "Asset: "
+msgstr "资源文件："
+
+msgid "Source: "
+msgstr "来源："
+
+msgid "Downloaded from: "
+msgstr "下载自："
+
+msgid "Wrapper: "
+msgstr "启动包装器："
+
+msgid "Desktop entry: "
+msgstr "桌面入口："
+
+msgid "AppImage file is missing: "
+msgstr "缺少 AppImage 文件："
+
+msgid "repair failed after detecting a FUSE-related problem; install a FUSE 2 compatible package or check whether this AppImage supports extraction"
+msgstr "检测到 FUSE 相关问题后 repair 失败；请安装兼容 FUSE 2 的软件包，或确认此 AppImage 是否支持解压运行"
+
+msgid "repair failed: no runnable mode found"
+msgstr "repair 失败：找不到可运行模式"
+
+msgid "repair requires exactly one package id"
+msgstr "repair 恰好需要一个包 id"
+
+msgid "Repaired "
+msgstr "已修复 "
+
+msgid "current AppImage is missing: "
+msgstr "当前 AppImage 缺失："
+
+msgid "metadata is missing: "
+msgstr "缺少元数据："
+
+msgid "saving previous version"
+msgstr "保存上一版本"
+
+msgid "no rollback version is available for "
+msgstr "没有可用于回滚的版本："
+
+msgid "restoring rollback metadata"
+msgstr "恢复回滚元数据"
+
+msgid "rollback requires exactly one package id"
+msgstr "rollback 恰好需要一个包 id"
+
+msgid "Rolled back "
+msgstr "已回滚 "
+
+msgid "upgrade requires a package id or --all"
+msgstr "upgrade 需要包 id 或 --all"
+
+msgid "unknown upgrade option: "
+msgstr "未知的 upgrade 选项："
+
+msgid "upgrade accepts one package id or --all"
+msgstr "upgrade 接受一个包 id 或 --all"
+
+msgid "upgrade --all does not accept a package id"
+msgstr "upgrade --all 不能再指定包 id"
+
+msgid "upgrade arguments must not contain line breaks"
+msgstr "upgrade 参数不能包含换行"
+
+msgid "local AppImage path has no queryable update source"
+msgstr "本地 AppImage 路径没有可查询的更新来源"
+
+msgid "plain URL install has no stable update source"
+msgstr "普通 URL 安装没有稳定的更新来源"
+
+msgid "package source is unavailable"
+msgstr "包源不可用"
+
+msgid "source kind is not upgradable: "
+msgstr "来源类型不可升级："
+
+msgid "package is not upgradable: "
+msgstr "包不可升级："
+
+msgid "package is not upgradable: GitHub metadata is missing for "
+msgstr "包不可升级：缺少 GitHub 元数据："
+
+msgid ""
+"{id} is already up to date ({version})\n"
+msgstr ""
+"{id} 已是最新版本（{version}）\n"
+
+msgid ""
+"Upgrading {id} from {current} to {latest}\n"
+msgstr ""
+"正在升级 {id}：{current} -> {latest}\n"
+
+msgid "updated AppImage is not runnable; current installation was not changed"
+msgstr "更新后的 AppImage 不可运行；当前安装未改动"
+
+msgid "activating updated AppImage"
+msgstr "启用更新后的 AppImage"
+
+msgid "failed to activate updated AppImage: "
+msgstr "无法启用更新后的 AppImage："
+
+msgid "activating updated extracted directory"
+msgstr "启用更新后的解压目录"
+
+msgid "failed to activate updated extracted directory: "
+msgstr "无法启用更新后的解压目录："
+
+msgid "upgrade failed and rollback failed: "
+msgstr "升级失败且回滚也失败："
+
+msgid "; rollback error: "
+msgstr "；回滚错误："
+
+msgid "upgrade failed; restored previous version: "
+msgstr "升级失败；已恢复上一版本："
+
+msgid ""
+"Upgraded {id} to {version}\n"
+msgstr ""
+"已升级 {id} 到 {version}\n"
+
+msgid "Rollback version: "
+msgstr "可回滚版本："
+
+msgid "Upgrade {count} package(s)? [y/N] "
+msgstr "要升级 {count} 个包吗？[y/N] "
+
+msgid "already up to date"
+msgstr "已是最新版本"
+
+msgid "source: "
+msgstr "来源："
+
+msgid "asset: "
+msgstr "资源："
+
+msgid ""
+"No upgradable packages\n"
+msgstr ""
+"没有可升级的包\n"
+
+msgid ""
+"Upgrade cancelled\n"
+msgstr ""
+"升级已取消\n"
+
+msgid "yai: upgrade failed for "
+msgstr "yai：升级失败："
+
+msgid "{failed} of {total} upgrade task(s) failed"
+msgstr "{failed}/{total} 个升级任务失败"
+
+msgid "update accepts zero or one package id"
+msgstr "update 接受零个或一个包 id"
+
+msgid "removing installed package file"
+msgstr "正在删除已安装包文件"
+
+msgid "remove requires exactly one package id"
+msgstr "remove 恰好需要一个包 id"
+
+msgid "removing installed package directory"
+msgstr "正在删除已安装包目录"
+
+msgid "Removed "
+msgstr "已移除 "
+
+msgid "search requires exactly one keyword"
+msgstr "search 恰好需要一个关键词"
+
+msgid "Reason: "
+msgstr "原因："
+
+msgid "Source: direct_url "
+msgstr "来源：direct_url "
+
+msgid "Source: website_page "
+msgstr "来源：website_page "
+
+msgid ""
+"Source: unavailable\n"
+msgstr ""
+"来源：不可用\n"
+
+msgid "info requires exactly one package id"
+msgstr "info 恰好需要一个包 id"
+
+msgid "package not found in repo index: "
+msgstr "仓库索引中找不到包："
+
+msgid "Id: "
+msgstr "ID："
+
+msgid "Name: "
+msgstr "名称："
+
+msgid "Summary: "
+msgstr "简介："
+
+msgid "Homepage: "
+msgstr "官网："
+
+msgid "License: "
+msgstr "许可证："
+
+msgid "Asset pattern: "
+msgstr "资源匹配规则："
+
+msgid "repo list does not accept arguments"
+msgstr "repo list 不接受参数"
+
+msgid "repo add requires a name and optional URL/path"
+msgstr "repo add 需要名称，以及可选的 URL/路径"
+
+msgid "repo add without URL/path is only supported for the built-in appimage feed"
+msgstr "不带 URL/路径的 repo add 仅支持内置 appimage feed"
+
+msgid "Added repo "
+msgstr "已添加包源 "
+
+msgid "Location: "
+msgstr "位置："
+
+msgid "repo update accepts at most one repo name"
+msgstr "repo update 最多接受一个仓库名"
+
+msgid "repo not configured: "
+msgstr "仓库未配置："
+
+msgid ""
+"Updated {count} repo(s)\n"
+msgstr ""
+"已更新 {count} 个包源\n"
+
+msgid ""
+"No repos configured\n"
+msgstr ""
+"尚未配置包源\n"
+
+msgid "repo requires a subcommand: list, add, or update"
+msgstr "repo 需要子命令：list、add 或 update"
+
+msgid "unknown repo subcommand: "
+msgstr "未知的 repo 子命令："
+
+msgid "mirror list does not accept arguments"
+msgstr "mirror list 不接受参数"
+
+msgid "Current: "
+msgstr "当前："
+
+msgid "Strategy: "
+msgstr "策略："
+
+msgid "Template: "
+msgstr "模板："
+
+msgid ""
+"\n"
+"Available providers:\n"
+msgstr ""
+"\n"
+"可用代理：\n"
+
+msgid "mirror use requires a provider name"
+msgstr "mirror use 需要提供商名称"
+
+msgid "unknown mirror provider: "
+msgstr "未知的镜像提供商："
+
+msgid "Enabled GitHub Release proxy provider: "
+msgstr "已启用 GitHub Release 代理："
+
+msgid "mirror custom requires an Xget domain or template"
+msgstr "mirror custom 需要 Xget 域名或模板"
+
+msgid "Enabled custom GitHub Release proxy template: "
+msgstr "已启用自定义 GitHub Release 代理模板："
+
+msgid "mirror off does not accept arguments"
+msgstr "mirror off 不接受参数"
+
+msgid ""
+"GitHub Release proxy disabled; yai will use direct GitHub downloads by default\n"
+msgstr ""
+"GitHub Release 代理已关闭；yai 默认将直连 GitHub 下载\n"
+
+msgid "mirror requires a subcommand: list, use, custom, or off"
+msgstr "mirror 需要子命令：list、use、custom 或 off"
+
+msgid "unknown mirror subcommand: "
+msgstr "未知的 mirror 子命令："
+
+msgid ""
+"WARN {id}: missing AppImage {path}\n"
+msgstr ""
+"警告 {id}：缺少 AppImage {path}\n"
+
+msgid ""
+"WARN {id}: missing wrapper {path}\n"
+msgstr ""
+"警告 {id}：缺少启动包装器 {path}\n"
+
+msgid ""
+"WARN {id}: missing desktop entry {path}\n"
+msgstr ""
+"警告 {id}：缺少桌面入口 {path}\n"
+
+msgid ""
+"WARN {id}: missing extracted AppRun {path}\n"
+msgstr ""
+"警告 {id}：缺少解压后的 AppRun {path}\n"
+
+msgid ""
+"OK   {id}: files present, mode={mode}\n"
+msgstr ""
+"正常 {id}：文件齐全，模式={mode}\n"
+
+msgid ""
+"OK   no installed yai apps found\n"
+msgstr ""
+"OK   未发现已安装的 yai 应用\n"
+
+msgid "OK   PATH contains "
+msgstr "OK   PATH 包含 "
+
+msgid "WARN PATH does not contain "
+msgstr "WARN PATH 不包含 "
+
+msgid ""
+"WARN /dev/fuse is missing; some AppImages may require extracted mode\n"
+msgstr ""
+"WARN 缺少 /dev/fuse；部分 AppImage 可能需要解压模式\n"
+
+msgid ""
+"OK   /dev/fuse is accessible\n"
+msgstr ""
+"OK   /dev/fuse 可访问\n"
+
+msgid ""
+"WARN /dev/fuse exists but is not accessible by this user\n"
+msgstr ""
+"WARN /dev/fuse 存在，但当前用户不可访问\n"
+
+msgid ""
+"Doctor finished with no warnings\n"
+msgstr ""
+"Doctor 完成，没有警告\n"
+
+msgid ""
+"Doctor finished with {count} warning(s)\n"
+msgstr ""
+"Doctor 完成，发现 {count} 个警告\n"
+
+msgid "doctor does not accept arguments"
+msgstr "doctor 不接受参数"
+
+msgid "HOME is not set"
+msgstr "未设置 HOME"
+
+msgid ": close failed: "
+msgstr "：关闭失败："
+
+msgid ": waitpid failed: "
+msgstr "：waitpid 失败："
+
+msgid "pipe failed: "
+msgstr "pipe 失败："
+
+msgid "fork failed: "
+msgstr "fork 失败："
+
+msgid "setpgid failed: "
+msgstr "setpgid 失败："
+
+msgid "captured process setup: close failed: "
+msgstr "捕获进程设置：关闭失败："
+
+msgid "fcntl F_GETFL failed: "
+msgstr "fcntl F_GETFL 失败："
+
+msgid "fcntl F_SETFL failed: "
+msgstr "fcntl F_SETFL 失败："
+
+msgid "read failed: "
+msgstr "读取失败："
+
+msgid "timed-out process cleanup"
+msgstr "超时进程清理"
+
+msgid "process"
+msgstr "进程"
+
+msgid "captured process output"
+msgstr "捕获进程输出"
+
+msgid "captured process"
+msgstr "捕获进程"
+
+msgid "captured process poll: waitpid failed: "
+msgstr "捕获进程轮询：waitpid 失败："
+
+msgid "unknown"
+msgstr "未知"
+
+msgid "Total:"
+msgstr "共计:"
+
+msgid "Downloaded:"
+msgstr "已下载:"
+
+msgid "Speed:"
+msgstr "速度:"
+
+msgid "Total time:"
+msgstr "共用时间:"
+
+msgid "Elapsed:"
+msgstr "已用时间:"
+
+msgid "Left:"
+msgstr "剩余时间:"
+
+msgid "download process poll: waitpid failed: "
+msgstr "下载进程轮询：waitpid 失败："
+
+msgid "download process output"
+msgstr "下载进程输出"
+
+msgid "failed to create directory "
+msgstr "无法创建目录 "
+
+msgid ": failed to remove "
+msgstr "：无法删除 "
+
+msgid "failed to write "
+msgstr "无法写入 "
+
+msgid "failed to read "
+msgstr "无法读取 "
+
+msgid "failed to copy "
+msgstr "无法复制 "
+
+msgid " to "
+msgstr " 到 "
+
+msgid "custom mirror template must not be empty or contain line breaks"
+msgstr "自定义镜像模板不能为空或包含换行"
+
+msgid ""
+"This tool only accelerates public GitHub Release assets for lawful open source downloads;\n"
+"proxy services are third-party providers, and you are responsible for following local laws;\n"
+"yai does not host or rewrite binaries, and indexes point to upstream URLs."
+msgstr ""
+"本工具仅加速 GitHub 公开 Release 资源，供开发者合法获取开源软件；\n"
+"代理功能由第三方提供，用户需自行确保符合所在地法律法规；\n"
+"本工具不提供、不托管任何二进制文件，索引均指向 upstream 原链接。"
+
+msgid "--jobs must be a positive integer"
+msgstr "--jobs 必须是正整数"
+
+msgid "--jobs must be between 1 and 32"
+msgstr "--jobs 必须在 1 到 32 之间"
+
+msgid "--jobs requires a value"
+msgstr "--jobs 需要一个值"
+
+msgid "unknown {command} option: {arg}"
+msgstr "未知的 {command} 选项：{arg}"
+
+msgid " requires at least one target"
+msgstr " 至少需要一个目标"
+
+msgid "batch install cannot use --id or --name with multiple targets"
+msgstr "批量 install 不能在多个目标时使用 --id 或 --name"
+
+msgid "yai: running "
+msgstr "yai：正在运行 "
+
+msgid " task(s) with "
+msgstr " 个任务，并发数 "
+
+msgid ""
+" job(s)\n"
+msgstr ""
+"\n"
+
+msgid "yai: task failed: "
+msgstr "yai：任务失败："
+
+msgid "{failed} of {total} batch task(s) failed"
+msgstr "{failed}/{total} 个批量任务失败"
+
+msgid "unknown command: "
+msgstr "未知命令："
+
+msgid "repo index package is missing id"
+msgstr "仓库索引中的包缺少 id"
+
+msgid "unsupported package source type for "
+msgstr "不支持的包来源类型："
+
+msgid "github_release package is missing owner or repo: "
+msgstr "github_release 包缺少 owner 或 repo："
+
+msgid "direct_url package is missing url: "
+msgstr "direct_url 包缺少 url："
+
+msgid "website_page package is missing url: "
+msgstr "website_page 包缺少 url："
+
+msgid "unsupported repo index schema_version: "
+msgstr "不支持的仓库索引 schema_version："
+
+msgid "repo index is missing packages array"
+msgstr "仓库索引缺少 packages 数组"
+
+msgid "AppImage feed is missing items array"
+msgstr "AppImage feed 缺少 items 数组"
+
+msgid "unsupported repo source format"
+msgstr "不支持的仓库源格式"
+
+msgid "invalid repo config line: "
+msgstr "无效的仓库配置行："
+
+msgid "repo name must not contain whitespace control characters"
+msgstr "仓库名不能包含空白或控制字符"
+
+msgid "repo name must already be a safe id: "
+msgstr "仓库名必须已是安全 id："
+
+msgid "repo location must not be empty or contain line breaks"
+msgstr "仓库位置不能为空或包含换行"
+
+msgid "repo has not been updated yet: "
+msgstr "仓库尚未更新："
+
+msgid "package pattern matched no repo packages: "
+msgstr "包名模式未匹配到仓库中的包："
+
+msgid "451 Unavailable For Legal Reasons: GitHub repository is blocked by yai policy: "
+msgstr "451 Unavailable For Legal Reasons：该 GitHub 仓库被 yai 策略屏蔽："
+
+msgid "invalid asset_pattern for "
+msgstr "无效的 asset_pattern："
+
+msgid "no AppImage asset matched architecture "
+msgstr "没有匹配该架构的 AppImage 资源："
+
+msgid "yai: download failed from "
+msgstr "yai：下载失败："
+
+msgid "all download candidates failed: "
+msgstr "所有下载候选都失败了："
+
+msgid "yai: website search for "
+msgstr "yai：正在官网搜索 "
+
+msgid ""
+"yai: website search selected {url} after checking {checked} page(s), queued {queued}, skipped {skipped}\n"
+msgstr ""
+"yai：官网搜索已选择 {url}，已检查 {checked} 个页面，已排队 {queued} 个，已跳过 {skipped} 个\n"
+
+msgid "yai: {state} website pages: checked {checked}, queued {queued}, candidates {candidates} - {url}"
+msgstr "yai：官网搜索{state}：已检查 {checked}，已排队 {queued}，候选 {candidates} - {url}"
+
+msgid "checking"
+msgstr "检查中"
+
+msgid "skipped"
+msgstr "已跳过"
+
+msgid "found candidate"
+msgstr "发现候选"
+
+msgid "no AppImage download link found on website pages for "
+msgstr "在网站页面上找不到 AppImage 下载链接："
+
+msgid ""
+"yai: warning: failed to clean downloaded HTML landing page\n"
+msgstr ""
+"yai：警告：清理已下载的 HTML 落地页失败\n"
+
+msgid "downloaded URL returned an HTML page instead of an AppImage: "
+msgstr "下载的 URL 返回了 HTML 页面而不是 AppImage："
+
+msgid ""
+"yai: downloaded an AppImage landing page; following embedded AppImage link\n"
+msgstr ""
+"yai：下载到 AppImage 中转页，正在跟随页面内的 AppImage 链接\n"
+
+msgid ""
+"yai: warning: failed to clean downloaded HTML landing page before following AppImage link\n"
+msgstr ""
+"yai：警告：跟随 AppImage 链接前清理 HTML 落地页失败\n"
+
+msgid "too many nested AppImage landing pages: "
+msgstr "嵌套的 AppImage 落地页过多："
+
+msgid "local AppImage file does not exist: "
+msgstr "本地 AppImage 文件不存在："
+
+msgid "local AppImage target is not a file: "
+msgstr "本地 AppImage 目标不是文件："
+
+msgid "package is listed but has no installable AppImage source: "
+msgstr "包已列出但没有可安装的 AppImage 来源："
+
+msgid " ("
+msgstr "（"
+
+msgid ")"
+msgstr "）"
+
+msgid ""
+"China network optimization\n"
+msgstr ""
+"中国网络优化\n"
+
+msgid "GitHub direct download is the default. Enable a third-party proxy for public GitHub Release downloads? [y/N] "
+msgstr "默认直连 GitHub。是否为 GitHub 公开 Release 下载启用第三方代理？[y/N] "
+
+msgid ""
+"Choose a proxy provider:\n"
+msgstr ""
+"请选择代理：\n"
+
+msgid ""
+". custom - enter an Xget domain or template\n"
+msgstr ""
+". custom - 自填 Xget 域名或模板\n"
+
+msgid "Choice [1-"
+msgstr "选择 [1-"
+
+msgid "Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
+msgstr "输入 Xget 域名或镜像模板（支持 {raw_url}、{raw_url_noscheme}、{url}、{owner}、{repo}、{tag}、{asset}）: "
+
+msgid "Use proxy {provider} for this GitHub Release download? [Y/n] "
+msgstr "本次 GitHub Release 下载是否使用代理 {provider}？[Y/n] "
+
+msgid ""
+"OK   curl is available\n"
+msgstr ""
+"OK   curl 可用\n"
+
+msgid ""
+"WARN curl is not available; URL installs will fail\n"
+msgstr ""
+"WARN curl 不可用；URL 安装会失败\n"
+
+msgid ""
+"OK   update-desktop-database is available\n"
+msgstr ""
+"OK   update-desktop-database 可用\n"
+
+msgid ""
+"WARN update-desktop-database is not available; desktop cache refresh will be skipped\n"
+msgstr ""
+"WARN update-desktop-database 不可用；将跳过桌面缓存刷新\n"
+
+msgid "GHFast prefix proxy"
+msgstr "GHFast 前缀代理"
+
+msgid "ChengC-style GitHub proxy"
+msgstr "ChengC 风格 GitHub 代理"
+
+msgid "FastGit release download mirror"
+msgstr "FastGit Release 下载镜像"
+
+msgid "YYLX prefix proxy"
+msgstr "YYLX 前缀代理"
+
+msgid "LLKK prefix proxy"
+msgstr "LLKK 前缀代理"

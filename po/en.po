@@ -1,0 +1,1008 @@
+# yai English translations
+# Generated from source msgids; edit msgstr values only.
+
+msgid "preparing desktop extract temp directory"
+msgstr "preparing desktop extract temp directory"
+
+msgid "failed to stat "
+msgstr "failed to stat "
+
+msgid ": "
+msgstr ": "
+
+msgid "failed to chmod "
+msgstr "failed to chmod "
+
+msgid "preparing extract temp directory"
+msgstr "preparing extract temp directory"
+
+msgid "preparing extracted AppImage directory"
+msgstr "preparing extracted AppImage directory"
+
+msgid "failed to move extracted AppImage into place: "
+msgstr "failed to move extracted AppImage into place: "
+
+msgid ""
+"yai: probing direct AppImage mode\n"
+msgstr ""
+"yai: probing direct AppImage mode\n"
+
+msgid ""
+"yai: selected direct AppImage mode\n"
+msgstr ""
+"yai: selected direct AppImage mode\n"
+
+msgid ""
+"yai: direct mode reported a FUSE problem; trying extract-and-run mode\n"
+msgstr ""
+"yai: direct mode reported a FUSE problem; trying extract-and-run mode\n"
+
+msgid ""
+"yai: direct mode did not pass runtime probe; trying extract-and-run mode\n"
+msgstr ""
+"yai: direct mode did not pass runtime probe; trying extract-and-run mode\n"
+
+msgid ""
+"yai: probing extract-and-run AppImage mode\n"
+msgstr ""
+"yai: probing extract-and-run AppImage mode\n"
+
+msgid ""
+"yai: selected extract-and-run AppImage mode\n"
+msgstr ""
+"yai: selected extract-and-run AppImage mode\n"
+
+msgid ""
+"yai: extract-and-run mode did not pass runtime probe; extracting AppImage\n"
+msgstr ""
+"yai: extract-and-run mode did not pass runtime probe; extracting AppImage\n"
+
+msgid ""
+"yai: selected extracted AppRun mode\n"
+msgstr ""
+"yai: selected extracted AppRun mode\n"
+
+msgid ""
+"Usage:\n"
+msgstr ""
+"Usage:\n"
+
+msgid ""
+"  yai search <keyword>\n"
+msgstr ""
+"  yai search <keyword>\n"
+
+msgid ""
+"  yai info <package>\n"
+msgstr ""
+"  yai info <package>\n"
+
+msgid ""
+"  yai repo list\n"
+msgstr ""
+"  yai repo list\n"
+
+msgid ""
+"  yai repo add <name> [url-or-path]\n"
+msgstr ""
+"  yai repo add <name> [url-or-path]\n"
+
+msgid ""
+"  yai repo update [name]\n"
+msgstr ""
+"  yai repo update [name]\n"
+
+msgid ""
+"  yai mirror list\n"
+msgstr ""
+"  yai mirror list\n"
+
+msgid ""
+"  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n"
+msgstr ""
+"  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n"
+
+msgid ""
+"  yai mirror custom <xget-domain-or-template>\n"
+msgstr ""
+"  yai mirror custom <xget-domain-or-template>\n"
+
+msgid ""
+"  yai mirror off\n"
+msgstr ""
+"  yai mirror off\n"
+
+msgid ""
+"  yai download <package|url|owner/repo> [...]\n"
+msgstr ""
+"  yai download <package|url|owner/repo> [...]\n"
+
+msgid ""
+"              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n"
+msgstr ""
+"              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n"
+
+msgid ""
+"              [--download direct|mirror_first|direct_first]\n"
+msgstr ""
+"              [--download direct|mirror_first|direct_first]\n"
+
+msgid ""
+"              [--mirror-template <template>]\n"
+msgstr ""
+"              [--mirror-template <template>]\n"
+
+msgid ""
+"              [--downloader auto|curl|wget|wget2|aria2c]\n"
+msgstr ""
+"              [--downloader auto|curl|wget|wget2|aria2c]\n"
+
+msgid ""
+"              [--jobs <n>]\n"
+msgstr ""
+"              [--jobs <n>]\n"
+
+msgid ""
+"  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
+msgstr ""
+"  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
+
+msgid ""
+"  yai update [id]\n"
+msgstr ""
+"  yai update [id]\n"
+
+msgid ""
+"  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
+msgstr ""
+"  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n"
+
+msgid ""
+"  yai rollback <id>\n"
+msgstr ""
+"  yai rollback <id>\n"
+
+msgid ""
+"  yai repair <id>\n"
+msgstr ""
+"  yai repair <id>\n"
+
+msgid ""
+"  yai doctor\n"
+msgstr ""
+"  yai doctor\n"
+
+msgid ""
+"  yai remove <id>\n"
+msgstr ""
+"  yai remove <id>\n"
+
+msgid ""
+"  yai list\n"
+msgstr ""
+"  yai list\n"
+
+msgid ""
+"  yai help\n"
+msgstr ""
+"  yai help\n"
+
+msgid ""
+"\n"
+"Language: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n"
+msgstr ""
+"\n"
+"Language: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n"
+
+msgid ""
+"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+msgstr ""
+"Package/id arguments support quoted * and ? patterns when they match exactly one package.\n"
+
+msgid ""
+"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+msgstr ""
+"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+
+msgid " requires a value"
+msgstr " requires a value"
+
+msgid "--arch must be "
+msgstr "--arch must be "
+
+msgid "--download must be direct, mirror_first, or direct_first"
+msgstr "--download must be direct, mirror_first, or direct_first"
+
+msgid "--downloader must be "
+msgstr "--downloader must be "
+
+msgid "--mirror-template is required when using a mirror download strategy"
+msgstr "--mirror-template is required when using a mirror download strategy"
+
+msgid "install arguments must not contain line breaks"
+msgstr "install arguments must not contain line breaks"
+
+msgid "download arguments must not contain line breaks"
+msgstr "download arguments must not contain line breaks"
+
+msgid "install requires a URL or owner/repo target"
+msgstr "install requires a URL or owner/repo target"
+
+msgid "unknown install option: "
+msgstr "unknown install option: "
+
+msgid "download requires a URL, package, or owner/repo target"
+msgstr "download requires a URL, package, or owner/repo target"
+
+msgid "unknown download option: "
+msgstr "unknown download option: "
+
+msgid "no supported downloader is available; install curl, wget, wget2, or aria2c"
+msgstr "no supported downloader is available; install curl, wget, wget2, or aria2c"
+
+msgid "requested downloader is not available: "
+msgstr "requested downloader is not available: "
+
+msgid "unsupported downloader: "
+msgstr "unsupported downloader: "
+
+msgid ""
+"yai: warning: failed to clean temporary download files\n"
+msgstr ""
+"yai: warning: failed to clean temporary download files\n"
+
+msgid " failed with exit code "
+msgstr " failed with exit code "
+
+msgid "preparing temporary download file"
+msgstr "preparing temporary download file"
+
+msgid "preparing temporary download headers"
+msgstr "preparing temporary download headers"
+
+msgid "preparing temporary aria2 state"
+msgstr "preparing temporary aria2 state"
+
+msgid ""
+"yai: warning: failed to clean temporary download metadata\n"
+msgstr ""
+"yai: warning: failed to clean temporary download metadata\n"
+
+msgid "failed to move downloaded file into place: "
+msgstr "failed to move downloaded file into place: "
+
+msgid "yai: downloader failed, trying next: "
+msgstr "yai: downloader failed, trying next: "
+
+msgid "all selected downloaders failed: "
+msgstr "all selected downloaders failed: "
+
+msgid "failed to fetch "
+msgstr "failed to fetch "
+
+msgid "package is not installed: "
+msgstr "package is not installed: "
+
+msgid "package pattern matched no installed packages: "
+msgstr "package pattern matched no installed packages: "
+
+msgid "package pattern is ambiguous: {pattern} (matches: {matches})"
+msgstr "package pattern is ambiguous: {pattern} (matches: {matches})"
+
+msgid "Mode: "
+msgstr "Mode: "
+
+msgid ""
+"FUSE problem detected; yai selected a fallback mode.\n"
+msgstr ""
+"FUSE problem detected; yai selected a fallback mode.\n"
+
+msgid "download does not accept local AppImage paths"
+msgstr "download does not accept local AppImage paths"
+
+msgid "download target already exists: "
+msgstr "download target already exists: "
+
+msgid "Using GitHub Release proxy strategy: "
+msgstr "Using GitHub Release proxy strategy: "
+
+msgid "Upstream: "
+msgstr "Upstream: "
+
+msgid "Downloading "
+msgstr "Downloading "
+
+msgid "Downloaded to: "
+msgstr "Downloaded to: "
+
+msgid "Installing local AppImage "
+msgstr "Installing local AppImage "
+
+msgid "failed to find a runnable AppImage mode"
+msgstr "failed to find a runnable AppImage mode"
+
+msgid "Installed "
+msgstr "Installed "
+
+msgid "GitHub release: "
+msgstr "GitHub release: "
+
+msgid "Asset: "
+msgstr "Asset: "
+
+msgid "Source: "
+msgstr "Source: "
+
+msgid "Downloaded from: "
+msgstr "Downloaded from: "
+
+msgid "Wrapper: "
+msgstr "Wrapper: "
+
+msgid "Desktop entry: "
+msgstr "Desktop entry: "
+
+msgid "AppImage file is missing: "
+msgstr "AppImage file is missing: "
+
+msgid "repair failed after detecting a FUSE-related problem; install a FUSE 2 compatible package or check whether this AppImage supports extraction"
+msgstr "repair failed after detecting a FUSE-related problem; install a FUSE 2 compatible package or check whether this AppImage supports extraction"
+
+msgid "repair failed: no runnable mode found"
+msgstr "repair failed: no runnable mode found"
+
+msgid "repair requires exactly one package id"
+msgstr "repair requires exactly one package id"
+
+msgid "Repaired "
+msgstr "Repaired "
+
+msgid "current AppImage is missing: "
+msgstr "current AppImage is missing: "
+
+msgid "metadata is missing: "
+msgstr "metadata is missing: "
+
+msgid "saving previous version"
+msgstr "saving previous version"
+
+msgid "no rollback version is available for "
+msgstr "no rollback version is available for "
+
+msgid "restoring rollback metadata"
+msgstr "restoring rollback metadata"
+
+msgid "rollback requires exactly one package id"
+msgstr "rollback requires exactly one package id"
+
+msgid "Rolled back "
+msgstr "Rolled back "
+
+msgid "upgrade requires a package id or --all"
+msgstr "upgrade requires a package id or --all"
+
+msgid "unknown upgrade option: "
+msgstr "unknown upgrade option: "
+
+msgid "upgrade accepts one package id or --all"
+msgstr "upgrade accepts one package id or --all"
+
+msgid "upgrade --all does not accept a package id"
+msgstr "upgrade --all does not accept a package id"
+
+msgid "upgrade arguments must not contain line breaks"
+msgstr "upgrade arguments must not contain line breaks"
+
+msgid "local AppImage path has no queryable update source"
+msgstr "local AppImage path has no queryable update source"
+
+msgid "plain URL install has no stable update source"
+msgstr "plain URL install has no stable update source"
+
+msgid "package source is unavailable"
+msgstr "package source is unavailable"
+
+msgid "source kind is not upgradable: "
+msgstr "source kind is not upgradable: "
+
+msgid "package is not upgradable: "
+msgstr "package is not upgradable: "
+
+msgid "package is not upgradable: GitHub metadata is missing for "
+msgstr "package is not upgradable: GitHub metadata is missing for "
+
+msgid ""
+"{id} is already up to date ({version})\n"
+msgstr ""
+"{id} is already up to date ({version})\n"
+
+msgid ""
+"Upgrading {id} from {current} to {latest}\n"
+msgstr ""
+"Upgrading {id} from {current} to {latest}\n"
+
+msgid "updated AppImage is not runnable; current installation was not changed"
+msgstr "updated AppImage is not runnable; current installation was not changed"
+
+msgid "activating updated AppImage"
+msgstr "activating updated AppImage"
+
+msgid "failed to activate updated AppImage: "
+msgstr "failed to activate updated AppImage: "
+
+msgid "activating updated extracted directory"
+msgstr "activating updated extracted directory"
+
+msgid "failed to activate updated extracted directory: "
+msgstr "failed to activate updated extracted directory: "
+
+msgid "upgrade failed and rollback failed: "
+msgstr "upgrade failed and rollback failed: "
+
+msgid "; rollback error: "
+msgstr "; rollback error: "
+
+msgid "upgrade failed; restored previous version: "
+msgstr "upgrade failed; restored previous version: "
+
+msgid ""
+"Upgraded {id} to {version}\n"
+msgstr ""
+"Upgraded {id} to {version}\n"
+
+msgid "Rollback version: "
+msgstr "Rollback version: "
+
+msgid "Upgrade {count} package(s)? [y/N] "
+msgstr "Upgrade {count} package(s)? [y/N] "
+
+msgid "already up to date"
+msgstr "already up to date"
+
+msgid "source: "
+msgstr "source: "
+
+msgid "asset: "
+msgstr "asset: "
+
+msgid ""
+"No upgradable packages\n"
+msgstr ""
+"No upgradable packages\n"
+
+msgid ""
+"Upgrade cancelled\n"
+msgstr ""
+"Upgrade cancelled\n"
+
+msgid "yai: upgrade failed for "
+msgstr "yai: upgrade failed for "
+
+msgid "{failed} of {total} upgrade task(s) failed"
+msgstr "{failed} of {total} upgrade task(s) failed"
+
+msgid "update accepts zero or one package id"
+msgstr "update accepts zero or one package id"
+
+msgid "removing installed package file"
+msgstr "removing installed package file"
+
+msgid "remove requires exactly one package id"
+msgstr "remove requires exactly one package id"
+
+msgid "removing installed package directory"
+msgstr "removing installed package directory"
+
+msgid "Removed "
+msgstr "Removed "
+
+msgid "search requires exactly one keyword"
+msgstr "search requires exactly one keyword"
+
+msgid "Reason: "
+msgstr "Reason: "
+
+msgid "Source: direct_url "
+msgstr "Source: direct_url "
+
+msgid "Source: website_page "
+msgstr "Source: website_page "
+
+msgid ""
+"Source: unavailable\n"
+msgstr ""
+"Source: unavailable\n"
+
+msgid "info requires exactly one package id"
+msgstr "info requires exactly one package id"
+
+msgid "package not found in repo index: "
+msgstr "package not found in repo index: "
+
+msgid "Id: "
+msgstr "Id: "
+
+msgid "Name: "
+msgstr "Name: "
+
+msgid "Summary: "
+msgstr "Summary: "
+
+msgid "Homepage: "
+msgstr "Homepage: "
+
+msgid "License: "
+msgstr "License: "
+
+msgid "Asset pattern: "
+msgstr "Asset pattern: "
+
+msgid "repo list does not accept arguments"
+msgstr "repo list does not accept arguments"
+
+msgid "repo add requires a name and optional URL/path"
+msgstr "repo add requires a name and optional URL/path"
+
+msgid "repo add without URL/path is only supported for the built-in appimage feed"
+msgstr "repo add without URL/path is only supported for the built-in appimage feed"
+
+msgid "Added repo "
+msgstr "Added repo "
+
+msgid "Location: "
+msgstr "Location: "
+
+msgid "repo update accepts at most one repo name"
+msgstr "repo update accepts at most one repo name"
+
+msgid "repo not configured: "
+msgstr "repo not configured: "
+
+msgid ""
+"Updated {count} repo(s)\n"
+msgstr ""
+"Updated {count} repo(s)\n"
+
+msgid ""
+"No repos configured\n"
+msgstr ""
+"No repos configured\n"
+
+msgid "repo requires a subcommand: list, add, or update"
+msgstr "repo requires a subcommand: list, add, or update"
+
+msgid "unknown repo subcommand: "
+msgstr "unknown repo subcommand: "
+
+msgid "mirror list does not accept arguments"
+msgstr "mirror list does not accept arguments"
+
+msgid "Current: "
+msgstr "Current: "
+
+msgid "Strategy: "
+msgstr "Strategy: "
+
+msgid "Template: "
+msgstr "Template: "
+
+msgid ""
+"\n"
+"Available providers:\n"
+msgstr ""
+"\n"
+"Available providers:\n"
+
+msgid "mirror use requires a provider name"
+msgstr "mirror use requires a provider name"
+
+msgid "unknown mirror provider: "
+msgstr "unknown mirror provider: "
+
+msgid "Enabled GitHub Release proxy provider: "
+msgstr "Enabled GitHub Release proxy provider: "
+
+msgid "mirror custom requires an Xget domain or template"
+msgstr "mirror custom requires an Xget domain or template"
+
+msgid "Enabled custom GitHub Release proxy template: "
+msgstr "Enabled custom GitHub Release proxy template: "
+
+msgid "mirror off does not accept arguments"
+msgstr "mirror off does not accept arguments"
+
+msgid ""
+"GitHub Release proxy disabled; yai will use direct GitHub downloads by default\n"
+msgstr ""
+"GitHub Release proxy disabled; yai will use direct GitHub downloads by default\n"
+
+msgid "mirror requires a subcommand: list, use, custom, or off"
+msgstr "mirror requires a subcommand: list, use, custom, or off"
+
+msgid "unknown mirror subcommand: "
+msgstr "unknown mirror subcommand: "
+
+msgid ""
+"WARN {id}: missing AppImage {path}\n"
+msgstr ""
+"WARN {id}: missing AppImage {path}\n"
+
+msgid ""
+"WARN {id}: missing wrapper {path}\n"
+msgstr ""
+"WARN {id}: missing wrapper {path}\n"
+
+msgid ""
+"WARN {id}: missing desktop entry {path}\n"
+msgstr ""
+"WARN {id}: missing desktop entry {path}\n"
+
+msgid ""
+"WARN {id}: missing extracted AppRun {path}\n"
+msgstr ""
+"WARN {id}: missing extracted AppRun {path}\n"
+
+msgid ""
+"OK   {id}: files present, mode={mode}\n"
+msgstr ""
+"OK   {id}: files present, mode={mode}\n"
+
+msgid ""
+"OK   no installed yai apps found\n"
+msgstr ""
+"OK   no installed yai apps found\n"
+
+msgid "OK   PATH contains "
+msgstr "OK   PATH contains "
+
+msgid "WARN PATH does not contain "
+msgstr "WARN PATH does not contain "
+
+msgid ""
+"WARN /dev/fuse is missing; some AppImages may require extracted mode\n"
+msgstr ""
+"WARN /dev/fuse is missing; some AppImages may require extracted mode\n"
+
+msgid ""
+"OK   /dev/fuse is accessible\n"
+msgstr ""
+"OK   /dev/fuse is accessible\n"
+
+msgid ""
+"WARN /dev/fuse exists but is not accessible by this user\n"
+msgstr ""
+"WARN /dev/fuse exists but is not accessible by this user\n"
+
+msgid ""
+"Doctor finished with no warnings\n"
+msgstr ""
+"Doctor finished with no warnings\n"
+
+msgid ""
+"Doctor finished with {count} warning(s)\n"
+msgstr ""
+"Doctor finished with {count} warning(s)\n"
+
+msgid "doctor does not accept arguments"
+msgstr "doctor does not accept arguments"
+
+msgid "HOME is not set"
+msgstr "HOME is not set"
+
+msgid ": close failed: "
+msgstr ": close failed: "
+
+msgid ": waitpid failed: "
+msgstr ": waitpid failed: "
+
+msgid "pipe failed: "
+msgstr "pipe failed: "
+
+msgid "fork failed: "
+msgstr "fork failed: "
+
+msgid "setpgid failed: "
+msgstr "setpgid failed: "
+
+msgid "captured process setup: close failed: "
+msgstr "captured process setup: close failed: "
+
+msgid "fcntl F_GETFL failed: "
+msgstr "fcntl F_GETFL failed: "
+
+msgid "fcntl F_SETFL failed: "
+msgstr "fcntl F_SETFL failed: "
+
+msgid "read failed: "
+msgstr "read failed: "
+
+msgid "timed-out process cleanup"
+msgstr "timed-out process cleanup"
+
+msgid "process"
+msgstr "process"
+
+msgid "captured process output"
+msgstr "captured process output"
+
+msgid "captured process"
+msgstr "captured process"
+
+msgid "captured process poll: waitpid failed: "
+msgstr "captured process poll: waitpid failed: "
+
+msgid "unknown"
+msgstr "unknown"
+
+msgid "Total:"
+msgstr "Total:"
+
+msgid "Downloaded:"
+msgstr "Downloaded:"
+
+msgid "Speed:"
+msgstr "Speed:"
+
+msgid "Total time:"
+msgstr "Total time:"
+
+msgid "Elapsed:"
+msgstr "Elapsed:"
+
+msgid "Left:"
+msgstr "Left:"
+
+msgid "download process poll: waitpid failed: "
+msgstr "download process poll: waitpid failed: "
+
+msgid "download process output"
+msgstr "download process output"
+
+msgid "failed to create directory "
+msgstr "failed to create directory "
+
+msgid ": failed to remove "
+msgstr ": failed to remove "
+
+msgid "failed to write "
+msgstr "failed to write "
+
+msgid "failed to read "
+msgstr "failed to read "
+
+msgid "failed to copy "
+msgstr "failed to copy "
+
+msgid " to "
+msgstr " to "
+
+msgid "custom mirror template must not be empty or contain line breaks"
+msgstr "custom mirror template must not be empty or contain line breaks"
+
+msgid ""
+"This tool only accelerates public GitHub Release assets for lawful open source downloads;\n"
+"proxy services are third-party providers, and you are responsible for following local laws;\n"
+"yai does not host or rewrite binaries, and indexes point to upstream URLs."
+msgstr ""
+"This tool only accelerates public GitHub Release assets for lawful open source downloads;\n"
+"proxy services are third-party providers, and you are responsible for following local laws;\n"
+"yai does not host or rewrite binaries, and indexes point to upstream URLs."
+
+msgid "--jobs must be a positive integer"
+msgstr "--jobs must be a positive integer"
+
+msgid "--jobs must be between 1 and 32"
+msgstr "--jobs must be between 1 and 32"
+
+msgid "--jobs requires a value"
+msgstr "--jobs requires a value"
+
+msgid "unknown {command} option: {arg}"
+msgstr "unknown {command} option: {arg}"
+
+msgid " requires at least one target"
+msgstr " requires at least one target"
+
+msgid "batch install cannot use --id or --name with multiple targets"
+msgstr "batch install cannot use --id or --name with multiple targets"
+
+msgid "yai: running "
+msgstr "yai: running "
+
+msgid " task(s) with "
+msgstr " task(s) with "
+
+msgid ""
+" job(s)\n"
+msgstr ""
+" job(s)\n"
+
+msgid "yai: task failed: "
+msgstr "yai: task failed: "
+
+msgid "{failed} of {total} batch task(s) failed"
+msgstr "{failed} of {total} batch task(s) failed"
+
+msgid "unknown command: "
+msgstr "unknown command: "
+
+msgid "repo index package is missing id"
+msgstr "repo index package is missing id"
+
+msgid "unsupported package source type for "
+msgstr "unsupported package source type for "
+
+msgid "github_release package is missing owner or repo: "
+msgstr "github_release package is missing owner or repo: "
+
+msgid "direct_url package is missing url: "
+msgstr "direct_url package is missing url: "
+
+msgid "website_page package is missing url: "
+msgstr "website_page package is missing url: "
+
+msgid "unsupported repo index schema_version: "
+msgstr "unsupported repo index schema_version: "
+
+msgid "repo index is missing packages array"
+msgstr "repo index is missing packages array"
+
+msgid "AppImage feed is missing items array"
+msgstr "AppImage feed is missing items array"
+
+msgid "unsupported repo source format"
+msgstr "unsupported repo source format"
+
+msgid "invalid repo config line: "
+msgstr "invalid repo config line: "
+
+msgid "repo name must not contain whitespace control characters"
+msgstr "repo name must not contain whitespace control characters"
+
+msgid "repo name must already be a safe id: "
+msgstr "repo name must already be a safe id: "
+
+msgid "repo location must not be empty or contain line breaks"
+msgstr "repo location must not be empty or contain line breaks"
+
+msgid "repo has not been updated yet: "
+msgstr "repo has not been updated yet: "
+
+msgid "package pattern matched no repo packages: "
+msgstr "package pattern matched no repo packages: "
+
+msgid "451 Unavailable For Legal Reasons: GitHub repository is blocked by yai policy: "
+msgstr "451 Unavailable For Legal Reasons: GitHub repository is blocked by yai policy: "
+
+msgid "invalid asset_pattern for "
+msgstr "invalid asset_pattern for "
+
+msgid "no AppImage asset matched architecture "
+msgstr "no AppImage asset matched architecture "
+
+msgid "yai: download failed from "
+msgstr "yai: download failed from "
+
+msgid "all download candidates failed: "
+msgstr "all download candidates failed: "
+
+msgid "yai: website search for "
+msgstr "yai: website search for "
+
+msgid ""
+"yai: website search selected {url} after checking {checked} page(s), queued {queued}, skipped {skipped}\n"
+msgstr ""
+"yai: website search selected {url} after checking {checked} page(s), queued {queued}, skipped {skipped}\n"
+
+msgid "yai: {state} website pages: checked {checked}, queued {queued}, candidates {candidates} - {url}"
+msgstr "yai: {state} website pages: checked {checked}, queued {queued}, candidates {candidates} - {url}"
+
+msgid "checking"
+msgstr "checking"
+
+msgid "skipped"
+msgstr "skipped"
+
+msgid "found candidate"
+msgstr "found candidate"
+
+msgid "no AppImage download link found on website pages for "
+msgstr "no AppImage download link found on website pages for "
+
+msgid ""
+"yai: warning: failed to clean downloaded HTML landing page\n"
+msgstr ""
+"yai: warning: failed to clean downloaded HTML landing page\n"
+
+msgid "downloaded URL returned an HTML page instead of an AppImage: "
+msgstr "downloaded URL returned an HTML page instead of an AppImage: "
+
+msgid ""
+"yai: downloaded an AppImage landing page; following embedded AppImage link\n"
+msgstr ""
+"yai: downloaded an AppImage landing page; following embedded AppImage link\n"
+
+msgid ""
+"yai: warning: failed to clean downloaded HTML landing page before following AppImage link\n"
+msgstr ""
+"yai: warning: failed to clean downloaded HTML landing page before following AppImage link\n"
+
+msgid "too many nested AppImage landing pages: "
+msgstr "too many nested AppImage landing pages: "
+
+msgid "local AppImage file does not exist: "
+msgstr "local AppImage file does not exist: "
+
+msgid "local AppImage target is not a file: "
+msgstr "local AppImage target is not a file: "
+
+msgid "package is listed but has no installable AppImage source: "
+msgstr "package is listed but has no installable AppImage source: "
+
+msgid " ("
+msgstr " ("
+
+msgid ")"
+msgstr ")"
+
+msgid ""
+"China network optimization\n"
+msgstr ""
+"China network optimization\n"
+
+msgid "GitHub direct download is the default. Enable a third-party proxy for public GitHub Release downloads? [y/N] "
+msgstr "GitHub direct download is the default. Enable a third-party proxy for public GitHub Release downloads? [y/N] "
+
+msgid ""
+"Choose a proxy provider:\n"
+msgstr ""
+"Choose a proxy provider:\n"
+
+msgid ""
+". custom - enter an Xget domain or template\n"
+msgstr ""
+". custom - enter an Xget domain or template\n"
+
+msgid "Choice [1-"
+msgstr "Choice [1-"
+
+msgid "Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
+msgstr "Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
+
+msgid "Use proxy {provider} for this GitHub Release download? [Y/n] "
+msgstr "Use proxy {provider} for this GitHub Release download? [Y/n] "
+
+msgid ""
+"OK   curl is available\n"
+msgstr ""
+"OK   curl is available\n"
+
+msgid ""
+"WARN curl is not available; URL installs will fail\n"
+msgstr ""
+"WARN curl is not available; URL installs will fail\n"
+
+msgid ""
+"OK   update-desktop-database is available\n"
+msgstr ""
+"OK   update-desktop-database is available\n"
+
+msgid ""
+"WARN update-desktop-database is not available; desktop cache refresh will be skipped\n"
+msgstr ""
+"WARN update-desktop-database is not available; desktop cache refresh will be skipped\n"
+
+msgid "GHFast prefix proxy"
+msgstr "GHFast prefix proxy"
+
+msgid "ChengC-style GitHub proxy"
+msgstr "ChengC-style GitHub proxy"
+
+msgid "FastGit release download mirror"
+msgstr "FastGit release download mirror"
+
+msgid "YYLX prefix proxy"
+msgstr "YYLX prefix proxy"
+
+msgid "LLKK prefix proxy"
+msgstr "LLKK prefix proxy"

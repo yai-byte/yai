@@ -1,0 +1,8 @@
+yai
+*.o
+*.AppImage
+.DS_Store
+fuck-u-code-report.json
+.superpowers/sdd/*.pre-*
+.superpowers/sdd/Makefile.pre-*
+package-lock.json
