@@ -185,8 +185,11 @@ void run_batch_command(const BatchCommand& batch) {
         }
         if (result.output.exit_code != 0) {
             ++failed;
-            std::cerr << tr("yai: task failed: ") << batch.command << " "
-                      << result.target << " (exit " << result.output.exit_code << ")\n";
+            std::cerr << tr_format(
+                "yai: task failed: {command} {target} (exit {code})\n",
+                {{"{command}", batch.command},
+                 {"{target}", result.target},
+                 {"{code}", std::to_string(result.output.exit_code)}});
         }
     }
 
@@ -246,7 +249,7 @@ int main(int argc, char** argv) {
         dispatch_command(argc, argv);
         return 0;
     } catch (const std::exception& ex) {
-        std::cerr << "yai: " << ex.what() << "\n";
+        std::cerr << tr("yai: ") << ex.what() << "\n";
         return 1;
     }
 }

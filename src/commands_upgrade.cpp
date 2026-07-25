@@ -527,7 +527,7 @@ void upgrade_all_app(const UpgradeCommandOptions& command) {
             upgrade_installed_target(options);
         } catch (const std::exception& ex) {
             ++failed;
-            std::cerr << tr("yai: upgrade failed for ") << id << ": " << ex.what() << "\n";
+            std::cerr << tr("yai: upgrade failed for ") << id << tr(": ") << ex.what() << "\n";
         }
     }
     if (failed > 0) {

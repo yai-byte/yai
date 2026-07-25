@@ -817,8 +817,11 @@ msgid ""
 msgstr ""
 "\n"
 
-msgid "yai: task failed: "
-msgstr "yai：任务失败："
+msgid "yai: "
+msgstr "yai："
+
+msgid "yai: task failed: {command} {target} (exit {code})\n"
+msgstr "yai：任务失败：{command} {target}（退出码 {code}）\n"
 
 msgid "{failed} of {total} batch task(s) failed"
 msgstr "{failed}/{total} 个批量任务失败"
