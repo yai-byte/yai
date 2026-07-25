@@ -106,6 +106,49 @@ grep -Fq "\"source_url\": \"file://$ORIGINAL_ROOT/$ASSET\"" "$META"
 
 HOME="$TMP_HOME" "$TMP_HOME/.local/bin/repo-demo" | grep -q "repo demo app"
 HOME="$TMP_HOME" "$ROOT/yai" list | grep -q "repo-demo"
+
+# --- search installed marker ---
+SEARCH_INSTALLED="$(HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" search repo-demo)"
+printf '%s\n' "$SEARCH_INSTALLED" | grep -q $'repo-demo\tRepository Demo\t'
+printf '%s\n' "$SEARCH_INSTALLED" | grep -q '\[installed\]'
+# Tag must be a summary suffix, not a fourth tab column before the tag text alone
+if printf '%s\n' "$SEARCH_INSTALLED" | grep -q $'\t\[installed\]$'; then
+  echo "installed tag must not be a separate TSV column" >&2
+  exit 1
+fi
+if printf '%s\n' "$SEARCH_INSTALLED" | grep -q $'\[installed\]\t'; then
+  echo "installed tag must not appear before a tab column" >&2
+  exit 1
+fi
+
+SEARCH_OTHER="$(HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" search repo-delta)"
+printf '%s\n' "$SEARCH_OTHER" | grep -q "repo-delta"
+if printf '%s\n' "$SEARCH_OTHER" | grep -q '\[installed\]'; then
+  echo "uninstalled search hit unexpectedly had [installed] tag" >&2
+  exit 1
+fi
+
+SEARCH_PIPE="$(HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" search repo-demo | cat)"
+printf '%s\n' "$SEARCH_PIPE" | grep -q '\[installed\]'
+if printf '%s\n' "$SEARCH_PIPE" | grep -q $'\033'; then
+  echo "piped search output contained ANSI escapes" >&2
+  exit 1
+fi
+
+SEARCH_NO_COLOR="$(HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" NO_COLOR=1 "$ROOT/yai" search repo-demo)"
+printf '%s\n' "$SEARCH_NO_COLOR" | grep -q '\[installed\]'
+if printf '%s\n' "$SEARCH_NO_COLOR" | grep -q $'\033'; then
+  echo "NO_COLOR=1 search output contained ANSI escapes" >&2
+  exit 1
+fi
+
+SEARCH_ZH="$(HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" YAI_LANG=zh "$ROOT/yai" search repo-demo)"
+printf '%s\n' "$SEARCH_ZH" | grep -q '\[已安装\]'
+if printf '%s\n' "$SEARCH_ZH" | grep -q '\[installed\]'; then
+  echo "zh search still showed English [installed] tag" >&2
+  exit 1
+fi
+
 HOME="$TMP_HOME" "$ROOT/yai" remove 'repo-*'
 
 echo "stage4 smoke test passed"
