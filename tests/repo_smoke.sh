@@ -117,4 +117,75 @@ if HOME="$TMP_HOME" "$ROOT/yai" repo update missing 2>"$TMP_HOME/missing.err"; t
 fi
 grep -q "repo not configured: missing" "$TMP_HOME/missing.err"
 
+# --- repo remove ---
+cat > "$TMP_HOME/remove-source.json" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-25T00:00:00Z",
+  "packages": [
+    {
+      "id": "remove-me",
+      "name": "Remove Me",
+      "summary": "Source for remove smoke",
+      "homepage": "https://example.com/remove-me",
+      "license": "Unknown",
+      "source": {
+        "type": "github_release",
+        "owner": "acme",
+        "repo": "repo-managed",
+        "asset_pattern": ".*x86_64.*\\.AppImage$"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TMP_HOME" "$ROOT/yai" repo add keepme "$SOURCE_INDEX"
+HOME="$TMP_HOME" "$ROOT/yai" repo add dropme "$TMP_HOME/remove-source.json"
+HOME="$TMP_HOME" \
+YAI_GITHUB_API_BASE="file://$API_ROOT" \
+"$ROOT/yai" install remove-me
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/remove-me" | grep -q "repo managed app"
+
+HOME="$TMP_HOME" "$ROOT/yai" repo remove dropme | grep -q "Removed repo dropme"
+if HOME="$TMP_HOME" "$ROOT/yai" repo list | grep -q $'dropme\t'; then
+  echo "expected dropme to be gone from repo list" >&2
+  exit 1
+fi
+test ! -e "$TMP_HOME/.local/share/yai/repos/dropme.json"
+if HOME="$TMP_HOME" "$ROOT/yai" search "Remove Me" | grep -q "remove-me"; then
+  echo "expected remove-me package to leave merged index after source remove" >&2
+  exit 1
+fi
+HOME="$TMP_HOME" "$ROOT/yai" repo list | grep -q $'keepme\t'
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/remove-me" | grep -q "repo managed app"
+HOME="$TMP_HOME" "$ROOT/yai" list | grep -q "remove-me"
+
+if HOME="$TMP_HOME" "$ROOT/yai" repo remove nosuch 2>"$TMP_HOME/remove-missing.err"; then
+  echo "expected missing repo remove to fail" >&2
+  exit 1
+fi
+grep -q "repo not configured: nosuch" "$TMP_HOME/remove-missing.err"
+
+HOME="$TMP_HOME" "$ROOT/yai" repo add alpha "$TMP_HOME/remove-source.json"
+HOME="$TMP_HOME" "$ROOT/yai" repo add abelian "$SOURCE_INDEX"
+if HOME="$TMP_HOME" "$ROOT/yai" repo remove 'a*' 2>"$TMP_HOME/remove-ambiguous.err"; then
+  echo "expected ambiguous repo remove to fail" >&2
+  exit 1
+fi
+grep -q "repo pattern is ambiguous:" "$TMP_HOME/remove-ambiguous.err"
+
+# dropme already removed; pattern should fail with no match
+if HOME="$TMP_HOME" "$ROOT/yai" repo remove 'drop*' 2>"$TMP_HOME/remove-nomatch.err"; then
+  echo "expected no-match repo remove to fail" >&2
+  exit 1
+fi
+grep -q "repo pattern matched no configured repos:" "$TMP_HOME/remove-nomatch.err"
+
+HOME="$TMP_HOME" "$ROOT/yai" repo remove 'alp*' | grep -q "Removed repo alpha"
+if HOME="$TMP_HOME" "$ROOT/yai" repo list | grep -q $'alpha\t'; then
+  echo "expected alpha to be removed via glob" >&2
+  exit 1
+fi
+
 echo "repo smoke test passed"
