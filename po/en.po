@@ -582,6 +582,9 @@ msgstr "repo remove requires a name or pattern"
 msgid "Removed repo "
 msgstr "Removed repo "
 
+msgid "failed to remove repo cache "
+msgstr "failed to remove repo cache "
+
 msgid "repo pattern matched no configured repos: "
 msgstr "repo pattern matched no configured repos: "
 

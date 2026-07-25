@@ -582,6 +582,9 @@ msgstr "repo remove 需要名称或模式"
 msgid "Removed repo "
 msgstr "已移除包源 "
 
+msgid "failed to remove repo cache "
+msgstr "无法删除包源缓存 "
+
 msgid "repo pattern matched no configured repos: "
 msgstr "包源模式未匹配到已配置包源："
 
