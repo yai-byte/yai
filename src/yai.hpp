@@ -484,7 +484,6 @@ void repo_update_app(int argc, char** argv);
 void repo_remove_app(int argc, char** argv);
 void repo_app(int argc, char** argv);
 std::vector<std::string> resolve_configured_repo_names(const std::string& pattern);
-std::string resolve_configured_repo_name(const std::string& pattern);
 void mirror_list_app(int argc);
 void mirror_use_app(int argc, char** argv);
 void mirror_custom_app(int argc, char** argv);

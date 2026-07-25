@@ -93,9 +93,9 @@ msgstr ""
 "  yai repo update [name]\n"
 
 msgid ""
-"  yai repo remove <name-or-pattern>\n"
+"  yai repo remove <name-or-pattern> [--yes]\n"
 msgstr ""
-"  yai repo remove <name-or-pattern>\n"
+"  yai repo remove <name-or-pattern> [--yes]\n"
 
 msgid ""
 "  yai mirror list\n"
@@ -612,6 +612,17 @@ msgstr "repo requires a subcommand: list, add, update, or remove"
 msgid "repo remove requires a name or pattern"
 msgstr "repo remove requires a name or pattern"
 
+msgid "unknown repo remove option: "
+msgstr "unknown repo remove option: "
+
+msgid "Remove {count} repo(s)? [y/N] "
+msgstr "Remove {count} repo(s)? [y/N] "
+
+msgid ""
+"Repo remove cancelled\n"
+msgstr ""
+"Repo remove cancelled\n"
+
 msgid "Removed repo "
 msgstr "Removed repo "
 
@@ -620,9 +631,6 @@ msgstr "failed to remove repo cache "
 
 msgid "repo pattern matched no configured repos: "
 msgstr "repo pattern matched no configured repos: "
-
-msgid "repo pattern is ambiguous: {pattern} (matches: {matches})"
-msgstr "repo pattern is ambiguous: {pattern} (matches: {matches})"
 
 msgid "unknown repo subcommand: "
 msgstr "unknown repo subcommand: "

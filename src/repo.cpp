@@ -233,14 +233,6 @@ std::vector<std::string> resolve_configured_repo_names(const std::string& patter
     return matches;
 }
 
-std::string resolve_configured_repo_name(const std::string& pattern) {
-    const std::vector<std::string> matches = resolve_configured_repo_names(pattern);
-    if (matches.size() > 1) {
-        throw std::runtime_error(tr("multi-match pattern requires list resolver"));
-    }
-    return matches.front();
-}
-
 void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries) {
     // The combined default index is rebuilt from cached named indexes. A missing
     // cache means that repo has not been fetched yet, so fail instead of silently
