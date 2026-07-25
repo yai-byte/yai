@@ -449,6 +449,7 @@ void save_previous_version(const InstallPaths& paths);
 void restore_previous_version(const std::string& id);
 void rollback_app(int argc, char** argv);
 void cleanup_update_candidate(const InstallPaths& candidate_paths);
+std::vector<std::string> collect_upgradable_package_ids();
 void update_app(int argc, char** argv);
 void upgrade_app(int argc, char** argv);
 void remove_if_exists(const fs::path& path);

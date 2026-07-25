@@ -6,12 +6,15 @@ TARGET := yai
 SRC := \
 	src/arch.cpp \
 	src/appimage.cpp \
+	src/appimage_desktop.cpp \
+	src/appimage_runtime.cpp \
 	src/cli_download.cpp \
 	src/commands.cpp \
 	src/commands_doctor.cpp \
 	src/commands_lifecycle.cpp \
 	src/commands_query.cpp \
 	src/commands_repo.cpp \
+	src/commands_update.cpp \
 	src/commands_upgrade.cpp \
 	src/core.cpp \
 	src/download_progress.cpp \
@@ -20,6 +23,7 @@ SRC := \
 	src/main.cpp \
 	src/process.cpp \
 	src/repo.cpp \
+	src/repo_feed.cpp \
 	src/resolver.cpp \
 	src/resolver_github.cpp \
 	src/resolver_url.cpp \

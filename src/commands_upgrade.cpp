@@ -1,6 +1,6 @@
 #include "yai.hpp"
 
-// Upgrade / update preview and apply workflows.
+// Upgrade apply workflows (yai upgrade). Update preview lives in commands_update.cpp.
 
 namespace {
 struct UpgradeCommandOptions {
@@ -352,163 +352,8 @@ bool confirm_batch_upgrade(std::size_t count, bool yes) {
     return answer == "y" || answer == "yes";
 }
 
-std::vector<std::string> installed_package_ids() {
-    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
-    std::vector<std::string> ids;
-    if (!fs::exists(apps_dir)) {
-        return ids;
-    }
-
-    for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
-        if (!entry.is_directory()) {
-            continue;
-        }
-        const InstallPaths paths = paths_for(entry.path().filename().string());
-        const fs::path metadata = readable_metadata_path(paths);
-        if (!fs::exists(metadata)) {
-            continue;
-        }
-        const std::string id = metadata_value(metadata, "id").value_or(entry.path().filename().string());
-        if (std::find(ids.begin(), ids.end(), id) == ids.end()) {
-            ids.push_back(id);
-        }
-    }
-    std::sort(ids.begin(), ids.end());
-    return ids;
-}
-
-std::string preview_value_or_dash(const std::string& value) {
-    return value.empty() ? "-" : value;
-}
-
-struct UpdatePreviewResult {
-    std::string id;
-    std::string current_version;
-    std::string latest_version;
-    std::string status;
-    std::string reason;
-};
-
-bool preview_result_is_upgradable(const UpdatePreviewResult& result) {
-    return result.status == "upgradable";
-}
-
-void print_update_preview_row(const UpdatePreviewResult& result) {
-    std::cout << result.id << "\t"
-              << preview_value_or_dash(result.current_version) << "\t"
-              << preview_value_or_dash(result.latest_version) << "\t"
-              << result.status << "\t"
-              << result.reason << "\n";
-}
-
-UpdatePreviewResult build_update_preview(const std::string& id) {
-    const InstallPaths paths = paths_for(id);
-    if (!metadata_exists(paths)) {
-        throw std::runtime_error(tr("package is not installed: ") + id);
-    }
-
-    const fs::path metadata = readable_metadata_path(paths);
-    const std::string source_kind = metadata_value(metadata, "source_kind").value_or("url");
-    const std::string current_version = metadata_value(metadata, "version").value_or("");
-    const std::string name = metadata_value(metadata, "name").value_or(id);
-    const std::string source_url = metadata_value(metadata, "source_url").value_or("");
-    const std::string github_owner = metadata_value(metadata, "github_owner").value_or("");
-    const std::string github_repo = metadata_value(metadata, "github_repo").value_or("");
-    const std::string installed_arch = metadata_value(metadata, "arch").value_or(current_arch());
-
-    if (source_kind == "repo_direct_url" || source_kind == "repo_website_page") {
-        try {
-            UpdateContext context{
-                InstallOptions{},
-                id,
-                paths,
-                source_kind,
-                current_version,
-                name,
-                source_url,
-                github_owner,
-                github_repo,
-                installed_arch};
-            ResolvedSource source = resolve_repo_update_source(context);
-            if (!update_source_identity_changed(context, source)) {
-                return UpdatePreviewResult{
-                    id,
-                    current_version,
-                    source.version,
-                    "current",
-                    tr("already up to date")};
-            }
-            return UpdatePreviewResult{
-                id,
-                current_version,
-                source.version,
-                "upgradable",
-                tr("source: ") + source.source_url};
-        } catch (const std::exception& ex) {
-            return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
-        }
-    }
-
-    if ((source_kind != "github_release" && source_kind != "repo_github_release") ||
-        github_owner.empty() ||
-        github_repo.empty()) {
-        return UpdatePreviewResult{
-            id,
-            current_version,
-            "",
-            "unsupported",
-            unsupported_update_reason(source_kind)};
-    }
-
-    try {
-        const GitHubRelease release = resolve_github_latest(
-            github_owner + "/" + github_repo,
-            "",
-            installed_arch);
-        if (release.tag == current_version) {
-            return UpdatePreviewResult{
-                id,
-                current_version,
-                release.tag,
-                "current",
-                tr("already up to date")};
-        }
-        return UpdatePreviewResult{
-            id,
-            current_version,
-            release.tag,
-            "upgradable",
-            tr("asset: ") + release.asset.name};
-    } catch (const std::exception& ex) {
-        return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
-    }
-}
-
-std::vector<UpdatePreviewResult> build_update_previews(const std::vector<std::string>& ids) {
-    std::vector<UpdatePreviewResult> results;
-    results.reserve(ids.size());
-    for (const std::string& id : ids) {
-        results.push_back(build_update_preview(id));
-    }
-    return results;
-}
-
-void print_update_previews(const std::vector<UpdatePreviewResult>& results) {
-    for (const UpdatePreviewResult& result : results) {
-        print_update_preview_row(result);
-    }
-}
-
 void upgrade_all_app(const UpgradeCommandOptions& command) {
-    const std::vector<UpdatePreviewResult> previews = build_update_previews(installed_package_ids());
-    print_update_previews(previews);
-
-    std::vector<std::string> upgrade_ids;
-    for (const UpdatePreviewResult& result : previews) {
-        if (preview_result_is_upgradable(result)) {
-            upgrade_ids.push_back(result.id);
-        }
-    }
+    const std::vector<std::string> upgrade_ids = collect_upgradable_package_ids();
 
     if (upgrade_ids.empty()) {
         std::cout << tr("No upgradable packages\n");
@@ -564,17 +409,3 @@ void upgrade_app(int argc, char** argv) {
 
     upgrade_installed_target(command.options);
 }
-
-void update_app(int argc, char** argv) {
-    if (argc > 3) {
-        throw std::runtime_error(tr("update accepts zero or one package id"));
-    }
-
-    if (argc == 3) {
-        print_update_preview_row(build_update_preview(resolve_installed_package_id(argv[2])));
-        return;
-    }
-
-    print_update_previews(build_update_previews(installed_package_ids()));
-}
-
