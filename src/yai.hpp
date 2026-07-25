@@ -49,6 +49,7 @@ struct InstallOptions {
     bool download_explicit = false;
     bool mirror_template_explicit = false;
     bool downloader_explicit = false;
+    bool yes = false;
 };
 
 struct GitHubReleaseAsset {

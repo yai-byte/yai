@@ -143,9 +143,9 @@ msgstr ""
 "              [--downloader auto|curl|wget|wget2|aria2c]\n"
 
 msgid ""
-"              [--jobs <n>]\n"
+"              [--jobs <n>] [--yes|-y]\n"
 msgstr ""
-"              [--jobs <n>]\n"
+"              [--jobs <n>] [--yes|-y]\n"
 
 msgid ""
 "  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
@@ -867,6 +867,22 @@ msgstr " 至少需要一个目标"
 msgid "batch install cannot use --id or --name with multiple targets"
 msgstr "批量 install 不能在多个目标时使用 --id 或 --name"
 
+msgid "Download {count} package(s)? [y/N] "
+msgstr "下载 {count} 个包？[y/N] "
+
+msgid "Install {count} package(s)? [y/N] "
+msgstr "安装 {count} 个包？[y/N] "
+
+msgid ""
+"Download cancelled\n"
+msgstr ""
+"已取消下载\n"
+
+msgid ""
+"Install cancelled\n"
+msgstr ""
+"已取消安装\n"
+
 msgid "yai: running "
 msgstr "yai：正在运行 "
 
@@ -883,6 +899,9 @@ msgstr "yai："
 
 msgid "yai: task failed: {command} {target} (exit {code})\n"
 msgstr "yai：任务失败：{command} {target}（退出码 {code}）\n"
+
+msgid "batch stopped after task failure"
+msgstr "任务失败，批处理已停止"
 
 msgid "{failed} of {total} batch task(s) failed"
 msgstr "{failed}/{total} 个批量任务失败"

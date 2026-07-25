@@ -24,13 +24,13 @@ void print_usage() {
         << tr("              [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
-        << tr("              [--jobs <n>]\n")
+        << tr("              [--jobs <n>] [--yes|-y]\n")
         << tr("  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n")
         << tr("              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n")
         << tr("              [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
-        << tr("              [--jobs <n>]\n")
+        << tr("              [--jobs <n>] [--yes|-y]\n")
         << tr("  yai update [id]\n")
         << tr("  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
@@ -114,6 +114,10 @@ void validate_mirror_options(const InstallOptions& options) {
 }
 
 bool parse_common_download_option(InstallOptions& options, int argc, char** argv, int& index, const std::string& arg) {
+    if (arg == "--yes" || arg == "-y") {
+        options.yes = true;
+        return true;
+    }
     if (arg == "--arch") {
         parse_arch_option(options, read_option_value(argc, argv, index, arg));
         return true;

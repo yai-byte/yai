@@ -48,6 +48,82 @@ grep -q "Removed multi-b" "$TMP_HOME/rm-yes.out"
 test ! -d "$TMP_HOME/.local/share/yai/apps/multi-a"
 test ! -d "$TMP_HOME/.local/share/yai/apps/multi-b"
 
-# Mid-batch failure coverage for install globs is in Task 7 (pack-a then unavailable pack-b).
+# Multi-match install/download globs expand repo ids before dispatch.
+ASSET_DIR="$TMP_HOME/assets"
+INDEX="$TMP_HOME/multi-index.json"
+DOWNLOAD_DIR="$TMP_HOME/downloads"
+mkdir -p "$ASSET_DIR" "$DOWNLOAD_DIR"
+for asset in PackA DownA DownB; do
+  cat >"$ASSET_DIR/$asset.AppImage" <<APP
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--appimage-version" ]]; then
+  echo "$asset 1.0.0"
+  exit 0
+fi
+echo "$asset app"
+APP
+  chmod +x "$ASSET_DIR/$asset.AppImage"
+done
+cat >"$INDEX" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-25T00:00:00Z",
+  "packages": [
+    {
+      "id": "pack-a",
+      "name": "Pack A",
+      "summary": "Installable first package",
+      "homepage": "https://example.com/pack-a",
+      "license": "Unknown",
+      "source": {"type": "direct_url", "url": "file://$ASSET_DIR/PackA.AppImage"}
+    },
+    {
+      "id": "pack-b",
+      "name": "Pack B",
+      "summary": "Unavailable second package",
+      "homepage": "https://example.com/pack-b",
+      "license": "Unknown",
+      "source": {"type": "unavailable", "reason": "mid-batch failure fixture"}
+    },
+    {
+      "id": "down-a",
+      "name": "Down A",
+      "summary": "First downloadable package",
+      "homepage": "https://example.com/down-a",
+      "license": "Unknown",
+      "source": {"type": "direct_url", "url": "file://$ASSET_DIR/DownA.AppImage"}
+    },
+    {
+      "id": "down-b",
+      "name": "Down B",
+      "summary": "Second downloadable package",
+      "homepage": "https://example.com/down-b",
+      "license": "Unknown",
+      "source": {"type": "direct_url", "url": "file://$ASSET_DIR/DownB.AppImage"}
+    }
+  ]
+}
+JSON
+
+printf 'n\n' | HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+  "$ROOT/yai" install 'pack-*' >"$TMP_HOME/install-cancel.out" 2>"$TMP_HOME/install-cancel.err"
+grep -Fq "Install 2 package(s)? [y/N] " "$TMP_HOME/install-cancel.err"
+grep -q "Install cancelled" "$TMP_HOME/install-cancel.out"
+test ! -e "$TMP_HOME/.local/share/yai/apps/pack-a"
+
+if HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+  "$ROOT/yai" install 'pack-*' --yes >"$TMP_HOME/install-multi.out" 2>"$TMP_HOME/install-multi.err"; then
+  echo "expected multi install to fail on unavailable pack-b" >&2
+  exit 1
+fi
+test -x "$TMP_HOME/.local/share/yai/apps/pack-a/current.AppImage"
+test ! -e "$TMP_HOME/.local/share/yai/apps/pack-b"
+
+(
+  cd "$DOWNLOAD_DIR"
+  HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" download 'down-*' -y
+)
+test -f "$DOWNLOAD_DIR/down-a.AppImage"
+test -f "$DOWNLOAD_DIR/down-b.AppImage"
 
 echo "wildcard multi smoke passed"
