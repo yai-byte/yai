@@ -207,6 +207,45 @@ std::string validate_repo_location(const std::string& value) {
     return fs::absolute(value).lexically_normal().string();
 }
 
+std::string resolve_configured_repo_name(const std::string& pattern) {
+    const std::vector<RepoEntry> entries = load_repo_entries();
+    if (!has_glob_wildcards(pattern)) {
+        const std::string name = validate_repo_name(pattern);
+        for (const RepoEntry& entry : entries) {
+            if (entry.name == name) {
+                return name;
+            }
+        }
+        throw std::runtime_error(tr("repo not configured: ") + name);
+    }
+
+    std::vector<std::string> matches;
+    for (const RepoEntry& entry : entries) {
+        if (glob_match_case_insensitive(pattern, entry.name)) {
+            matches.push_back(entry.name);
+        }
+    }
+    std::sort(matches.begin(), matches.end());
+    matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
+
+    if (matches.empty()) {
+        throw std::runtime_error(tr("repo pattern matched no configured repos: ") + pattern);
+    }
+    if (matches.size() > 1) {
+        std::string listed;
+        for (std::size_t i = 0; i < matches.size(); ++i) {
+            if (i > 0) {
+                listed += ", ";
+            }
+            listed += matches[i];
+        }
+        throw std::runtime_error(tr_format(
+            "repo pattern is ambiguous: {pattern} (matches: {matches})",
+            {{"{pattern}", pattern}, {"{matches}", listed}}));
+    }
+    return matches.front();
+}
+
 void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries) {
     // The combined default index is rebuilt from cached named indexes. A missing
     // cache means that repo has not been fetched yet, so fail instead of silently

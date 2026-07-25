@@ -120,9 +120,34 @@ void repo_update_app(int argc, char** argv) {
     print_repo_update_result(fetched.size());
 }
 
+void repo_remove_app(int argc, char** argv) {
+    if (argc != 4) {
+        throw std::runtime_error(tr("repo remove requires a name or pattern"));
+    }
+
+    const std::string name = resolve_configured_repo_name(argv[3]);
+    std::vector<RepoEntry> entries = load_repo_entries();
+    std::vector<RepoEntry> remaining;
+    remaining.reserve(entries.size());
+    for (const RepoEntry& entry : entries) {
+        if (entry.name != name) {
+            remaining.push_back(entry);
+        }
+    }
+
+    write_repo_entries(remaining);
+    remove_if_exists(named_repo_index_path(name));
+    if (remaining.empty()) {
+        write_empty_repo_index();
+    } else {
+        rebuild_repo_index_from_cached_files(remaining);
+    }
+    std::cout << tr("Removed repo ") << name << "\n";
+}
+
 void repo_app(int argc, char** argv) {
     if (argc < 3) {
-        throw std::runtime_error(tr("repo requires a subcommand: list, add, or update"));
+        throw std::runtime_error(tr("repo requires a subcommand: list, add, update, or remove"));
     }
 
     const std::string subcommand = argv[2];
@@ -132,6 +157,8 @@ void repo_app(int argc, char** argv) {
         repo_add_app(argc, argv);
     } else if (subcommand == "update") {
         repo_update_app(argc, argv);
+    } else if (subcommand == "remove") {
+        repo_remove_app(argc, argv);
     } else {
         throw std::runtime_error(tr("unknown repo subcommand: ") + subcommand);
     }
