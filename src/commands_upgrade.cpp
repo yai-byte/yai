@@ -68,9 +68,6 @@ std::string unsupported_update_reason(const std::string& source_kind) {
     if (source_kind == "local_path") {
         return tr("local AppImage path has no queryable update source");
     }
-    if (source_kind == "url") {
-        return tr("plain URL install has no stable update source");
-    }
     if (source_kind == "unavailable") {
         return tr("package source is unavailable");
     }
@@ -95,7 +92,8 @@ UpdateContext load_update_context(const InstallOptions& options) {
     if (source_kind != "github_release" &&
         source_kind != "repo_github_release" &&
         source_kind != "repo_direct_url" &&
-        source_kind != "repo_website_page") {
+        source_kind != "repo_website_page" &&
+        source_kind != "url") {
         throw std::runtime_error(tr("package is not upgradable: ") + unsupported_update_reason(source_kind));
     }
     if ((source_kind == "github_release" || source_kind == "repo_github_release") &&
@@ -151,10 +149,14 @@ InstallOptions update_resolution_options(const UpdateContext& context) {
 }
 
 bool update_source_identity_changed(const UpdateContext& context, const ResolvedSource& source) {
+    // Index URL change is enough to download/commit (basename/version may match).
+    if (source.source_url != context.source_url) {
+        return true;
+    }
     if (!source.version.empty() && !context.current_version.empty()) {
         return source.version != context.current_version;
     }
-    return source.source_url != context.source_url;
+    return false;
 }
 
 ResolvedSource resolve_repo_update_source(const UpdateContext& context) {
@@ -294,32 +296,10 @@ void print_update_result(
     std::cout << tr("Rollback version: ") << previous_version_dir(context.paths) << "\n";
 }
 
-void upgrade_installed_target(const InstallOptions& options) {
-    // Upgrade reuses the installed source metadata. GitHub sources query the
-    // release API; repo direct/website sources resolve the current repo package
-    // again and compare the resulting AppImage identity.
-    // The transaction order is: parse original install metadata -> resolve next
-    // source -> download/probe candidate -> save previous -> activate candidate
-    // -> write updated metadata and launch files -> clean temporary candidate
-    // files.
-    const UpdateContext context = load_update_context(options);
-
-    ResolvedSource source;
-    if (context.source_kind == "github_release" || context.source_kind == "repo_github_release") {
-        const GitHubRelease release = resolve_github_latest(
-            context.github_owner + "/" + context.github_repo,
-            "",
-            context.installed_arch);
-        source = build_update_source(context, release);
-    } else {
-        source = resolve_repo_update_source(context);
-    }
-    if (!update_source_identity_changed(context, source)) {
-        print_already_up_to_date(context);
-        return;
-    }
-    const InstallOptions effective_options = apply_network_config_to_options(options, source);
-
+void download_probe_and_commit_update(
+    const UpdateContext& context,
+    ResolvedSource& source) {
+    const InstallOptions effective_options = apply_network_config_to_options(context.options, source);
     const InstallPaths candidate_paths = update_candidate_paths(context.paths);
     cleanup_update_candidate(candidate_paths);
 
@@ -329,6 +309,144 @@ void upgrade_installed_target(const InstallOptions& options) {
     commit_update_transaction(context, candidate_paths, source, repair);
     cleanup_update_candidate(candidate_paths);
     print_update_result(context, source, repair);
+}
+
+ResolvedSource build_url_update_source(const UpdateContext& context) {
+    const fs::path metadata = readable_metadata_path(context.paths);
+    ResolvedSource source;
+    source.source_kind = context.source_kind;
+    source.id = context.id;
+    source.name = context.name;
+    source.version = context.current_version;
+    source.arch = context.installed_arch;
+    source.source_url = context.source_url;
+    source.download_url = metadata_value(metadata, "download_url").value_or(context.source_url);
+    return source;
+}
+
+ResolvedSource source_from_installed_metadata(const UpdateContext& context) {
+    const fs::path metadata = readable_metadata_path(context.paths);
+    ResolvedSource source;
+    source.id = context.id;
+    source.name = metadata_value(metadata, "name").value_or(context.id);
+    source.source_kind = metadata_value(metadata, "source_kind").value_or(context.source_kind);
+    source.version = metadata_value(metadata, "version").value_or("");
+    source.source_url = metadata_value(metadata, "source_url").value_or("");
+    source.download_url = metadata_value(metadata, "download_url").value_or(source.source_url);
+    source.http_etag = metadata_value(metadata, "http_etag").value_or("");
+    source.http_last_modified = metadata_value(metadata, "http_last_modified").value_or("");
+    source.http_content_length = metadata_value(metadata, "http_content_length").value_or("");
+    source.github_owner = metadata_value(metadata, "github_owner").value_or("");
+    source.github_repo = metadata_value(metadata, "github_repo").value_or("");
+    source.github_asset = metadata_value(metadata, "github_asset").value_or("");
+    source.arch = metadata_value(metadata, "arch").value_or(context.installed_arch);
+    return source;
+}
+
+void refresh_metadata_http_validators(const UpdateContext& context, const ResolvedSource& downloaded) {
+    // Sha256 matched the installed AppImage; keep the binary, refresh validators.
+    ResolvedSource source = source_from_installed_metadata(context);
+    source.http_etag = downloaded.http_etag;
+    source.http_last_modified = downloaded.http_last_modified;
+    source.http_content_length = downloaded.http_content_length;
+    const fs::path metadata = readable_metadata_path(context.paths);
+    const std::string mode = metadata_value(metadata, "install_mode").value_or("direct");
+    write_metadata(context.paths, source, mode);
+}
+
+void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& source) {
+    const fs::path metadata = readable_metadata_path(context.paths);
+    const std::string candidate_url =
+        !source.source_url.empty()
+            ? source.source_url
+            : (!source.download_url.empty() ? source.download_url : context.source_url);
+    if (candidate_url.empty()) {
+        throw std::runtime_error(tr("package is not upgradable: ") + "missing update source URL");
+    }
+
+    const UrlFreshnessResult probe =
+        probe_url_freshness(candidate_url, validators_from_metadata(metadata));
+    if (probe.status == UrlFreshness::Unchanged) {
+        print_already_up_to_date(context);
+        return;
+    }
+    if (probe.status == UrlFreshness::Error) {
+        throw std::runtime_error(probe.detail);
+    }
+
+    source.source_url = candidate_url;
+    source.download_url = candidate_url;
+
+    const InstallOptions effective_options = apply_network_config_to_options(context.options, source);
+    const InstallPaths candidate_paths = update_candidate_paths(context.paths);
+    cleanup_update_candidate(candidate_paths);
+
+    print_update_start(context, source, effective_options);
+    const RepairResult repair = download_and_probe_update_candidate(source, effective_options, candidate_paths);
+
+    const std::string current_sha = metadata_value(metadata, "sha256").value_or("");
+    const std::string candidate_sha = sha256_file(candidate_paths.appimage);
+    if (!current_sha.empty() && !candidate_sha.empty() && candidate_sha == current_sha) {
+        cleanup_update_candidate(candidate_paths);
+        try {
+            refresh_metadata_http_validators(context, source);
+        } catch (const std::exception&) {
+            // Best-effort validator refresh must not fail the already-current path.
+        }
+        print_already_up_to_date(context);
+        return;
+    }
+
+    commit_update_transaction(context, candidate_paths, source, repair);
+    cleanup_update_candidate(candidate_paths);
+    print_update_result(context, source, repair);
+}
+
+void upgrade_installed_target(const InstallOptions& options) {
+    // Upgrade reuses the installed source metadata. GitHub sources query the
+    // release API; repo website sources resolve and compare identity; repo
+    // direct URL uses identity first then same-URL freshness; plain URL uses
+    // freshness then sha256. Transaction order for apply: download/probe ->
+    // save previous -> activate -> write metadata -> clean candidate.
+    const UpdateContext context = load_update_context(options);
+
+    if (context.source_kind == "github_release" || context.source_kind == "repo_github_release") {
+        const GitHubRelease release = resolve_github_latest(
+            context.github_owner + "/" + context.github_repo,
+            "",
+            context.installed_arch);
+        ResolvedSource source = build_update_source(context, release);
+        if (!update_source_identity_changed(context, source)) {
+            print_already_up_to_date(context);
+            return;
+        }
+        download_probe_and_commit_update(context, source);
+        return;
+    }
+
+    if (context.source_kind == "repo_website_page") {
+        ResolvedSource source = resolve_repo_update_source(context);
+        if (!update_source_identity_changed(context, source)) {
+            print_already_up_to_date(context);
+            return;
+        }
+        download_probe_and_commit_update(context, source);
+        return;
+    }
+
+    if (context.source_kind == "repo_direct_url") {
+        ResolvedSource source = resolve_repo_update_source(context);
+        if (update_source_identity_changed(context, source)) {
+            download_probe_and_commit_update(context, source);
+            return;
+        }
+        upgrade_via_url_freshness(context, source);
+        return;
+    }
+
+    // source_kind == "url"
+    ResolvedSource source = build_url_update_source(context);
+    upgrade_via_url_freshness(context, source);
 }
 
 std::string yes_no_prompt_text(std::size_t count) {

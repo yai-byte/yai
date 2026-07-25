@@ -201,8 +201,83 @@ if grep -q $'\tcurrent\t' "$TMP_HOME/repo_url_change.out"; then
   exit 1
 fi
 
-# --- Task 5: upgrade execution (gated until Task 5) ---
-# HOME="$TMP_HOME" "$ROOT/yai" upgrade url-updatable
-# HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" "$ROOT/yai" upgrade same-url-direct
+# --- Task 5: upgrade execution ---
+# Case 1: URL install already grown above; upgrade applies new bytes.
+# Keep the grown file (do not rewrite to an equal-length label — that would
+# restore the stored Content-Length and hide the change from the probe).
+URL_OLD_SHA="$(python3 - "$URL_META" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["sha256"])
+PY
+)"
+test -n "$URL_OLD_SHA"
+test ! -e "$TMP_HOME/.local/share/yai/apps/url-updatable/versions/previous"
 
-echo "url_update smoke (preview) passed"
+HOME="$TMP_HOME" "$ROOT/yai" upgrade --yes url-updatable > "$TMP_HOME/url_upgrade.out"
+grep -q 'Upgraded url-updatable' "$TMP_HOME/url_upgrade.out"
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/url-updatable" | grep -q "url-v1 app"
+grep -q 'appended for freshness' \
+  "$TMP_HOME/.local/share/yai/apps/url-updatable/current.AppImage"
+
+URL_NEW_SHA="$(python3 - "$URL_META" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["sha256"])
+PY
+)"
+test "$URL_OLD_SHA" != "$URL_NEW_SHA"
+ASSET_SHA="$(sha256sum "$ASSET" | awk '{print $1}')"
+test "$URL_NEW_SHA" = "$ASSET_SHA"
+
+# http_* refreshed when download captured validators (file:// → content_length).
+python3 - "$URL_META" "$ASSET" <<'PY'
+import json, os, sys
+meta_path, asset = sys.argv[1], sys.argv[2]
+with open(meta_path, encoding="utf-8") as f:
+    data = json.load(f)
+cl = data.get("http_content_length", "")
+if cl:
+    size = str(os.path.getsize(asset))
+    if cl != size:
+        raise SystemExit(f"http_content_length {cl!r} != asset size {size!r}")
+PY
+
+test -e "$TMP_HOME/.local/share/yai/apps/url-updatable/versions/previous"
+
+# Case 2: no remote change → already up to date; Unchanged path does not require previous.
+HOME="$TMP_HOME" "$ROOT/yai" upgrade url-updatable > "$TMP_HOME/url_upgrade_noop.out"
+grep -q 'already up to date' "$TMP_HOME/url_upgrade_noop.out"
+if grep -q 'Upgraded url-updatable' "$TMP_HOME/url_upgrade_noop.out"; then
+  echo "noop upgrade must not apply a new version" >&2
+  cat "$TMP_HOME/url_upgrade_noop.out" >&2
+  exit 1
+fi
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/url-updatable" | grep -q "url-v1 app"
+
+# Case 3: repo_direct_url same URL; content already rewritten to direct-v2 above.
+cat > "$INDEX" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-20T00:00:00Z",
+  "packages": [
+    {
+      "id": "same-url-direct",
+      "name": "Same URL Direct",
+      "summary": "Same-URL freshness demo",
+      "homepage": "https://example.com/same-url-direct",
+      "license": "Unknown",
+      "source": {
+        "type": "direct_url",
+        "url": "file://$SAME"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TMP_HOME" \
+YAI_REPO_INDEX="$INDEX" \
+"$ROOT/yai" upgrade --yes same-url-direct > "$TMP_HOME/repo_upgrade.out"
+grep -q 'Upgraded same-url-direct' "$TMP_HOME/repo_upgrade.out"
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/same-url-direct" | grep -q "direct-v2 app"
+
+echo "url_update smoke (preview + upgrade) passed"
