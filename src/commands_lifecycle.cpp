@@ -5,14 +5,10 @@
 namespace {
 
 std::string download_output_name(const ResolvedSource& source) {
-    std::string name = source.github_asset.empty()
-        ? basename_from_url(source.source_url)
-        : source.github_asset;
-    name = fs::path(name).filename().string();
-    if (name.empty() || name == "." || name == "..") {
-        name = source.id.empty() ? "download.AppImage" : source.id + ".AppImage";
+    if (source.id.empty()) {
+        return "download.AppImage";
     }
-    return name;
+    return source.id + ".AppImage";
 }
 
 } // namespace
@@ -36,8 +32,8 @@ void download_app(int argc, char** argv) {
     if (fs::exists(target)) {
         throw std::runtime_error(tr("download target already exists: ") + target.string());
     }
-    // The destination is always the caller's current directory plus the upstream
-    // asset name. Refusing collisions preserves download-only behavior without
+    // The destination is current_path() / {source.id}.AppImage (package id
+    // basename). Refusing collisions preserves download-only behavior without
     // silently replacing user files.
 
     if (effective_options.download_strategy != "direct") {

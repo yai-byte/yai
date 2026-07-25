@@ -199,7 +199,7 @@ JSON
   HOME="$TMP_HOME" YAI_GITHUB_API_BASE="file://$API_ROOT" "$ROOT/yai" download acme/download-demo
 )
 
-DOWNLOADED="$DOWNLOAD_DIR/$ASSET"
+DOWNLOADED="$DOWNLOAD_DIR/download-demo.AppImage"
 test -f "$DOWNLOADED"
 grep -q "download demo app" "$DOWNLOADED"
 test ! -x "$DOWNLOADED"
@@ -213,12 +213,12 @@ test ! -e "$TMP_HOME/.local/share/applications/yai-download-demo.desktop"
     "$ROOT/yai" download acme/parallel-one acme/parallel-two --jobs 2
 )
 
-test -f "$PARALLEL_DOWNLOAD_DIR/$PARALLEL_ONE_ASSET"
-test -f "$PARALLEL_DOWNLOAD_DIR/$PARALLEL_TWO_ASSET"
-grep -q "parallel one app" "$PARALLEL_DOWNLOAD_DIR/$PARALLEL_ONE_ASSET"
-grep -q "parallel two app" "$PARALLEL_DOWNLOAD_DIR/$PARALLEL_TWO_ASSET"
-test ! -x "$PARALLEL_DOWNLOAD_DIR/$PARALLEL_ONE_ASSET"
-test ! -x "$PARALLEL_DOWNLOAD_DIR/$PARALLEL_TWO_ASSET"
+test -f "$PARALLEL_DOWNLOAD_DIR/parallel-one.AppImage"
+test -f "$PARALLEL_DOWNLOAD_DIR/parallel-two.AppImage"
+grep -q "parallel one app" "$PARALLEL_DOWNLOAD_DIR/parallel-one.AppImage"
+grep -q "parallel two app" "$PARALLEL_DOWNLOAD_DIR/parallel-two.AppImage"
+test ! -x "$PARALLEL_DOWNLOAD_DIR/parallel-one.AppImage"
+test ! -x "$PARALLEL_DOWNLOAD_DIR/parallel-two.AppImage"
 test ! -e "$TMP_HOME/.local/share/yai/apps/parallel-one"
 test ! -e "$TMP_HOME/.local/share/yai/apps/parallel-two"
 
@@ -250,8 +250,8 @@ grep -q "download target already exists" "$TMP_HOME/exists.err"
   "$ROOT/yai" download 'download-*'
 )
 
-test -f "$WILDCARD_DOWNLOAD_DIR/$ASSET"
-test ! -x "$WILDCARD_DOWNLOAD_DIR/$ASSET"
+test -f "$WILDCARD_DOWNLOAD_DIR/download-demo.AppImage"
+test ! -x "$WILDCARD_DOWNLOAD_DIR/download-demo.AppImage"
 test ! -e "$TMP_HOME/.local/share/yai/apps/download-demo"
 
 (
@@ -262,12 +262,12 @@ test ! -e "$TMP_HOME/.local/share/yai/apps/download-demo"
   "$ROOT/yai" download "https://example.invalid/$AUTO_DOWNLOAD_ASSET"
 )
 
-test -f "$AUTO_DOWNLOAD_DIR/$AUTO_DOWNLOAD_ASSET"
-grep -q "fake downloader app" "$AUTO_DOWNLOAD_DIR/$AUTO_DOWNLOAD_ASSET"
-test ! -x "$AUTO_DOWNLOAD_DIR/$AUTO_DOWNLOAD_ASSET"
+test -f "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
+grep -q "fake downloader app" "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
+test ! -x "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
 grep -Fq $'curl-head\thttps://example.invalid/AutoDownload-x86_64.AppImage' "$TMP_HOME/auto-downloader.log"
 grep -Fq $'aria2c\thttps://example.invalid/AutoDownload-x86_64.AppImage\tfile-allocation=none' "$TMP_HOME/auto-downloader.log"
-test ! -e "$TMP_HOME/.local/share/yai/apps/auto-download"
+test ! -e "$TMP_HOME/.local/share/yai/apps/autodownload"
 
 HOME="$TMP_HOME" \
 PATH="$FAKE_BIN:$PATH" \
@@ -288,5 +288,43 @@ if HOME="$TMP_HOME" "$ROOT/yai" download "https://example.invalid/$AUTO_DOWNLOAD
   exit 1
 fi
 grep -q -- "--downloader must be auto, curl, wget, wget2, or aria2c" "$TMP_HOME/bad-downloader.err"
+
+# download (repo id name) then local install must use package id
+VERSIONED_ASSET="download-demo-1.2.3-x86_64.AppImage"
+cp "$ORIGINAL_ROOT/$ASSET" "$TMP_HOME/$VERSIONED_ASSET"
+HOME="$TMP_HOME" \
+YAI_REPO_INDEX="$INDEX" \
+YAI_GITHUB_API_BASE="file://$API_ROOT" \
+"$ROOT/yai" install "$TMP_HOME/$VERSIONED_ASSET"
+grep -q '"id": "download-demo"' \
+  "$TMP_HOME/.local/share/yai/apps/download-demo/metadata.json"
+grep -q '"name": "Download Demo"' \
+  "$TMP_HOME/.local/share/yai/apps/download-demo/metadata.json"
+grep -q '"source_kind": "local_path"' \
+  "$TMP_HOME/.local/share/yai/apps/download-demo/metadata.json"
+HOME="$TMP_HOME" "$ROOT/yai" remove download-demo
+
+# URL-style strip without repo: Foo-1.2-x86_64.AppImage -> id foo
+cp "$ORIGINAL_ROOT/$ASSET" "$TMP_HOME/Foo-1.2-x86_64.AppImage"
+HOME="$TMP_HOME" "$ROOT/yai" install "$TMP_HOME/Foo-1.2-x86_64.AppImage"
+test -e "$TMP_HOME/.local/share/yai/apps/foo/metadata.json"
+grep -q '"id": "foo"' "$TMP_HOME/.local/share/yai/apps/foo/metadata.json"
+HOME="$TMP_HOME" "$ROOT/yai" remove foo
+
+# id-named download then install
+mkdir -p "$TMP_HOME/id-named-download"
+(
+  cd "$TMP_HOME/id-named-download"
+  HOME="$TMP_HOME" \
+  YAI_REPO_INDEX="$INDEX" \
+  YAI_GITHUB_API_BASE="file://$API_ROOT" \
+  "$ROOT/yai" download download-demo
+)
+HOME="$TMP_HOME" \
+YAI_REPO_INDEX="$INDEX" \
+"$ROOT/yai" install "$TMP_HOME/id-named-download/download-demo.AppImage"
+grep -q '"id": "download-demo"' \
+  "$TMP_HOME/.local/share/yai/apps/download-demo/metadata.json"
+HOME="$TMP_HOME" "$ROOT/yai" remove download-demo
 
 echo "download smoke test passed"

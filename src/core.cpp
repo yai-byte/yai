@@ -6,6 +6,35 @@
 
 const char* APPIMAGE_FEED_URL = "https://appimage.github.io/feed.json";
 
+namespace {
+
+bool token_looks_like_version(const std::string& token) {
+    if (token.empty()) {
+        return false;
+    }
+    std::size_t i = 0;
+    if (token[0] == 'v' || token[0] == 'V') {
+        if (token.size() == 1) {
+            return false;
+        }
+        i = 1;
+    }
+    bool saw_digit = false;
+    for (; i < token.size(); ++i) {
+        const unsigned char ch = static_cast<unsigned char>(token[i]);
+        if (ch >= '0' && ch <= '9') {
+            saw_digit = true;
+            continue;
+        }
+        if (ch == '.') {
+            continue;
+        }
+        return false;
+    }
+    return saw_digit;
+}
+
+}  // namespace
 
 std::optional<std::string> env_string(const char* name) {
     const char* value = std::getenv(name);
@@ -89,6 +118,41 @@ std::string strip_appimage_suffix(std::string value) {
         value.resize(value.size() - suffix.size());
     }
     return value;
+}
+
+std::string base_name_from_appimage_filename(const std::string& filename) {
+    const std::string stem = strip_appimage_suffix(fs::path(filename).filename().string());
+    std::vector<std::string> tokens;
+    std::string current;
+    for (char ch : stem) {
+        if (ch == '-' || ch == '_') {
+            if (!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+        } else {
+            current.push_back(ch);
+        }
+    }
+    if (!current.empty()) {
+        tokens.push_back(current);
+    }
+
+    while (!tokens.empty() &&
+           (token_looks_like_arch(tokens.back()) || token_looks_like_version(tokens.back()))) {
+        tokens.pop_back();
+    }
+
+    if (tokens.empty()) {
+        return stem;
+    }
+
+    std::string out = tokens.front();
+    for (std::size_t i = 1; i < tokens.size(); ++i) {
+        out.push_back('-');
+        out += tokens[i];
+    }
+    return out;
 }
 
 std::string sanitize_id(const std::string& value) {

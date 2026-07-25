@@ -198,6 +198,8 @@ std::string trim(std::string value);
 std::string basename_from_url(const std::string& url);
 std::string strip_appimage_suffix(std::string value);
 std::string sanitize_id(const std::string& value);
+bool token_looks_like_arch(const std::string& token);
+std::string base_name_from_appimage_filename(const std::string& filename);
 std::string shell_escape_double_quoted(const std::string& value);
 std::string desktop_escape(const std::string& value);
 std::string to_lower(std::string value);

@@ -24,6 +24,24 @@ const std::vector<ArchAliasRule>& arch_alias_rules() {
     return rules;
 }
 
+bool token_looks_like_arch(const std::string& token) {
+    const std::string lower = to_lower(trim(token));
+    if (lower.empty()) {
+        return false;
+    }
+    for (const ArchAliasRule& rule : arch_alias_rules()) {
+        if (lower == rule.canonical) {
+            return true;
+        }
+        for (const std::string& alias : rule.aliases) {
+            if (lower == alias) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool contains_any_arch_needle(const std::string& value, const ArchAliasRule& rule) {
     for (const std::string& needle : rule.asset_needles) {
         if (value.find(needle) != std::string::npos) {

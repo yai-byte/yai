@@ -191,7 +191,7 @@ yai download owner/one owner/two --jobs 2
 yai download owner/repo --downloader aria2c
 ```
 
-`download` 命令只把解析出的 AppImage 文件下载到用户运行命令时的当前目录，并使用上游文件名。它不设置执行权限、不探测运行模式、不生成 wrapper、不写 metadata、不创建桌面入口，也不覆盖当前目录已有的同名文件。
+`download` 命令只把解析出的 AppImage 文件下载到用户运行命令时的当前目录，保存为 `{解析后的包 id}.AppImage`。URL 与本地路径在未显式指定 `--id` 时，默认 id 会去掉文件名末尾的版本号和架构标记；本地 `install` 无 `--id` 时会尝试按文件名 stem 匹配仓库中的包。它不设置执行权限、不探测运行模式、不生成 wrapper、不写 metadata、不创建桌面入口，也不覆盖当前目录已有的同名文件。
 
 ### 7.3 修复应用
 
@@ -344,7 +344,7 @@ yai mirror off
 当前实现没有全局下载缓存，也没有对应的缓存清理命令。下载会直接暂存到目标文件旁边的 `.part` 文件：
 
 - `install` 写入应用目录中的 `current.AppImage.part`，成功后移动为 `current.AppImage`。
-- `download` 写入用户当前目录中的上游文件名，成功前使用同目录 `.part` 文件。
+- `download` 写入用户当前目录中的 `{source.id}.AppImage`，成功前使用同目录 `.part` 文件。
 - curl 响应头临时写入同目录 `.headers` 文件，用于读取 `Content-Length` 并渲染 TTY 进度。
 - 下载失败时清理 `.part` 和 `.headers`；清理失败只作为 warning，不改变主要失败原因。
 

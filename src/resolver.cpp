@@ -81,6 +81,44 @@ std::string stage_appimage_source(
 
 namespace {
 
+std::optional<RepoPackage> match_repo_package_for_local_stem(const std::string& stem) {
+    std::vector<RepoPackage> packages;
+    try {
+        packages = load_repo_packages();
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+
+    std::vector<const RepoPackage*> candidates;
+    for (const RepoPackage& package : packages) {
+        if (package.id.empty()) {
+            continue;
+        }
+        if (stem == package.id || stem.rfind(package.id + "-", 0) == 0) {
+            candidates.push_back(&package);
+        }
+    }
+    if (candidates.empty()) {
+        return std::nullopt;
+    }
+
+    std::size_t best_len = 0;
+    for (const RepoPackage* package : candidates) {
+        best_len = std::max(best_len, package->id.size());
+    }
+
+    std::vector<const RepoPackage*> best;
+    for (const RepoPackage* package : candidates) {
+        if (package->id.size() == best_len) {
+            best.push_back(package);
+        }
+    }
+    if (best.size() != 1) {
+        return std::nullopt;
+    }
+    return *best.front();
+}
+
 ResolvedSource resolve_local_install_source(const InstallOptions& options) {
     const fs::path local_path = options.target;
     if (!fs::exists(local_path)) {
@@ -90,11 +128,30 @@ ResolvedSource resolve_local_install_source(const InstallOptions& options) {
         throw std::runtime_error(tr("local AppImage target is not a file: ") + options.target);
     }
 
-    const std::string base = local_path.filename().string();
+    const std::string filename = local_path.filename().string();
+    const std::string full_stem_id = sanitize_id(strip_appimage_suffix(filename));
+    const std::string stripped = base_name_from_appimage_filename(filename);
+    const std::optional<RepoPackage> matched =
+        options.id_explicit ? std::nullopt : match_repo_package_for_local_stem(full_stem_id);
+
     ResolvedSource source;
     source.source_kind = "local_path";
-    source.id = options.id.empty() ? sanitize_id(strip_appimage_suffix(base)) : options.id;
-    source.name = options.name.empty() ? strip_appimage_suffix(base) : options.name;
+    if (options.id_explicit) {
+        source.id = options.id;
+    } else if (matched.has_value()) {
+        source.id = sanitize_id(matched->id);
+    } else {
+        source.id = sanitize_id(stripped);
+    }
+
+    if (options.name_explicit) {
+        source.name = options.name;
+    } else if (matched.has_value()) {
+        source.name = matched->name;
+    } else {
+        source.name = stripped.empty() ? strip_appimage_suffix(filename) : stripped;
+    }
+
     source.source_url = fs::absolute(local_path).lexically_normal().string();
     source.download_url = source.source_url;
     return with_install_arch(source, options);
@@ -206,10 +263,13 @@ ResolvedSource resolve_repo_package_install_source(const InstallOptions& options
 
 ResolvedSource resolve_url_install_source(const InstallOptions& options) {
     const std::string base = basename_from_url(options.target);
+    const std::string stripped = base_name_from_appimage_filename(base);
     ResolvedSource source;
     source.source_kind = "url";
-    source.id = options.id.empty() ? sanitize_id(strip_appimage_suffix(base)) : options.id;
-    source.name = options.name.empty() ? strip_appimage_suffix(base) : options.name;
+    source.id = options.id.empty() ? sanitize_id(stripped) : options.id;
+    source.name = options.name.empty()
+        ? (stripped.empty() ? strip_appimage_suffix(base) : stripped)
+        : options.name;
     source.source_url = options.target;
     source.download_url = options.target;
     return with_install_arch(source, options);

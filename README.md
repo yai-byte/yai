@@ -55,9 +55,11 @@ the pattern matches exactly one package. Quote patterns such as `'obs*'` so the
 shell does not expand them before yai receives the argument. Commands with side
 effects reject patterns that match zero or multiple packages.
 
-`download` saves the selected AppImage into the current working directory using
-the upstream file name. It does not install, chmod, probe, write metadata,
-create wrappers, or overwrite an existing file.
+`download` saves the selected AppImage into the current working directory as
+`{resolved package id}.AppImage`. URL and local default ids strip trailing
+version and architecture tokens from the file name. Local install without
+`--id` tries to match a repo package by filename stem. It does not install,
+chmod, probe, write metadata, create wrappers, or overwrite an existing file.
 
 `install` and `download` accept multiple targets in one command. yai runs them
 in parallel with up to four workers by default, capped by the number of targets;

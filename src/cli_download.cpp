@@ -3,7 +3,7 @@
 // CLI parsing and AppImage download execution live here. Parsed options are
 // intentionally reused by install and download, but download_file only stages
 // bytes into a caller-provided target and reports transport failures with context.
-// The higher-level download command chooses current_path()/upstream_asset_name
+// The higher-level download command chooses current_path()/{package.id}.AppImage
 // and rejects existing targets before reaching download_file.
 
 void print_usage() {
@@ -158,11 +158,12 @@ void fill_install_defaults_for_direct_target(InstallOptions& options) {
     }
 
     const std::string base = basename_from_url(options.target);
+    const std::string stripped = base_name_from_appimage_filename(base);
     if (options.id.empty()) {
-        options.id = sanitize_id(strip_appimage_suffix(base));
+        options.id = sanitize_id(stripped);
     }
     if (options.name.empty()) {
-        options.name = strip_appimage_suffix(base);
+        options.name = stripped.empty() ? strip_appimage_suffix(base) : stripped;
     }
 }
 
