@@ -1,8 +1,32 @@
 #include "yai.hpp"
 
+#include <unordered_set>
+
 // Remove, list, search, and info command workflows.
 
 namespace {
+std::unordered_set<std::string> installed_package_id_set() {
+    std::unordered_set<std::string> ids;
+    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
+    if (!fs::exists(apps_dir)) {
+        return ids;
+    }
+
+    for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
+        if (!entry.is_directory()) {
+            continue;
+        }
+        const InstallPaths paths = paths_for(entry.path().filename().string());
+        const fs::path metadata = readable_metadata_path(paths);
+        if (!fs::exists(metadata)) {
+            continue;
+        }
+        const std::string id = metadata_value(metadata, "id").value_or(entry.path().filename().string());
+        ids.insert(id);
+    }
+    return ids;
+}
+
 std::string search_summary(const std::string& summary) {
     constexpr std::size_t max_summary_width = 80;
     return truncate_display_width(summary, max_summary_width);
@@ -80,12 +104,13 @@ void search_packages(int argc, char** argv) {
         throw std::runtime_error(tr("search requires exactly one keyword"));
     }
     const std::string keyword = argv[2];
+    const std::unordered_set<std::string> installed_ids = installed_package_id_set();
     for (const RepoPackage& package : load_repo_packages()) {
         if (!package_matches_keyword(package, keyword)) {
             continue;
         }
         std::string line = package.id + "\t" + package.name + "\t" + search_summary(package.summary);
-        if (metadata_exists(paths_for(package.id))) {
+        if (installed_ids.count(package.id) != 0) {
             line += " ";
             line += tr("[installed]");
             line = color_green(line);

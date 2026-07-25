@@ -142,6 +142,32 @@ if printf '%s\n' "$SEARCH_NO_COLOR" | grep -q $'\033'; then
   exit 1
 fi
 
+if command -v script >/dev/null 2>&1; then
+  SEARCH_TTY="$(
+    script -qefc \
+      "HOME=\"$TMP_HOME\" YAI_REPO_INDEX=\"$INDEX\" \"$ROOT/yai\" search repo-demo" \
+      /dev/null
+  )"
+  printf '%s\n' "$SEARCH_TTY" | grep -q '\[installed\]'
+  if ! printf '%s\n' "$SEARCH_TTY" | grep -q $'\033[32m'; then
+    echo "TTY search output missing green ANSI escape" >&2
+    exit 1
+  fi
+
+  SEARCH_TTY_NO_COLOR="$(
+    script -qefc \
+      "HOME=\"$TMP_HOME\" YAI_REPO_INDEX=\"$INDEX\" NO_COLOR=1 \"$ROOT/yai\" search repo-demo" \
+      /dev/null
+  )"
+  printf '%s\n' "$SEARCH_TTY_NO_COLOR" | grep -q '\[installed\]'
+  if printf '%s\n' "$SEARCH_TTY_NO_COLOR" | grep -q $'\033'; then
+    echo "TTY NO_COLOR=1 search output contained ANSI escapes" >&2
+    exit 1
+  fi
+else
+  echo "stage4: skipping TTY color assertions (script unavailable)" >&2
+fi
+
 SEARCH_ZH="$(HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" YAI_LANG=zh "$ROOT/yai" search repo-demo)"
 printf '%s\n' "$SEARCH_ZH" | grep -q '\[已安装\]'
 if printf '%s\n' "$SEARCH_ZH" | grep -q '\[installed\]'; then
