@@ -17,7 +17,8 @@ done
 
 # Help must no longer claim that wildcard arguments require exactly one match.
 HOME="$TMP_HOME" "$ROOT/yai" help >"$TMP_HOME/help.out"
-grep -q "supported commands may apply to multiple matches" "$TMP_HOME/help.out"
+grep -q "multiple matches run in sorted order" "$TMP_HOME/help.out"
+grep -q "Side-effect commands list matches and confirm when N>1" "$TMP_HOME/help.out"
 ! grep -q "patterns when they match exactly one package" "$TMP_HOME/help.out"
 
 # Minimal: two installed stub apps via metadata dirs for remove multi-match

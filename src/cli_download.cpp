@@ -42,8 +42,10 @@ void print_usage() {
         << tr("  yai list\n")
         << tr("  yai help\n");
     std::cout << tr("\nLanguage: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\n");
-    std::cout << tr("Package/id arguments support quoted * and ? patterns; supported commands may apply to multiple matches.\n");
-    std::cout << tr("install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n");
+    std::cout << tr("Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\n");
+    std::cout << tr("Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n");
+    std::cout << tr("install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n");
+    std::cout << tr("--id/--name are single-install only.\n");
 }
 
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option) {

@@ -50,10 +50,13 @@ Requires a C++17 compiler and `curl`. AppImage downloads can also use `aria2c`,
 ./yai remove <id>
 ```
 
-Package and installed-id arguments accept shell-style `*` and `?` patterns when
-the pattern matches exactly one package. Quote patterns such as `'obs*'` so the
-shell does not expand them before yai receives the argument. Commands with side
-effects reject patterns that match zero or multiple packages.
+Package, repo-name, and installed-id arguments accept shell-style `*` and `?`
+patterns. Quote patterns such as `'obs*'` so the shell does not expand them
+before yai receives the argument. When a pattern matches multiple targets,
+yai acts on every match in sorted order. Side-effect commands list the matches
+and ask for confirmation; pass `--yes` or `-y` to skip the prompt. Matching
+zero targets still fails. Wildcard-expanded `install`/`download` batches run
+sequentially and stop on the first failure.
 
 `download` saves the selected AppImage into the current working directory as
 `{resolved package id}.AppImage`. URL and local default ids strip trailing
@@ -61,9 +64,10 @@ version and architecture tokens from the file name. Local install without
 `--id` tries to match a repo package by filename stem. It does not install,
 chmod, probe, write metadata, create wrappers, or overwrite an existing file.
 
-`install` and `download` accept multiple targets in one command. yai runs them
-in parallel with up to four workers by default, capped by the number of targets;
-use `--jobs <n>` to choose 1 to 32 workers. The same `--arch`, `--download`, and
+`install` and `download` accept multiple targets in one command. Explicit
+multiple argv targets run in parallel with up to four workers by default,
+capped by the number of targets; use `--jobs <n>` to choose 1 to 32 workers.
+Wildcard-expanded pattern batches run sequentially instead. The same `--arch`, `--download`, and
 `--mirror-template`, and `--downloader` options apply to every target. `--id`
 and `--name` are available only for a single `install` target because batch
 installs derive each package id from its source.
@@ -97,7 +101,7 @@ architecture from metadata.
 
 `update [id]` previews available upgrades without downloading, probing, writing
 metadata, or replacing installed files. With no id, it previews all installed
-packages; with an id or unique pattern, it previews only that package. GitHub
+packages; with an id or pattern, it previews every matching package. GitHub
 Release installs compare the latest release tag. Repository `direct_url` and
 `website_page` installs re-resolve the current repo package and compare the
 selected AppImage file name or URL; plain URL and local-path installs remain
@@ -210,8 +214,9 @@ Repository commands manage `~/.local/share/yai/repos/repos.conf`.
 `repo update <name>` refreshes one configured repo. Both rebuild the combined
 index from cached repo files. `repo remove <name-or-pattern>` drops a configured
 repo, deletes its cache file, and rebuilds `index.json` without uninstalling
-apps. Name/pattern arguments follow the same single-match `*`/`?` rules as
-other side-effect commands.
+apps. Name/pattern arguments follow the same wildcard multi-match rules as
+other side-effect commands, including confirmation when a pattern matches
+more than one repo.
 
 The AppImage project feed can be used directly:
 

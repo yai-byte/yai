@@ -200,14 +200,24 @@ msgstr ""
 "语言：默认跟随系统 locale；设置 YAI_LANG=zh 或 YAI_LANG=en 可强制指定。\n"
 
 msgid ""
-"Package/id arguments support quoted * and ? patterns; supported commands may apply to multiple matches.\n"
+"Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\n"
 msgstr ""
-"包名/id 参数支持加引号的 * 和 ? 通配符；支持的命令可作用于多个匹配项。\n"
+"包名/id/包源名参数支持加引号的 * 和 ? 通配符；多个匹配项按排序顺序执行。\n"
 
 msgid ""
-"install/download accept multiple targets; --jobs controls parallel workers. --id/--name are single-install only.\n"
+"Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n"
 msgstr ""
-"install/download 支持多个目标；--jobs 控制并发任务数。--id/--name 只适用于单个安装。\n"
+"有副作用的命令在匹配数大于 1 时会列出匹配项并确认；使用 --yes/-y 可跳过。零匹配仍会失败。\n"
+
+msgid ""
+"install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n"
+msgstr ""
+"install/download 的多个 argv 目标可并行执行（--jobs）；通配符展开的批次改为顺序执行。\n"
+
+msgid ""
+"--id/--name are single-install only.\n"
+msgstr ""
+"--id/--name 仅适用于单个 install。\n"
 
 msgid " requires a value"
 msgstr " 需要一个值"
