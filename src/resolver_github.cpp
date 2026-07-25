@@ -130,12 +130,13 @@ std::string mirror_url_for(const std::string& mirror_template, const ResolvedSou
 }
 
 std::string download_with_strategy(
-    const ResolvedSource& source,
+    ResolvedSource& source,
     const InstallOptions& options,
     const fs::path& target) {
     // Mirror strategy is a transport fallback list. The original source_url
     // remains the upstream identity written to metadata even when the actual
-    // bytes came through a proxy.
+    // bytes came through a proxy. Validators from the successful transfer are
+    // written onto source for metadata persistence.
     std::vector<std::string> candidates;
     if (options.download_strategy == "direct") {
         candidates.push_back(source.source_url);
@@ -153,7 +154,10 @@ std::string download_with_strategy(
     std::string last_error;
     for (const std::string& candidate : candidates) {
         try {
-            download_file(candidate, target, options.downloader);
+            const HttpValidators validators = download_file(candidate, target, options.downloader);
+            source.http_etag = validators.etag;
+            source.http_last_modified = validators.last_modified;
+            source.http_content_length = validators.content_length;
             return candidate;
         } catch (const std::exception& ex) {
             last_error = ex.what();

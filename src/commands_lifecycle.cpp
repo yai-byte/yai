@@ -125,6 +125,9 @@ RepairResult repair_installed_package(const std::string& id) {
     source.version = metadata_value(metadata, "version").value_or("");
     source.source_url = metadata_value(metadata, "source_url").value_or("");
     source.download_url = metadata_value(metadata, "download_url").value_or(source.source_url);
+    source.http_etag = metadata_value(metadata, "http_etag").value_or("");
+    source.http_last_modified = metadata_value(metadata, "http_last_modified").value_or("");
+    source.http_content_length = metadata_value(metadata, "http_content_length").value_or("");
     source.github_owner = metadata_value(metadata, "github_owner").value_or("");
     source.github_repo = metadata_value(metadata, "github_repo").value_or("");
     source.github_asset = metadata_value(metadata, "github_asset").value_or("");

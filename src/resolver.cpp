@@ -37,12 +37,15 @@ ResolvedSource with_install_arch(ResolvedSource source, const InstallOptions& op
 }  // namespace
 
 std::string stage_appimage_source(
-    const ResolvedSource& source,
+    ResolvedSource& source,
     const InstallOptions& options,
     const fs::path& target) {
     // Staging is shared by install, update, and download. It copies local files
     // or downloads remote sources to the caller-supplied target; command code
     // decides whether to chmod, probe, or write desktop/metadata artifacts.
+    // Landing-page redirects mutate a local copy of the source URL so the
+    // caller's upstream identity stays intact; validators from the final
+    // successful download are copied back onto source.
     if (source.source_kind == "local_path") {
         copy_file_overwrite(source.source_url, target);
         return source.source_url;
@@ -61,9 +64,15 @@ std::string stage_appimage_source(
                 }
                 throw std::runtime_error(tr("downloaded URL returned an HTML page instead of an AppImage: ") + downloaded_url);
             }
+            source.http_etag = current_source.http_etag;
+            source.http_last_modified = current_source.http_last_modified;
+            source.http_content_length = current_source.http_content_length;
             return downloaded_url;
         }
         if (landing_appimage_url == downloaded_url) {
+            source.http_etag = current_source.http_etag;
+            source.http_last_modified = current_source.http_last_modified;
+            source.http_content_length = current_source.http_content_length;
             return downloaded_url;
         }
 

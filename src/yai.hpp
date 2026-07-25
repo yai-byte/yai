@@ -75,6 +75,9 @@ struct ResolvedSource {
     std::string arch;
     std::string source_url;
     std::string download_url;
+    std::string http_etag;
+    std::string http_last_modified;
+    std::string http_content_length;
     std::string github_owner;
     std::string github_repo;
     std::string github_asset;
@@ -321,7 +324,7 @@ void validate_mirror_options(const InstallOptions& options);
 InstallOptions parse_install_options(int argc, char** argv);
 InstallOptions parse_download_options(int argc, char** argv);
 bool executable_available(const std::string& name);
-void download_file(const std::string& url, const fs::path& target, const std::string& downloader);
+HttpValidators download_file(const std::string& url, const fs::path& target, const std::string& downloader);
 constexpr int kFetchTextDefaultTimeoutMs = 15000;
 constexpr int kFetchTextSpeculativeTimeoutMs = 5000;
 constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
@@ -390,7 +393,7 @@ GitHubRelease resolve_github_latest(
     const std::string& arch = "");
 std::string mirror_url_for(const std::string& mirror_template, const ResolvedSource& source);
 std::string download_with_strategy(
-    const ResolvedSource& source,
+    ResolvedSource& source,
     const InstallOptions& options,
     const fs::path& target);
 std::string strip_url_fragment_query(std::string value);
@@ -442,7 +445,7 @@ std::string resolve_website_appimage_download(
     const RepoPackage& package,
     const std::string& arch = "");
 std::string stage_appimage_source(
-    const ResolvedSource& source,
+    ResolvedSource& source,
     const InstallOptions& options,
     const fs::path& target);
 ResolvedSource resolve_install_source(const InstallOptions& options);

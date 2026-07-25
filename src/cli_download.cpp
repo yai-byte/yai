@@ -394,10 +394,12 @@ void run_downloader(
     }
 }
 
-void download_file(const std::string& url, const fs::path& target, const std::string& downloader) {
+HttpValidators download_file(const std::string& url, const fs::path& target, const std::string& downloader) {
     // Tool-native progress is suppressed so yai owns localized TTY progress on
     // stderr. curl also dumps headers to derive Content-Length during the same
     // transfer; other tools still report downloaded bytes and speed.
+    // Validators are parsed from the header dump before it is deleted so install
+    // metadata can persist ETag / Last-Modified / Content-Length for freshness checks.
     const fs::path part = target.string() + ".part";
     const fs::path headers = target.string() + ".headers";
     const std::vector<std::string> downloaders = available_downloaders(downloader, url);
@@ -414,6 +416,7 @@ void download_file(const std::string& url, const fs::path& target, const std::st
                 prefetch_download_headers(url, headers);
             }
             run_downloader(selected, url, part, headers);
+            const HttpValidators validators = parse_http_validators_from_headers(headers);
             const bool headers_removed = remove_best_effort(headers);
             const bool aria_removed = remove_best_effort(part.string() + ".aria2");
             if (!headers_removed || !aria_removed) {
@@ -424,7 +427,7 @@ void download_file(const std::string& url, const fs::path& target, const std::st
             if (ec) {
                 throw std::runtime_error(tr("failed to move downloaded file into place: ") + ec.message());
             }
-            return;
+            return validators;
         } catch (const std::exception& ex) {
             last_error = selected + ": " + ex.what();
             remove_download_temps(part, headers);
