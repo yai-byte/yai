@@ -324,15 +324,26 @@ struct BatchProgressEvent {
     std::uintmax_t done = 0;
     std::optional<std::uintmax_t> total;
     double rate_bps = 0.0;
+    double elapsed = 0.0;
+    // Negative means unknown (same convention as single-package progress).
+    double total_seconds = -1.0;
+    double left_seconds = -1.0;
 };
 
 std::optional<BatchProgressEvent> parse_batch_progress_event(const std::string& line);
-std::string format_batch_progress_event(
-    std::uintmax_t done,
-    std::optional<std::uintmax_t> total,
-    double rate_bps);
+std::string format_batch_progress_event(const BatchProgressEvent& event);
 std::string format_batch_progress_clear_event();
 int batch_event_fd();
+// Same layout as single-package TTY progress (stats left, bar right), sized to columns.
+std::string format_download_progress_line(
+    std::uintmax_t downloaded,
+    std::optional<std::uintmax_t> total,
+    double bytes_per_second,
+    double elapsed,
+    double total_seconds,
+    double left_seconds,
+    std::size_t columns,
+    int tick);
 
 class BatchTerminalUi {
 public:
@@ -348,6 +359,7 @@ private:
     struct ProgressRow {
         std::string target;
         BatchProgressEvent event;
+        int tick = 0;
     };
 
     std::string task_prefix(std::size_t index, const std::string& target) const;

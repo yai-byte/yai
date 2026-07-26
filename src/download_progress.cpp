@@ -415,6 +415,26 @@ void write_event_line(int event_fd, const std::string& line) {
 
 } // namespace
 
+std::string format_download_progress_line(
+    std::uintmax_t downloaded,
+    std::optional<std::uintmax_t> total,
+    double bytes_per_second,
+    double elapsed,
+    double total_seconds,
+    double left_seconds,
+    std::size_t columns,
+    int tick) {
+    DownloadProgressSnapshot snapshot;
+    snapshot.downloaded = downloaded;
+    snapshot.total = total;
+    snapshot.bytes_per_second = bytes_per_second;
+    snapshot.elapsed = elapsed;
+    snapshot.total_seconds = total_seconds;
+    snapshot.left_seconds = left_seconds;
+    const std::string stats = format_download_progress_stats(snapshot);
+    return render_progress_line(stats, snapshot, columns, tick);
+}
+
 void render_download_progress(
     const fs::path& part,
     const fs::path& headers,
@@ -431,11 +451,15 @@ void render_download_progress(
     }
 
     if (event_fd >= 0) {
-        const std::string line = format_batch_progress_event(
-            snapshot->downloaded,
-            snapshot->total,
-            snapshot->bytes_per_second) + "\n";
-        write_event_line(event_fd, line);
+        BatchProgressEvent event;
+        event.kind = BatchProgressEvent::Kind::Progress;
+        event.done = snapshot->downloaded;
+        event.total = snapshot->total;
+        event.rate_bps = snapshot->bytes_per_second;
+        event.elapsed = snapshot->elapsed;
+        event.total_seconds = snapshot->total_seconds;
+        event.left_seconds = snapshot->left_seconds;
+        write_event_line(event_fd, format_batch_progress_event(event) + "\n");
         return;
     }
 
@@ -446,8 +470,17 @@ void render_download_progress(
         return;
     }
 
-    const std::string stats = format_download_progress_stats(*snapshot);
-    write_progress_line(render_progress_line(stats, *snapshot, terminal_width(), tick), last_width);
+    write_progress_line(
+        format_download_progress_line(
+            snapshot->downloaded,
+            snapshot->total,
+            snapshot->bytes_per_second,
+            snapshot->elapsed,
+            snapshot->total_seconds,
+            snapshot->left_seconds,
+            terminal_width(),
+            tick),
+        last_width);
 }
 
 void clear_download_progress(std::size_t& last_width) {

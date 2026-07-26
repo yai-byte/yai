@@ -88,27 +88,64 @@ int main(int argc, char** argv) {
     require(stalled == 0.0, "speed did not clear after a real stall");
 
     {
-        const std::string line = format_batch_progress_event(12345, 67890, 1024.0);
-        require(line == "PROGRESS done=12345 total=67890 rate=1024", "format progress");
+        BatchProgressEvent sample;
+        sample.done = 12345;
+        sample.total = 67890;
+        sample.rate_bps = 1024.0;
+        sample.elapsed = 1.5;
+        sample.total_seconds = 60.0;
+        sample.left_seconds = 45.0;
+        const std::string line = format_batch_progress_event(sample);
+        require(
+            line == "PROGRESS done=12345 total=67890 rate=1024 elapsed=1.5 total_time=60 left=45",
+            "format progress");
         const auto ev = parse_batch_progress_event(line);
         require(ev.has_value(), "parse progress");
         require(ev->kind == BatchProgressEvent::Kind::Progress, "kind");
         require(ev->done == 12345, "done");
         require(ev->total.has_value() && *ev->total == 67890, "total");
         require(std::fabs(ev->rate_bps - 1024.0) < 0.001, "rate");
+        require(std::fabs(ev->elapsed - 1.5) < 0.001, "elapsed");
+        require(std::fabs(ev->total_seconds - 60.0) < 0.001, "total_time");
+        require(std::fabs(ev->left_seconds - 45.0) < 0.001, "left");
 
-        const std::string unknown = format_batch_progress_event(10, std::nullopt, 0.0);
-        require(unknown == "PROGRESS done=10 total=- rate=0", "format unknown total");
+        BatchProgressEvent unknown_sample;
+        unknown_sample.done = 10;
+        unknown_sample.total = std::nullopt;
+        unknown_sample.rate_bps = 0.0;
+        unknown_sample.elapsed = 0.5;
+        unknown_sample.total_seconds = -1.0;
+        unknown_sample.left_seconds = -1.0;
+        const std::string unknown = format_batch_progress_event(unknown_sample);
+        require(
+            unknown == "PROGRESS done=10 total=- rate=0 elapsed=0.5 total_time=- left=-",
+            "format unknown total");
         const auto ev2 = parse_batch_progress_event(unknown);
         require(ev2.has_value() && !ev2->total.has_value(), "parse unknown total");
+        require(ev2->total_seconds < 0.0 && ev2->left_seconds < 0.0, "unknown times");
 
         require(format_batch_progress_clear_event() == "PROGRESS_CLEAR", "format clear");
         const auto clear = parse_batch_progress_event("PROGRESS_CLEAR");
         require(clear.has_value() && clear->kind == BatchProgressEvent::Kind::Clear, "parse clear");
 
         require(!parse_batch_progress_event("NOPE").has_value(), "reject junk");
-        require(!parse_batch_progress_event("PROGRESS done=x total=1 rate=1").has_value(), "reject bad ints");
+        require(
+            !parse_batch_progress_event("PROGRESS done=x total=1 rate=1 elapsed=1 total_time=1 left=1")
+                 .has_value(),
+            "reject bad ints");
         require(batch_event_fd() < 0, "unset event fd");
+
+        const std::string single_style = format_download_progress_line(
+            12345,
+            67890,
+            1024.0,
+            1.5,
+            60.0,
+            45.0,
+            80,
+            0);
+        require(single_style.find("Downloaded:") != std::string::npos, "progress line has Downloaded");
+        require(single_style.find('[') != std::string::npos, "progress line has bar");
     }
 
     {

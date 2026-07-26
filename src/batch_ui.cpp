@@ -4,14 +4,6 @@ namespace {
 
 constexpr std::size_t kMaxFooterRows = 8;
 
-std::size_t clamp_bar_width(std::size_t columns) {
-    std::size_t bar_width = std::min<std::size_t>(30, std::max<std::size_t>(12, columns / 4));
-    if (bar_width + 4 >= columns) {
-        return 12;
-    }
-    return bar_width;
-}
-
 } // namespace
 
 BatchTerminalUi::BatchTerminalUi(std::size_t total_tasks)
@@ -38,33 +30,21 @@ void BatchTerminalUi::clear_footer_locked() {
 }
 
 std::string BatchTerminalUi::format_footer_row(std::size_t index, const ProgressRow& row) const {
+    // Match single-package progress layout exactly (Total/Downloaded/Speed/... + bar),
+    // with only the batch task prefix added in front.
     const std::string prefix = task_prefix(index, row.target);
     const std::size_t columns = terminal_width();
     const std::size_t prefix_width = display_width(prefix);
-    const std::size_t remain = columns > prefix_width ? columns - prefix_width : 0;
-    const std::size_t bar_width = clamp_bar_width(std::max<std::size_t>(remain, 16));
-    const std::string bar = progress_bar(row.event.total, row.event.done, bar_width, 0);
-
-    std::ostringstream stats;
-    stats << ' ' << bar << "  ";
-    if (row.event.total.has_value() && *row.event.total > 0) {
-        const double ratio = std::min(
-            1.0,
-            static_cast<double>(row.event.done) / static_cast<double>(*row.event.total));
-        stats << static_cast<int>(ratio * 100.0 + 0.5) << "%  "
-              << format_byte_count(row.event.done) << '/'
-              << format_byte_count(*row.event.total) << "  ";
-    } else {
-        stats << format_byte_count(row.event.done) << "/-  ";
-    }
-    stats << format_byte_count(static_cast<std::uintmax_t>(std::max(0.0, row.event.rate_bps)))
-          << "/s";
-
-    std::string line = prefix + stats.str();
-    if (display_width(line) > columns) {
-        line = truncate_display_width(line, columns);
-    }
-    return line;
+    const std::size_t body_columns = columns > prefix_width ? columns - prefix_width : 0;
+    return prefix + format_download_progress_line(
+               row.event.done,
+               row.event.total,
+               row.event.rate_bps,
+               row.event.elapsed,
+               row.event.total_seconds,
+               row.event.left_seconds,
+               body_columns,
+               row.tick);
 }
 
 void BatchTerminalUi::redraw_footer_locked() {
@@ -118,10 +98,11 @@ void BatchTerminalUi::apply_event(
     if (event.kind == BatchProgressEvent::Kind::Clear) {
         active_.erase(index);
     } else {
-        ProgressRow row;
+        ProgressRow& row = active_[index];
+        const int next_tick = row.tick + 1;
         row.target = target;
         row.event = event;
-        active_[index] = std::move(row);
+        row.tick = next_tick;
     }
     if (tty_) {
         redraw_footer_locked();

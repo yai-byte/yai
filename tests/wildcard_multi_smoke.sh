@@ -42,6 +42,31 @@ printf 'n\n' | HOME="$TMP_HOME" "$ROOT/yai" remove 'multi-*' >"$TMP_HOME/rm-canc
 test -d "$TMP_HOME/.local/share/yai/apps/multi-a"
 test -d "$TMP_HOME/.local/share/yai/apps/multi-b"
 
+# Shell-expanded local AppImage / multi-file argv must hint to quote wildcards.
+SHELL_GLOB_DIR="$TMP_HOME/shell-glob-cwd"
+mkdir -p "$SHELL_GLOB_DIR"
+: >"$SHELL_GLOB_DIR/packa.AppImage"
+: >"$SHELL_GLOB_DIR/package-lock.json"
+if (
+  cd "$SHELL_GLOB_DIR"
+  HOME="$TMP_HOME" "$ROOT/yai" remove packa.AppImage
+) >"$TMP_HOME/rm-local.out" 2>"$TMP_HOME/rm-local.err"; then
+  echo "remove packa.AppImage unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -Fq "quote wildcards like 'name*'" "$TMP_HOME/rm-local.err"
+grep -Fq "installed package ids" "$TMP_HOME/rm-local.err"
+! grep -q "package is not installed: packa.appimage" "$TMP_HOME/rm-local.err"
+if (
+  cd "$SHELL_GLOB_DIR"
+  HOME="$TMP_HOME" "$ROOT/yai" remove packa.AppImage package-lock.json
+) >"$TMP_HOME/rm-multi.out" 2>"$TMP_HOME/rm-multi.err"; then
+  echo "remove with multiple shell-expanded args unexpectedly succeeded" >&2
+  exit 1
+fi
+grep -Fq "quote wildcards like 'name*'" "$TMP_HOME/rm-multi.err"
+! grep -q "unknown remove option: package-lock.json" "$TMP_HOME/rm-multi.err"
+
 # --yes removes both (sorted: multi-a then multi-b)
 HOME="$TMP_HOME" "$ROOT/yai" remove 'multi-*' --yes | tee "$TMP_HOME/rm-yes.out" >/dev/null
 grep -q "Removed multi-a" "$TMP_HOME/rm-yes.out"

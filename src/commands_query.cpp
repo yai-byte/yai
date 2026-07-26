@@ -64,6 +64,17 @@ void print_package_info(const RepoPackage& package) {
         std::cout << tr("Asset pattern: ") << package.asset_pattern << "\n";
     }
 }
+
+bool looks_like_shell_expanded_remove_target(const std::string& value) {
+    if (value.empty() || has_glob_wildcards(value)) {
+        return false;
+    }
+    const std::string lower = to_lower(value);
+    return value.front() == '/' ||
+           value.rfind("./", 0) == 0 ||
+           value.rfind("../", 0) == 0 ||
+           lower.find(".appimage") != std::string::npos;
+}
 } // namespace
 
 void remove_if_exists(const fs::path& path) {
@@ -92,14 +103,24 @@ void remove_app(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--yes" || arg == "-y") {
             yes = true;
-        } else if (pattern.empty() && arg.rfind("--", 0) != 0) {
+        } else if (arg.rfind("--", 0) == 0) {
+            throw std::runtime_error(tr("unknown remove option: ") + arg);
+        } else if (pattern.empty()) {
             pattern = arg;
         } else {
-            throw std::runtime_error(tr("unknown remove option: ") + arg);
+            throw std::runtime_error(tr(
+                "remove accepts one package id or quoted pattern; quote wildcards like 'name*' so the shell does not expand them"));
         }
     }
     if (pattern.empty()) {
         throw std::runtime_error(tr("remove requires exactly one package id"));
+    }
+    if (looks_like_shell_expanded_remove_target(pattern)) {
+        const std::string id = sanitize_id(pattern);
+        if (!metadata_exists(paths_for(id))) {
+            throw std::runtime_error(tr(
+                "remove matches installed package ids only; quote wildcards like 'name*' so the shell does not expand them"));
+        }
     }
 
     const std::vector<std::string> ids = resolve_installed_package_ids(pattern);

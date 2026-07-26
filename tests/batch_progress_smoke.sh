@@ -29,6 +29,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   "$ROOT/src/core.cpp" \
   "$ROOT/src/arch.cpp" \
   "$ROOT/src/i18n.cpp" \
+  "$ROOT/src/json.cpp" \
   "$ROOT/src/process.cpp"
 
 "$TMP_DIR/batch_ui_test" >"$TMP_DIR/out" 2>"$TMP_DIR/err"
@@ -51,7 +52,15 @@ int main() {
     if (fd < 0) {
         return 2;
     }
-    const std::string progress = format_batch_progress_event(50, 100, 10) + "\n";
+    BatchProgressEvent ev;
+    ev.kind = BatchProgressEvent::Kind::Progress;
+    ev.done = 50;
+    ev.total = 100;
+    ev.rate_bps = 10;
+    ev.elapsed = 1.0;
+    ev.total_seconds = 10.0;
+    ev.left_seconds = 5.0;
+    const std::string progress = format_batch_progress_event(ev) + "\n";
     const std::string clear = format_batch_progress_clear_event() + "\n";
     if (write(fd, progress.data(), progress.size()) != static_cast<ssize_t>(progress.size())) {
         return 3;
@@ -72,6 +81,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   "$ROOT/src/core.cpp" \
   "$ROOT/src/arch.cpp" \
   "$ROOT/src/i18n.cpp" \
+  "$ROOT/src/json.cpp" \
   "$ROOT/src/process.cpp"
 
 cat > "$TMP_DIR/batch_stream_test.cpp" <<CPP
@@ -103,6 +113,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   "$ROOT/src/core.cpp" \
   "$ROOT/src/arch.cpp" \
   "$ROOT/src/i18n.cpp" \
+  "$ROOT/src/json.cpp" \
   "$ROOT/src/process.cpp"
 
 "$TMP_DIR/batch_stream_test" >"$TMP_DIR/stream_out" 2>"$TMP_DIR/stream_err"
