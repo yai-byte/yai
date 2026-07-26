@@ -257,4 +257,148 @@ grep -Fq 'krita-old-x86_64.AppImage' \
 HOME="$TMP_HOME" "$TMP_HOME/.local/bin/mtime-stale-only" | grep -q "krita old"
 HOME="$TMP_HOME" "$ROOT/yai" remove mtime-stale-only
 
+# --- Integration: listing top-N follow prune ---
+PRUNE="$TMP_DIR/download/prune"
+NOMTIME="$TMP_DIR/download/nomtime"
+mkdir -p "$PRUNE"/{v1,v2,v3,v4,v5,older_versions_are_in_the_attic} "$NOMTIME/deep"
+
+make_appimage "$ASSETS/prune-v5-x86_64.AppImage" "prune v5"
+make_appimage "$ASSETS/prune-v4-x86_64.AppImage" "prune v4"
+make_appimage "$ASSETS/prune-v3-x86_64.AppImage" "prune v3"
+make_appimage "$ASSETS/prune-v2-x86_64.AppImage" "prune v2"
+make_appimage "$ASSETS/prune-v1-x86_64.AppImage" "prune v1"
+make_appimage "$ASSETS/prune-attic-x86_64.AppImage" "prune attic"
+make_appimage "$ASSETS/nomtime-deep-x86_64.AppImage" "nomtime deep"
+
+cat > "$PRUNE/index.html" <<HTML
+<html><body><table>
+<tr><th>Name</th><th>Last modified</th></tr>
+<tr><td><a href="v5/index.html">v5/</a></td><td align="right">2026-06-05 12:00  </td></tr>
+<tr><td><a href="v4/index.html">v4/</a></td><td align="right">2026-06-04 12:00  </td></tr>
+<tr><td><a href="v3/index.html">v3/</a></td><td align="right">2026-06-03 12:00  </td></tr>
+<tr><td><a href="v2/index.html">v2/</a></td><td align="right">2026-06-02 12:00  </td></tr>
+<tr><td><a href="v1/index.html">v1/</a></td><td align="right">2026-06-01 12:00  </td></tr>
+<tr><td><a href="older_versions_are_in_the_attic/index.html">older_versions_are_in_the_attic/</a></td>
+    <td align="right">2018-01-01 00:00  </td></tr>
+</table></body></html>
+HTML
+
+for ver in v5 v4 v3 v2 v1; do
+  cat > "$PRUNE/$ver/index.html" <<HTML
+<html><body><a href="file://$ASSETS/prune-${ver}-x86_64.AppImage">AppImage</a></body></html>
+HTML
+done
+cat > "$PRUNE/older_versions_are_in_the_attic/index.html" <<HTML
+<html><body><a href="file://$ASSETS/prune-attic-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+cat > "$NOMTIME/index.html" <<HTML
+<html><body><table>
+<tr><th>Name</th></tr>
+<tr><td>[DIR] <a href="deep/index.html">deep/</a></td></tr>
+</table></body></html>
+HTML
+cat > "$NOMTIME/deep/index.html" <<HTML
+<html><body><a href="file://$ASSETS/nomtime-deep-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+cat > "$TMP_HOME/.local/share/yai/repos/index.json" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "mtime-listing-prune",
+      "name": "Prune Listing",
+      "summary": "Top-N listing prune fixture",
+      "homepage": "file://$PRUNE/index.html",
+      "license": "GPL",
+      "source": {
+        "type": "website_page",
+        "url": "file://$PRUNE/index.html",
+        "reason": "test"
+      }
+    },
+    {
+      "id": "mtime-listing-nomtime",
+      "name": "Nomtime Listing",
+      "summary": "No-mtime listing passthrough fixture",
+      "homepage": "file://$NOMTIME/index.html",
+      "license": "GPL",
+      "source": {
+        "type": "website_page",
+        "url": "file://$NOMTIME/index.html",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+PRUNE_CURL_LOG="$TMP_DIR/prune-curl.log"
+PRUNE_FAKE_BIN="$TMP_DIR/prune-fake-bin"
+REAL_CURL="$(command -v curl)"
+mkdir -p "$PRUNE_FAKE_BIN"
+cat > "$PRUNE_FAKE_BIN/curl" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$PRUNE_CURL_LOG"
+exec "$REAL_CURL" "\$@"
+SH
+chmod +x "$PRUNE_FAKE_BIN/curl"
+
+PATH="$PRUNE_FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install mtime-listing-prune 2>"$TMP_DIR/prune.err"
+PRUNE_META="$TMP_HOME/.local/share/yai/apps/mtime-listing-prune/metadata.json"
+grep -Fq 'prune-v5' "$PRUNE_META" || {
+  echo "expected download_url to prefer v5 AppImage, metadata:" >&2
+  cat "$PRUNE_META" >&2
+  echo "stderr:" >&2
+  cat "$TMP_DIR/prune.err" >&2
+  echo "curl log:" >&2
+  cat "$PRUNE_CURL_LOG" >&2
+  exit 1
+}
+if grep -q 'v2/index.html' "$TMP_DIR/prune.err"; then
+  echo "prune stderr must not show v2/index.html as a checked page" >&2
+  cat "$TMP_DIR/prune.err" >&2
+  exit 1
+fi
+if grep -q 'v1/index.html' "$TMP_DIR/prune.err"; then
+  echo "prune stderr must not show v1/index.html as a checked page" >&2
+  cat "$TMP_DIR/prune.err" >&2
+  exit 1
+fi
+if grep -q 'v2/index.html' "$PRUNE_CURL_LOG"; then
+  echo "prune must not fetch v2/index.html" >&2
+  cat "$PRUNE_CURL_LOG" >&2
+  exit 1
+fi
+if grep -q 'v1/index.html' "$PRUNE_CURL_LOG"; then
+  echo "prune must not fetch v1/index.html" >&2
+  cat "$PRUNE_CURL_LOG" >&2
+  exit 1
+fi
+grep -q 'v5/index.html' "$PRUNE_CURL_LOG" || {
+  echo "expected v5/index.html to be fetched" >&2
+  cat "$PRUNE_CURL_LOG" >&2
+  exit 1
+}
+grep -q 'website search selected' "$TMP_DIR/prune.err"
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/mtime-listing-prune" | grep -q "prune v5"
+HOME="$TMP_HOME" "$ROOT/yai" remove mtime-listing-prune
+
+HOME="$TMP_HOME" "$ROOT/yai" install mtime-listing-nomtime 2>"$TMP_DIR/nomtime.err"
+NOMTIME_META="$TMP_HOME/.local/share/yai/apps/mtime-listing-nomtime/metadata.json"
+grep -Fq 'nomtime-deep-x86_64.AppImage' "$NOMTIME_META" || {
+  echo "expected no-mtime listing to reach deep AppImage, metadata:" >&2
+  cat "$NOMTIME_META" >&2
+  echo "stderr:" >&2
+  cat "$TMP_DIR/nomtime.err" >&2
+  exit 1
+}
+test -x "$TMP_HOME/.local/share/yai/apps/mtime-listing-nomtime/current.AppImage"
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/mtime-listing-nomtime" | grep -q "nomtime deep"
+HOME="$TMP_HOME" "$ROOT/yai" remove mtime-listing-nomtime
+
 echo "website mtime integration smoke passed"
+echo "website listing prune integration smoke passed"
