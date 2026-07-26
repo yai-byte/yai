@@ -479,6 +479,22 @@ void write_progress_line(std::string line, std::size_t& last_width) {
     std::cerr << '\r' << line << std::flush;
 }
 
+void write_event_line(int event_fd, const std::string& line) {
+    const char* data = line.data();
+    std::size_t left = line.size();
+    while (left > 0) {
+        const ssize_t written = write(event_fd, data, left);
+        if (written < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        data += written;
+        left -= static_cast<std::size_t>(written);
+    }
+}
+
 } // namespace
 
 void render_download_progress(
@@ -488,15 +504,26 @@ void render_download_progress(
     int tick,
     std::size_t& last_width,
     DownloadProgressState& state) {
+    const int event_fd = batch_event_fd();
+    const std::optional<DownloadProgressSnapshot> snapshot =
+        download_progress_snapshot(part, headers, start, state);
+    if (!snapshot.has_value()) {
+        return;
+    }
+
+    if (event_fd >= 0) {
+        const std::string line = format_batch_progress_event(
+            snapshot->downloaded,
+            snapshot->total,
+            snapshot->bytes_per_second) + "\n";
+        write_event_line(event_fd, line);
+        return;
+    }
+
     // Progress is user-facing status, so it is TTY-only stderr. Redirected
     // commands keep stdout/stderr stable, and unknown totals fall back to the
     // animated bar instead of pretending a percentage is known.
     if (isatty(STDERR_FILENO) == 0) {
-        return;
-    }
-    const std::optional<DownloadProgressSnapshot> snapshot =
-        download_progress_snapshot(part, headers, start, state);
-    if (!snapshot.has_value()) {
         return;
     }
 
@@ -505,6 +532,13 @@ void render_download_progress(
 }
 
 void clear_download_progress(std::size_t& last_width) {
+    const int event_fd = batch_event_fd();
+    if (event_fd >= 0) {
+        const std::string line = format_batch_progress_clear_event() + "\n";
+        write_event_line(event_fd, line);
+        last_width = 0;
+        return;
+    }
     if (isatty(STDERR_FILENO) == 0 || last_width == 0) {
         return;
     }
