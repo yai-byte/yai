@@ -124,6 +124,8 @@ constexpr std::size_t kWebsiteFetchConcurrency = 4;
 constexpr std::size_t kWebsiteMaxPages = 96;
 constexpr std::size_t kWebsiteCandidateSoftCap = 8;
 constexpr std::size_t kWebsiteHeadFillMax = 4;
+constexpr std::size_t kWebsiteListingFollowNonStaleMax = 3;
+constexpr std::size_t kWebsiteListingFollowStaleMax = 1;
 
 bool queue_item_better(const WebsiteQueueItem& a, const WebsiteQueueItem& b) {
     if (a.stale_penalty != b.stale_penalty) {
@@ -376,6 +378,7 @@ void collect_appimage_candidates(
     WebsiteSearchState& state,
     WebsiteSearchProgress& progress,
     const std::string& arch) {
+    std::vector<WebsiteLinkMeta> follow_metas;
     for (const WebsiteLinkMeta& meta : links) {
         if (is_allowed_appimage_candidate(meta.url, package, state.allowed_hosts)) {
             WebsiteLinkMeta candidate = meta;
@@ -383,6 +386,20 @@ void collect_appimage_candidates(
             record_appimage_candidate(std::move(candidate), page, state, progress);
             continue;
         }
+        if (should_queue_website_link(meta.url, package, page, state)) {
+            follow_metas.push_back(meta);
+        }
+    }
+
+    const std::vector<WebsiteLinkMeta> to_queue =
+        select_listing_follow_metas_for_enqueue(
+            follow_metas,
+            kWebsiteListingFollowNonStaleMax,
+            kWebsiteListingFollowStaleMax);
+    for (const WebsiteLinkMeta& meta : to_queue) {
+        // Re-check should_queue: queue growth / seen set may have changed while
+        // recording AppImages; also prune may keep URLs that later fail host rules
+        // only if should_queue already passed — still re-check depth/seen/queue cap.
         if (should_queue_website_link(meta.url, package, page, state)) {
             queue_website_link(meta, package, page, state, progress);
         }
