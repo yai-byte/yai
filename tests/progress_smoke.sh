@@ -98,6 +98,30 @@ int main(int argc, char** argv) {
         1100);
     require(stalled == 0.0, "speed did not clear after a real stall");
 
+    {
+        const std::string line = format_batch_progress_event(12345, 67890, 1024.0);
+        require(line == "PROGRESS done=12345 total=67890 rate=1024", "format progress");
+        const auto ev = parse_batch_progress_event(line);
+        require(ev.has_value(), "parse progress");
+        require(ev->kind == BatchProgressEvent::Kind::Progress, "kind");
+        require(ev->done == 12345, "done");
+        require(ev->total.has_value() && *ev->total == 67890, "total");
+        require(std::fabs(ev->rate_bps - 1024.0) < 0.001, "rate");
+
+        const std::string unknown = format_batch_progress_event(10, std::nullopt, 0.0);
+        require(unknown == "PROGRESS done=10 total=- rate=0", "format unknown total");
+        const auto ev2 = parse_batch_progress_event(unknown);
+        require(ev2.has_value() && !ev2->total.has_value(), "parse unknown total");
+
+        require(format_batch_progress_clear_event() == "PROGRESS_CLEAR", "format clear");
+        const auto clear = parse_batch_progress_event("PROGRESS_CLEAR");
+        require(clear.has_value() && clear->kind == BatchProgressEvent::Kind::Clear, "parse clear");
+
+        require(!parse_batch_progress_event("NOPE").has_value(), "reject junk");
+        require(!parse_batch_progress_event("PROGRESS done=x total=1 rate=1").has_value(), "reject bad ints");
+        require(batch_event_fd() < 0, "unset event fd");
+    }
+
     std::cout << "progress smoke test passed\n";
     return 0;
 }
@@ -108,6 +132,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$TMP_DIR/progress_test.cpp" \
   "$ROOT/src/core.cpp" \
   "$ROOT/src/arch.cpp" \
+  "$ROOT/src/batch_progress_event.cpp" \
   "$ROOT/src/download_progress.cpp" \
   "$ROOT/src/i18n.cpp" \
   "$ROOT/src/process.cpp"

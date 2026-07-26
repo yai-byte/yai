@@ -5,6 +5,7 @@ LDFLAGS ?=
 TARGET := yai
 SRC := \
 	src/arch.cpp \
+	src/batch_progress_event.cpp \
 	src/appimage.cpp \
 	src/appimage_desktop.cpp \
 	src/appimage_runtime.cpp \

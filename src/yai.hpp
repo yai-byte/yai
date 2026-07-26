@@ -289,6 +289,22 @@ void render_download_progress(
     std::size_t& last_width,
     DownloadProgressState& state);
 void clear_download_progress(std::size_t& last_width);
+
+struct BatchProgressEvent {
+    enum class Kind { Progress, Clear } kind = Kind::Progress;
+    std::uintmax_t done = 0;
+    std::optional<std::uintmax_t> total;
+    double rate_bps = 0.0;
+};
+
+std::optional<BatchProgressEvent> parse_batch_progress_event(const std::string& line);
+std::string format_batch_progress_event(
+    std::uintmax_t done,
+    std::optional<std::uintmax_t> total,
+    double rate_bps);
+std::string format_batch_progress_clear_event();
+int batch_event_fd();
+
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
