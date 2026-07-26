@@ -1,80 +1,70 @@
-# Task 1 Report: Extract `src/i18n.cpp`
+# Task 1 Report: Stale path + listing mtime helpers
 
 ## Status
 
-**DONE** — `make clean && make` succeeded with no warnings.
+**DONE** — `bash tests/website_mtime_smoke.sh` prints `website mtime unit smoke passed`.
 
 ## What Was Implemented
 
-Mechanical extraction of PO/i18n code from `src/core.cpp` into new `src/i18n.cpp`, per task brief scripts and design doc i18n section.
+Pure URL/mtime helpers for website AppImage freshness (Task 1 scope only).
 
-### Created: `src/i18n.cpp` (213 lines)
+### Modified: `src/yai.hpp`
 
-- File header: `#include "yai.hpp"`, `#include <unordered_map>`, locale comment
-- Anonymous-namespace PO helpers (lines 13–166 of pre-split `core.cpp`):
-  - `po_unquote`, `executable_dir_path`, `translation_dirs`, `language_po_file`
-  - `parse_po_file`, `load_translation_catalog`, `translation_catalog`
-- Public i18n API (lines 183–234 of pre-split `core.cpp`):
-  - `current_language()`, `use_chinese()`, `tr()`, `tr_format()`
-- `tr_format` calls `replace_all` via `yai.hpp` declaration; definition remains in `core.cpp`
+Added near other URL helpers:
 
-### Modified: `src/core.cpp` (1407 lines, was 1614)
+- `struct WebsiteLinkMeta { url, mtime, stale_penalty }`
+- `bool website_url_looks_stale(const std::string& url)`
+- `int website_link_stale_penalty(const std::string& url)`
+- `std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text)`
+- `std::optional<std::int64_t> parse_http_last_modified_mtime(const std::string& text)`
 
-Removed the two slices above. Retained structure per brief:
+### Modified: `src/resolver_url.cpp`
 
-1. Includes + banner comment (lines 1–12)
-2. `APPIMAGE_FEED_URL`
-3. `env_string`, `ascii_lower` (lines 167–182 of pre-split)
-4. `home_dir` and all downstream helpers unchanged
+- `website_url_looks_stale` — case-insensitive path scan after `strip_url_fragment_query`; matches `older` substring, `/attic/` or `attic` segment, `old` segment (not substrings in `download`/`threshold`)
+- `website_link_stale_penalty` — returns `1` if stale, else `0`
+- `parse_directory_listing_mtime` — `YYYY-MM-DD HH:MM` or `YYYY-MM-DD HH:MM:SS` via `sscanf` + `timegm`; rejects trailing junk
+- `parse_http_last_modified_mtime` — minimal RFC 1123 parser (`Sun, 02 Jun 2026 09:22:00 GMT`); GMT/UTC only
+- Anonymous helpers: `tm_to_utc_epoch`, `trailing_whitespace_only`
 
-Confirmed absent from `core.cpp`: `namespace {` PO block, `current_language`, `use_chinese`, `tr`, `tr_format`.
+### Created: `tests/website_mtime_smoke.sh`
 
-Confirmed present in `core.cpp`: `replace_all` at line 247.
+Unit smoke (TDD):
 
-### Modified: `Makefile`
+1. RED — compile failed with undeclared symbols (verified)
+2. GREEN — all stale-path and listing-mtime assertions pass
 
-Added `src/i18n.cpp \` after `src/core.cpp \` in `SRC`.
+Link line expanded beyond brief minimum (resolver_url transitive deps): `repo_feed`, `repo`, `json`, `cli_download`, `url_freshness`, `appimage`, `batch_progress_event`, `batch_ui`, `download_progress`.
 
-## Build Verification
+## Test Verification
 
 ```bash
-make clean && make
+bash tests/website_mtime_smoke.sh
+# website mtime unit smoke passed
 ```
 
-**Output summary:**
-
-```
-rm -f yai
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -o yai src/arch.cpp src/appimage.cpp src/cli_download.cpp src/commands.cpp src/commands_doctor.cpp src/core.cpp src/i18n.cpp src/json.cpp src/main.cpp src/repo.cpp src/resolver.cpp
-```
-
-- Exit code: 0
-- Warnings: none
-- Binary: `yai` (891304 bytes)
+TDD cycle observed: failing compile (missing declarations) → implement → passing smoke.
 
 ## Files Changed
 
 | File | Action |
 |------|--------|
-| `src/i18n.cpp` | Created |
-| `src/core.cpp` | Modified (removed i18n slices) |
-| `Makefile` | Modified (added `src/i18n.cpp` to `SRC`) |
-
-No changes to `yai.hpp`, commands, resolver, or other headers.
+| `src/yai.hpp` | Modified (declarations + `WebsiteLinkMeta`) |
+| `src/resolver_url.cpp` | Modified (implementations) |
+| `tests/website_mtime_smoke.sh` | Created |
 
 ## Self-Review
 
-1. **Slice boundaries** — Re-located by markers; pre-split line numbers matched brief exactly (13–166 anon, 183–234 lang/tr, 167–182 env_string/ascii_lower kept).
-2. **Linkage** — `tr_format` → `replace_all` cross-TU link resolves via existing `yai.hpp` declaration + `core.cpp` definition.
-3. **ODR** — PO helpers in anonymous namespace in `i18n.cpp`; no duplicate symbols.
-4. **Scope discipline** — Only the three files above touched; no behavioral or signature changes.
-5. **Commits** — None (per plan).
+1. **Stale rules** — Matches brief verbatim; segment split avoids `download`/`threshold` false positives.
+2. **Listing mtime** — UTC via `timegm`; order test (`2026-06-02` > `2026-05-26`) passes; invalid input returns `nullopt`.
+3. **HTTP Last-Modified** — Declared and implemented for later tasks; not covered by unit smoke yet.
+4. **Scope** — No crawler/HTML wiring (later tasks).
+5. **Link deps** — Smoke links many TUs because `resolver_url.cpp` references `allowed_website_hosts` → `strip_unexpanded_url_placeholder` and `process.cpp` batch/download symbols. Acceptable for now; a dedicated small TU could shrink this in a follow-up.
 
 ## Concerns
 
-1. **Stale include in `core.cpp`** — `#include <unordered_map>` remains but is no longer used after i18n extraction. Harmless; can be removed in a later cleanup pass (out of Task 1 scope).
-2. **Stale banner in `core.cpp`** — Top comment still mentions "locale selection"; design doc notes banner updates for remainder files may come in later tasks.
+1. **`parse_http_last_modified_mtime` untested** — Implemented per interface list; Task 2+ should add smoke coverage.
+2. **Heavy smoke link set** — 13 source files for a unit test; inherited from monolithic `resolver_url.cpp` / `process.cpp` coupling.
 
 ## Commits
 
-None.
+One commit on `feature/website-mtime-candidate` (see git log after commit).
