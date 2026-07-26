@@ -519,6 +519,7 @@ bool website_url_looks_stale(const std::string& url);
 int website_link_stale_penalty(const std::string& url);
 std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text);
 std::optional<std::int64_t> parse_http_last_modified_mtime(const std::string& text);
+std::optional<std::int64_t> probe_url_last_modified_mtime(const std::string& url);
 std::string url_origin(const std::string& url);
 std::string url_host(const std::string& url);
 bool is_file_url(const std::string& url);

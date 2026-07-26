@@ -141,6 +141,8 @@ int website_url_priority(const std::string& url) {
 constexpr int kWebsiteSeedPriority = 100;
 constexpr std::size_t kWebsiteFetchConcurrency = 4;
 constexpr std::size_t kWebsiteMaxPages = 96;
+constexpr std::size_t kWebsiteCandidateSoftCap = 8;
+constexpr std::size_t kWebsiteHeadFillMax = 4;
 
 bool queue_item_better(const WebsiteQueueItem& a, const WebsiteQueueItem& b) {
     if (a.stale_penalty != b.stale_penalty) {
@@ -292,10 +294,14 @@ std::optional<std::vector<WebsiteLinkMeta>> fetch_website_links(
 
 void record_appimage_candidate(
     WebsiteLinkMeta meta,
+    const WebsiteQueueItem& page,
     WebsiteSearchState& state,
     WebsiteSearchProgress& progress) {
-    meta.stale_penalty =
-        std::max(meta.stale_penalty, website_link_stale_penalty(meta.url));
+    if (!meta.mtime.has_value()) {
+        meta.mtime = page.mtime;
+    }
+    meta.stale_penalty = std::max(
+        {meta.stale_penalty, page.stale_penalty, website_link_stale_penalty(meta.url)});
     state.appimage_candidates.push_back(std::move(meta));
     progress.candidate();
 }
@@ -393,7 +399,7 @@ void collect_appimage_candidates(
         if (is_allowed_appimage_candidate(meta.url, package, state.allowed_hosts)) {
             WebsiteLinkMeta candidate = meta;
             candidate.url = resolved_appimage_candidate(meta.url, package, arch);
-            record_appimage_candidate(std::move(candidate), state, progress);
+            record_appimage_candidate(std::move(candidate), page, state, progress);
             continue;
         }
         if (should_queue_website_link(meta.url, package, page, state)) {
@@ -402,10 +408,106 @@ void collect_appimage_candidates(
     }
 }
 
+std::size_t non_stale_appimage_candidate_count(
+    const std::vector<WebsiteLinkMeta>& candidates,
+    const std::string& arch) {
+    const std::string effective = arch.empty() ? current_arch() : normalize_arch(arch);
+    std::size_t count = 0;
+    for (const WebsiteLinkMeta& candidate : candidates) {
+        if (candidate.stale_penalty != 0 ||
+            !is_appimage_download_url(candidate.url) ||
+            appimage_asset_score(basename_from_url(candidate.url), effective) < 0) {
+            continue;
+        }
+        ++count;
+    }
+    return count;
+}
+
+std::optional<std::int64_t> best_non_stale_candidate_mtime(
+    const std::vector<WebsiteLinkMeta>& candidates,
+    const std::string& arch) {
+    const std::string effective = arch.empty() ? current_arch() : normalize_arch(arch);
+    std::optional<std::int64_t> best;
+    for (const WebsiteLinkMeta& candidate : candidates) {
+        if (candidate.stale_penalty != 0 ||
+            !candidate.mtime.has_value() ||
+            !is_appimage_download_url(candidate.url) ||
+            appimage_asset_score(basename_from_url(candidate.url), effective) < 0) {
+            continue;
+        }
+        if (!best.has_value() || *candidate.mtime > *best) {
+            best = candidate.mtime;
+        }
+    }
+    return best;
+}
+
+bool queue_has_newer_non_stale_mtime(
+    const WebsiteSearchState& state,
+    const std::optional<std::int64_t>& best_non_stale_mtime) {
+    for (const WebsiteQueueItem& item : state.queue) {
+        if (vector_contains(state.seen, item.url) ||
+            item.stale_penalty != 0 ||
+            !item.mtime.has_value()) {
+            continue;
+        }
+        if (!best_non_stale_mtime.has_value() || *item.mtime > *best_non_stale_mtime) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool website_search_should_stop(
+    const WebsiteSearchState& state,
+    const std::string& arch,
+    std::size_t pages_checked) {
+    if (pages_checked >= kWebsiteMaxPages) {
+        return true;
+    }
+    const std::size_t non_stale = non_stale_appimage_candidate_count(state.appimage_candidates, arch);
+    if (non_stale == 0) {
+        return false;
+    }
+    if (non_stale >= kWebsiteCandidateSoftCap) {
+        return true;
+    }
+    return !queue_has_newer_non_stale_mtime(
+        state, best_non_stale_candidate_mtime(state.appimage_candidates, arch));
+}
+
+void fill_missing_candidate_mtimes_from_head(
+    std::vector<WebsiteLinkMeta>& candidates,
+    const std::string& arch) {
+    std::vector<std::size_t> missing;
+    const std::string effective = arch.empty() ? current_arch() : normalize_arch(arch);
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+        if (candidates[i].mtime.has_value() ||
+            !is_appimage_download_url(candidates[i].url) ||
+            appimage_asset_score(basename_from_url(candidates[i].url), effective) < 0) {
+            continue;
+        }
+        missing.push_back(i);
+    }
+    std::sort(missing.begin(), missing.end(), [&](std::size_t a, std::size_t b) {
+        return website_candidate_better(candidates[a], candidates[b], arch);
+    });
+    const std::size_t limit = std::min(kWebsiteHeadFillMax, missing.size());
+    for (std::size_t n = 0; n < limit; ++n) {
+        const std::optional<std::int64_t> mtime =
+            probe_url_last_modified_mtime(candidates[missing[n]].url);
+        if (mtime.has_value()) {
+            candidates[missing[n]].mtime = mtime;
+        }
+    }
+}
+
 std::string selected_website_candidate(
-    const std::vector<WebsiteLinkMeta>& appimage_candidates,
+    std::vector<WebsiteLinkMeta>& appimage_candidates,
     const std::string& arch,
     WebsiteSearchProgress& progress) {
+    fill_missing_candidate_mtimes_from_head(appimage_candidates, arch);
     const std::string best = best_website_appimage_url(appimage_candidates, arch);
     if (!best.empty()) {
         progress.selected(best);
@@ -424,6 +526,10 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
     // which normal allowed-host checks and AppImage asset scoring apply.
     std::size_t pages_checked = 0;
     while (pages_checked < kWebsiteMaxPages) {
+        if (website_search_should_stop(state, arch, pages_checked)) {
+            break;
+        }
+
         std::vector<WebsiteQueueItem> batch;
         while (batch.size() < kWebsiteFetchConcurrency &&
                pages_checked + batch.size() < kWebsiteMaxPages) {
@@ -483,16 +589,21 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
             const WebsiteQueueItem& page = batch[i];
             collect_appimage_candidates(
                 *outcomes[i], package, page, state, progress, arch);
-
-            // Temporary early-return until Task 5 pool/early-stop; selection still
-            // uses best_website_appimage_url so mtime/stale scoring applies within
-            // candidates already discovered on checked pages.
-            const std::string best =
-                selected_website_candidate(state.appimage_candidates, arch, progress);
-            if (!best.empty()) {
-                return best;
-            }
         }
+
+        if (website_search_should_stop(state, arch, pages_checked)) {
+            break;
+        }
+        if (next_website_queue_index(state) == std::nullopt &&
+            !state.appimage_candidates.empty()) {
+            break;
+        }
+    }
+
+    const std::string best =
+        selected_website_candidate(state.appimage_candidates, arch, progress);
+    if (!best.empty()) {
+        return best;
     }
     throw std::runtime_error(tr("no AppImage download link found on website pages for ") + package.id);
 }

@@ -165,3 +165,36 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
 
     return {compare_http_validators(stored, remote), "", remote};
 }
+
+std::optional<std::int64_t> probe_url_last_modified_mtime(const std::string& url) {
+    // Listing-driven file:// fixtures should not invent mtimes from local files.
+    if (is_file_url(url) || !executable_available("curl")) {
+        return std::nullopt;
+    }
+
+    const fs::path headers = unique_temp_headers_path();
+    const ProcessResult result = run_process_capture_timeout({
+        "curl",
+        "--fail",
+        "--location",
+        "--silent",
+        "--show-error",
+        "--head",
+        "--max-time",
+        "10",
+        "--dump-header",
+        headers.string(),
+        "--output",
+        "/dev/null",
+        url,
+    }, 12000);
+
+    const HttpValidators remote = parse_http_validators_from_headers(headers);
+    const bool removed = remove_best_effort(headers);
+    (void)removed;
+
+    if (result.exit_code != 0 || result.timed_out || remote.last_modified.empty()) {
+        return std::nullopt;
+    }
+    return parse_http_last_modified_mtime(remote.last_modified);
+}

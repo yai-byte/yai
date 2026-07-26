@@ -74,6 +74,9 @@ int main() {
         best_website_appimage_url({stale}, "x86_64").find("9.0.0") != std::string::npos,
         "stale-only fallback");
 
+    require(!probe_url_last_modified_mtime("file:///tmp/listing-driven.AppImage").has_value(),
+            "file:// HEAD stays listing-driven");
+
     std::cout << "website mtime unit smoke passed\n";
     return 0;
 }
@@ -101,3 +104,112 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   -lpthread
 
 "$TMP_DIR/mtime_unit"
+
+# --- Integration: Krita-like autoindex crawl prefers newer listing mtime ---
+# Path contains "download" so should_follow_download_page accepts version dirs.
+# Root also lists an older AppImage file so early-return-on-first-hit picks wrong.
+TMP_HOME="$TMP_DIR/home"
+ASSETS="$TMP_DIR/assets"
+KRITA="$TMP_DIR/download/krita"
+mkdir -p "$TMP_HOME" "$ASSETS" \
+  "$KRITA/5.3.2.1" \
+  "$KRITA/6.0.2" \
+  "$KRITA/older_versions_are_in_the_attic"
+
+make_appimage() {
+  local path="$1"
+  local msg="$2"
+  cat > "$path" <<APP
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--appimage-version" ]]; then
+  echo "$msg"
+  exit 0
+fi
+echo "$msg"
+APP
+  chmod +x "$path"
+}
+
+make_appimage "$ASSETS/krita-5.3.2.1-x86_64.AppImage" "krita 5.3.2.1"
+make_appimage "$ASSETS/krita-6.0.2-x86_64.AppImage" "krita 6.0.2"
+make_appimage "$ASSETS/krita-old-x86_64.AppImage" "krita old"
+
+# Use index.html hrefs: curl file://.../dir/ only returns the filename "index.html".
+cat > "$KRITA/index.html" <<HTML
+<html><body><table>
+<tr><th>Name</th><th>Last modified</th></tr>
+<tr><td><a href="file://$ASSETS/krita-6.0.2-x86_64.AppImage">krita-6.0.2-x86_64.AppImage</a></td>
+    <td align="right">2026-05-26 14:33  </td></tr>
+<tr><td><a href="5.3.2.1/index.html">5.3.2.1/</a></td><td align="right">2026-06-02 09:22  </td></tr>
+<tr><td><a href="6.0.2/index.html">6.0.2/</a></td><td align="right">2026-05-26 14:33  </td></tr>
+<tr><td><a href="older_versions_are_in_the_attic/index.html">older_versions_are_in_the_attic/</a></td>
+    <td align="right">2018-05-24 14:14  </td></tr>
+</table></body></html>
+HTML
+
+cat > "$KRITA/5.3.2.1/index.html" <<HTML
+<html><body><a href="file://$ASSETS/krita-5.3.2.1-x86_64.AppImage">AppImage</a></body></html>
+HTML
+cat > "$KRITA/6.0.2/index.html" <<HTML
+<html><body><a href="file://$ASSETS/krita-6.0.2-x86_64.AppImage">AppImage</a></body></html>
+HTML
+cat > "$KRITA/older_versions_are_in_the_attic/index.html" <<HTML
+<html><body><a href="file://$ASSETS/krita-old-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+mkdir -p "$TMP_HOME/.local/share/yai/repos"
+# Package id/name must not contain krita/kdenlive/gimp (avoids network download hints).
+cat > "$TMP_HOME/.local/share/yai/repos/index.json" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "mtime-listing",
+      "name": "Mtime Listing",
+      "summary": "Krita-like autoindex fixture",
+      "homepage": "file://$KRITA/index.html",
+      "license": "GPL",
+      "source": {
+        "type": "website_page",
+        "url": "file://$KRITA/index.html",
+        "reason": "test"
+      }
+    },
+    {
+      "id": "mtime-stale-only",
+      "name": "Mtime Stale Only",
+      "summary": "Attic-only fixture",
+      "homepage": "file://$KRITA/older_versions_are_in_the_attic/index.html",
+      "license": "GPL",
+      "source": {
+        "type": "website_page",
+        "url": "file://$KRITA/older_versions_are_in_the_attic/index.html",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TMP_HOME" "$ROOT/yai" install mtime-listing 2>"$TMP_DIR/mtime_listing.err"
+META="$TMP_HOME/.local/share/yai/apps/mtime-listing/metadata.json"
+grep -Fq '5.3.2.1' "$META" || {
+  echo "expected download_url to prefer 5.3.2.1, metadata:" >&2
+  cat "$META" >&2
+  echo "stderr:" >&2
+  cat "$TMP_DIR/mtime_listing.err" >&2
+  exit 1
+}
+grep -E 'download_url.*.*5\.3\.2\.1' "$META" >/dev/null
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/mtime-listing" | grep -q "krita 5.3.2.1"
+HOME="$TMP_HOME" "$ROOT/yai" remove mtime-listing
+
+HOME="$TMP_HOME" "$ROOT/yai" install mtime-stale-only 2>"$TMP_DIR/mtime_stale.err"
+test -x "$TMP_HOME/.local/share/yai/apps/mtime-stale-only/current.AppImage"
+grep -Fq 'krita-old-x86_64.AppImage' \
+  "$TMP_HOME/.local/share/yai/apps/mtime-stale-only/metadata.json"
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/mtime-stale-only" | grep -q "krita old"
+HOME="$TMP_HOME" "$ROOT/yai" remove mtime-stale-only
+
+echo "website mtime integration smoke passed"
