@@ -119,30 +119,13 @@ struct WebsiteQueueItem {
     int stale_penalty = 0;
 };
 
-int website_url_priority(const std::string& url) {
-    const std::string clean = strip_url_fragment_query(url);
-    const std::size_t scheme = clean.find("://");
-    const std::size_t path_start =
-        scheme == std::string::npos ? 0 : clean.find('/', scheme + 3);
-    const std::string lower =
-        to_lower(path_start == std::string::npos ? "" : clean.substr(path_start));
-    if (lower.find("appimage") != std::string::npos) {
-        return 3;
-    }
-    if (lower.find("download") != std::string::npos) {
-        return 2;
-    }
-    if (lower.find("linux") != std::string::npos) {
-        return 1;
-    }
-    return 0;
-}
-
 constexpr int kWebsiteSeedPriority = 100;
 constexpr std::size_t kWebsiteFetchConcurrency = 4;
 constexpr std::size_t kWebsiteMaxPages = 96;
 constexpr std::size_t kWebsiteCandidateSoftCap = 8;
 constexpr std::size_t kWebsiteHeadFillMax = 4;
+constexpr std::size_t kWebsiteListingFollowNonStaleMax = 3;
+constexpr std::size_t kWebsiteListingFollowStaleMax = 1;
 
 bool queue_item_better(const WebsiteQueueItem& a, const WebsiteQueueItem& b) {
     if (a.stale_penalty != b.stale_penalty) {
@@ -395,6 +378,7 @@ void collect_appimage_candidates(
     WebsiteSearchState& state,
     WebsiteSearchProgress& progress,
     const std::string& arch) {
+    std::vector<WebsiteLinkMeta> follow_metas;
     for (const WebsiteLinkMeta& meta : links) {
         if (is_allowed_appimage_candidate(meta.url, package, state.allowed_hosts)) {
             WebsiteLinkMeta candidate = meta;
@@ -402,6 +386,20 @@ void collect_appimage_candidates(
             record_appimage_candidate(std::move(candidate), page, state, progress);
             continue;
         }
+        if (should_queue_website_link(meta.url, package, page, state)) {
+            follow_metas.push_back(meta);
+        }
+    }
+
+    const std::vector<WebsiteLinkMeta> to_queue =
+        select_listing_follow_metas_for_enqueue(
+            follow_metas,
+            kWebsiteListingFollowNonStaleMax,
+            kWebsiteListingFollowStaleMax);
+    for (const WebsiteLinkMeta& meta : to_queue) {
+        // Re-check should_queue: queue growth / seen set may have changed while
+        // recording AppImages; also prune may keep URLs that later fail host rules
+        // only if should_queue already passed — still re-check depth/seen/queue cap.
         if (should_queue_website_link(meta.url, package, page, state)) {
             queue_website_link(meta, package, page, state, progress);
         }
