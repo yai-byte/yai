@@ -84,9 +84,9 @@ queries and website discovery still use `curl`; the downloader option affects
 AppImage file transfers only. For non-curl downloaders, yai makes a best-effort
 header request with `curl` before the transfer so the progress line can show the
 total size when the server provides `Content-Length`. The progress line reports
-recent transfer speed instead of lifetime average speed; for `aria2c`, yai reads
-aria2's control file so sparse piece writes do not make the downloaded byte
-count jump to the apparent file size.
+recent transfer speed instead of lifetime average speed; for `aria2c`, yai queries
+aria2's local JSON-RPC `completedLength` so multi-connection sparse writes do not
+inflate the downloaded byte count.
 
 `install` copies a local AppImage path or downloads a remote AppImage, makes it
 executable, detects a runnable mode, and writes the wrapper plus desktop entry.

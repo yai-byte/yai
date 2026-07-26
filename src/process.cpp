@@ -502,7 +502,8 @@ ProcessResult run_process_capture_timeout(
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
-    const fs::path& headers) {
+    const fs::path& headers,
+    std::optional<std::uint16_t> aria2_rpc_port) {
     if (args.empty()) {
         return ProcessResult{1, ""};
     }
@@ -526,8 +527,8 @@ ProcessResult run_process_capture_download_progress(
     bool exited = false;
     while (!exited) {
         // curl output remains captured for errors. yai renders its own progress
-        // from the growing .part file and dumped headers, so stdout stays owned
-        // by the command result.
+        // from aria2 RPC when a port is set, otherwise from the growing .part file
+        // and dumped headers, so stdout stays owned by the command result.
         try {
             append_available_output(pipefd[0], output, pid);
         } catch (const std::exception&) {
@@ -545,7 +546,7 @@ ProcessResult run_process_capture_download_progress(
             clear_download_progress(last_width);
             throw std::runtime_error(std::string(tr("download process poll: waitpid failed: ")) + std::strerror(errno));
         }
-        render_download_progress(part, headers, start, tick, last_width, progress_state);
+        render_download_progress(part, headers, start, tick, last_width, progress_state, aria2_rpc_port);
         ++tick;
         usleep(200 * 1000);
     }

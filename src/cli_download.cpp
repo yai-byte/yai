@@ -1,5 +1,9 @@
 #include "yai.hpp"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
 // CLI parsing and AppImage download execution live here. Parsed options are
 // intentionally reused by install and download, but download_file only stages
 // bytes into a caller-provided target and reports transport failures with context.
@@ -282,13 +286,38 @@ std::vector<std::string> available_downloaders(const std::string& downloader, co
     throw std::runtime_error(tr("requested downloader is not available: ") + requested.front());
 }
 
-std::vector<std::string> downloader_command(
+std::uint16_t allocate_loopback_tcp_port() {
+    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        throw std::runtime_error(tr("failed to allocate loopback TCP port: ") + std::strerror(errno));
+    }
+    sockaddr_in addr {};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(0);
+    if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+        const int err = errno;
+        close(fd);
+        throw std::runtime_error(tr("failed to bind loopback TCP port: ") + std::strerror(err));
+    }
+    socklen_t len = sizeof(addr);
+    if (::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
+        const int err = errno;
+        close(fd);
+        throw std::runtime_error(tr("failed to read loopback TCP port: ") + std::strerror(err));
+    }
+    close(fd);
+    return ntohs(addr.sin_port);
+}
+
+DownloadToolCommand build_downloader_command(
     const std::string& downloader,
     const std::string& url,
     const fs::path& part,
     const fs::path& headers) {
+    DownloadToolCommand cmd;
     if (downloader == "curl") {
-        return {
+        cmd.args = {
             "curl",
             "--fail",
             "--location",
@@ -304,9 +333,10 @@ std::vector<std::string> downloader_command(
             part.string(),
             url,
         };
+        return cmd;
     }
     if (downloader == "wget" || downloader == "wget2") {
-        return {
+        cmd.args = {
             downloader,
             "--quiet",
             "--tries=3",
@@ -315,9 +345,12 @@ std::vector<std::string> downloader_command(
             part.string(),
             url,
         };
+        return cmd;
     }
     if (downloader == "aria2c") {
-        return {
+        const std::uint16_t port = allocate_loopback_tcp_port();
+        cmd.aria2_rpc_port = port;
+        cmd.args = {
             "aria2c",
             "--quiet=true",
             "--console-log-level=error",
@@ -332,15 +365,31 @@ std::vector<std::string> downloader_command(
             "--split=16",
             "--max-tries=3",
             "--retry-wait=1",
+            "--enable-rpc=true",
+            "--rpc-listen-all=false",
+            "--rpc-allow-origin-all=true",
+            "--rpc-listen-port=" + std::to_string(port),
             "--dir",
             part.parent_path().string(),
             "--out",
             part.filename().string(),
             url,
         };
+        return cmd;
     }
     throw std::runtime_error(tr("unsupported downloader: ") + downloader);
 }
+
+namespace {
+
+bool aria2_rpc_bind_conflict(const std::string& output) {
+    const std::string lower = to_lower(output);
+    return lower.find("bind") != std::string::npos ||
+           lower.find("address already in use") != std::string::npos ||
+           lower.find("failed to listen") != std::string::npos;
+}
+
+}  // namespace
 
 void prefetch_download_headers(const std::string& url, const fs::path& headers) {
     if (is_file_url(url) || !executable_available("curl")) {
@@ -385,16 +434,25 @@ void run_downloader(
     const std::string& url,
     const fs::path& part,
     const fs::path& headers) {
-    const ProcessResult result = run_process_capture_download_progress(
-        downloader_command(downloader, url, part, headers),
-        part,
-        headers);
-    if (result.exit_code != 0) {
-        const std::string detail = trim(result.output);
-        throw std::runtime_error(
-            downloader + tr(" failed with exit code ") + std::to_string(result.exit_code) +
-            (detail.empty() ? "" : tr(": ") + detail));
+    ProcessResult result;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        const DownloadToolCommand cmd = build_downloader_command(downloader, url, part, headers);
+        result = run_process_capture_download_progress(
+            cmd.args,
+            part,
+            headers,
+            cmd.aria2_rpc_port);
+        if (result.exit_code == 0) {
+            return;
+        }
+        if (downloader != "aria2c" || attempt + 1 >= 3 || !aria2_rpc_bind_conflict(result.output)) {
+            break;
+        }
     }
+    const std::string detail = trim(result.output);
+    throw std::runtime_error(
+        downloader + tr(" failed with exit code ") + std::to_string(result.exit_code) +
+        (detail.empty() ? "" : tr(": ") + detail));
 }
 
 HttpValidators download_file(const std::string& url, const fs::path& target, const std::string& downloader) {

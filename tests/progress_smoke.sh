@@ -24,48 +24,6 @@ static void require(bool condition, const char* message) {
     }
 }
 
-static void write_u16(std::ofstream& out, std::uint16_t value) {
-    out.put(static_cast<char>((value >> 8) & 0xff));
-    out.put(static_cast<char>(value & 0xff));
-}
-
-static void write_u32(std::ofstream& out, std::uint32_t value) {
-    for (int shift = 24; shift >= 0; shift -= 8) {
-        out.put(static_cast<char>((value >> shift) & 0xff));
-    }
-}
-
-static void write_u64(std::ofstream& out, std::uint64_t value) {
-    for (int shift = 56; shift >= 0; shift -= 8) {
-        out.put(static_cast<char>((value >> shift) & 0xff));
-    }
-}
-
-static void write_aria2_control(const fs::path& path) {
-    std::ofstream out(path, std::ios::binary);
-    if (!out) {
-        throw std::runtime_error("failed to create aria2 control fixture");
-    }
-
-    const std::uint32_t piece_length = 256 * 1024;
-    const std::uint64_t total_length = 1024 * 1024;
-
-    write_u16(out, 1);                  // version
-    write_u32(out, 0);                  // extension length
-    write_u32(out, 0);                  // info hash length
-    write_u32(out, piece_length);
-    write_u64(out, total_length);
-    write_u64(out, 0);                  // upload length
-    write_u32(out, 1);                  // completed-piece bitfield length
-    out.put(static_cast<char>(0x80));   // first 256 KiB piece is complete
-    write_u32(out, 1);                  // in-flight piece count
-    write_u32(out, 2);                  // third piece is partially complete
-    write_u32(out, piece_length);
-    write_u32(out, 2);                  // 16 chunks need 2 bytes of bitfield
-    out.put(static_cast<char>(0x80));   // one 16 KiB chunk is complete
-    out.put(static_cast<char>(0x00));
-}
-
 int main(int argc, char** argv) {
     if (argc != 2) {
         throw std::runtime_error("usage: progress_test <tmp-dir>");
@@ -77,10 +35,39 @@ int main(int argc, char** argv) {
         out.seekp((1024 * 1024) - 1);
         out.put('\0');
     }
-    write_aria2_control(part.string() + ".aria2");
+    {
+        const std::string body =
+            "{\"id\":\"yai\",\"jsonrpc\":\"2.0\",\"result\":[{"
+            "\"gid\":\"abc\","
+            "\"completedLength\":\"1048576\","
+            "\"totalLength\":\"10485760\","
+            "\"downloadSpeed\":\"204800\""
+            "}]}";
+        const auto parsed = parse_aria2_tell_active_response(body);
+        require(parsed.has_value(), "parse tellActive");
+        require(parsed->completed == 1048576, "completedLength");
+        require(parsed->total.has_value() && *parsed->total == 10485760, "totalLength");
+        require(parsed->speed_bps.has_value() && std::fabs(*parsed->speed_bps - 204800.0) < 0.001, "downloadSpeed");
 
-    const std::uintmax_t downloaded = download_progress_downloaded_bytes(part);
-    require(downloaded == (256 * 1024) + (16 * 1024), "aria2 progress used apparent file size");
+        require(!parse_aria2_tell_active_response(
+                    "{\"id\":\"yai\",\"jsonrpc\":\"2.0\",\"result\":[]}").has_value(),
+                "empty tellActive");
+        require(!parse_aria2_tell_active_response("not-json").has_value(), "reject junk");
+    }
+
+    {
+        Aria2RpcProgress prev;
+        prev.completed = 1000;
+        prev.total = 5000;
+        prev.speed_bps = 10.0;
+        const auto held = merge_aria2_rpc_progress(prev, std::nullopt);
+        require(held.has_value() && held->completed == 1000, "hold last rpc progress");
+        Aria2RpcProgress next;
+        next.completed = 2000;
+        const auto advanced = merge_aria2_rpc_progress(prev, next);
+        require(advanced.has_value() && advanced->completed == 2000, "accept newer rpc progress");
+        require(!merge_aria2_rpc_progress(std::nullopt, std::nullopt).has_value(), "no rpc yet");
+    }
 
     DownloadProgressState state;
     const auto start = std::chrono::steady_clock::now();
@@ -169,6 +156,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   "$ROOT/src/batch_ui.cpp" \
   "$ROOT/src/download_progress.cpp" \
   "$ROOT/src/i18n.cpp" \
+  "$ROOT/src/json.cpp" \
   "$ROOT/src/process.cpp"
 
 "$TMP_DIR/progress_test" "$TMP_DIR"

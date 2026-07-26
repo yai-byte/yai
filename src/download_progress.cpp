@@ -136,175 +136,68 @@ std::optional<std::uintmax_t> download_total_from_headers(const fs::path& header
     return total;
 }
 
-namespace {
-
-std::optional<std::uint16_t> read_big_endian_u16(
-    const std::vector<unsigned char>& bytes,
-    std::size_t& offset) {
-    if (offset + 2 > bytes.size()) {
+std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json) {
+    // aria2 encodes lengths/speeds as JSON strings. Empty result[] means not ready.
+    if (json.find("\"result\":[]") != std::string::npos) {
         return std::nullopt;
     }
-    const std::uint16_t value =
-        static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[offset]) << 8) |
-                                   static_cast<std::uint16_t>(bytes[offset + 1]));
-    offset += 2;
-    return value;
-}
-
-std::optional<std::uint32_t> read_big_endian_u32(
-    const std::vector<unsigned char>& bytes,
-    std::size_t& offset) {
-    if (offset + 4 > bytes.size()) {
+    const std::optional<std::string> completed = json_find_string(json, "completedLength");
+    if (!completed.has_value() || completed->empty()) {
         return std::nullopt;
     }
-    std::uint32_t value = 0;
-    for (std::size_t i = 0; i < 4; ++i) {
-        value = (value << 8) | static_cast<std::uint32_t>(bytes[offset + i]);
-    }
-    offset += 4;
-    return value;
-}
-
-std::optional<std::uint64_t> read_big_endian_u64(
-    const std::vector<unsigned char>& bytes,
-    std::size_t& offset) {
-    if (offset + 8 > bytes.size()) {
+    Aria2RpcProgress out;
+    try {
+        out.completed = static_cast<std::uintmax_t>(std::stoull(*completed));
+    } catch (const std::exception&) {
         return std::nullopt;
     }
-    std::uint64_t value = 0;
-    for (std::size_t i = 0; i < 8; ++i) {
-        value = (value << 8) | static_cast<std::uint64_t>(bytes[offset + i]);
-    }
-    offset += 8;
-    return value;
-}
-
-bool consume_bytes(std::size_t count, const std::vector<unsigned char>& bytes, std::size_t& offset) {
-    if (offset + count > bytes.size()) {
-        return false;
-    }
-    offset += count;
-    return true;
-}
-
-bool bitfield_bit_is_set(const std::vector<unsigned char>& bitfield, std::uint64_t bit_index) {
-    const std::uint64_t byte_index = bit_index / 8;
-    if (byte_index >= bitfield.size()) {
-        return false;
-    }
-    const unsigned char mask = static_cast<unsigned char>(0x80u >> (bit_index % 8));
-    return (bitfield[static_cast<std::size_t>(byte_index)] & mask) != 0;
-}
-
-std::uint64_t bytes_for_range_chunk(std::uint64_t length, std::uint64_t offset, std::uint64_t chunk_size) {
-    if (offset >= length) {
-        return 0;
-    }
-    return std::min(chunk_size, length - offset);
-}
-
-std::optional<std::uintmax_t> aria2_control_downloaded_bytes(const fs::path& control) {
-    std::ifstream in(control, std::ios::binary);
-    if (!in) {
-        return std::nullopt;
-    }
-
-    const std::vector<unsigned char> bytes(
-        (std::istreambuf_iterator<char>(in)),
-        std::istreambuf_iterator<char>());
-    std::size_t offset = 0;
-
-    const std::optional<std::uint16_t> version = read_big_endian_u16(bytes, offset);
-    if (!version.has_value() || *version != 1) {
-        return std::nullopt;
-    }
-    const std::optional<std::uint32_t> extension_length = read_big_endian_u32(bytes, offset);
-    if (!extension_length.has_value() || !consume_bytes(*extension_length, bytes, offset)) {
-        return std::nullopt;
-    }
-    const std::optional<std::uint32_t> info_hash_length = read_big_endian_u32(bytes, offset);
-    if (!info_hash_length.has_value() || !consume_bytes(*info_hash_length, bytes, offset)) {
-        return std::nullopt;
-    }
-    const std::optional<std::uint32_t> piece_length = read_big_endian_u32(bytes, offset);
-    const std::optional<std::uint64_t> total_length = read_big_endian_u64(bytes, offset);
-    const std::optional<std::uint64_t> upload_length = read_big_endian_u64(bytes, offset);
-    (void)upload_length;
-    if (!piece_length.has_value() || *piece_length == 0 || !total_length.has_value()) {
-        return std::nullopt;
-    }
-
-    const std::optional<std::uint32_t> bitfield_length = read_big_endian_u32(bytes, offset);
-    if (!bitfield_length.has_value() || offset + *bitfield_length > bytes.size()) {
-        return std::nullopt;
-    }
-    const std::vector<unsigned char> completed_bitfield(
-        bytes.begin() + static_cast<std::ptrdiff_t>(offset),
-        bytes.begin() + static_cast<std::ptrdiff_t>(offset + *bitfield_length));
-    offset += *bitfield_length;
-
-    const std::uint64_t piece_count = (*total_length + *piece_length - 1) / *piece_length;
-    std::uint64_t downloaded = 0;
-    for (std::uint64_t i = 0; i < piece_count; ++i) {
-        if (bitfield_bit_is_set(completed_bitfield, i)) {
-            downloaded += bytes_for_range_chunk(*total_length, i * *piece_length, *piece_length);
-        }
-    }
-
-    const std::optional<std::uint32_t> inflight_count = read_big_endian_u32(bytes, offset);
-    if (!inflight_count.has_value()) {
-        return std::min<std::uint64_t>(downloaded, *total_length);
-    }
-
-    constexpr std::uint64_t aria2_inflight_chunk_size = 16 * 1024;
-    for (std::uint32_t i = 0; i < *inflight_count; ++i) {
-        const std::optional<std::uint32_t> piece_index = read_big_endian_u32(bytes, offset);
-        const std::optional<std::uint32_t> length = read_big_endian_u32(bytes, offset);
-        const std::optional<std::uint32_t> piece_bitfield_length = read_big_endian_u32(bytes, offset);
-        if (!piece_index.has_value() || !length.has_value() || !piece_bitfield_length.has_value() ||
-            offset + *piece_bitfield_length > bytes.size()) {
-            return std::nullopt;
-        }
-        const std::vector<unsigned char> piece_bitfield(
-            bytes.begin() + static_cast<std::ptrdiff_t>(offset),
-            bytes.begin() + static_cast<std::ptrdiff_t>(offset + *piece_bitfield_length));
-        offset += *piece_bitfield_length;
-
-        if (*piece_index >= piece_count || bitfield_bit_is_set(completed_bitfield, *piece_index)) {
-            continue;
-        }
-        const std::uint64_t piece_start = static_cast<std::uint64_t>(*piece_index) * *piece_length;
-        const std::uint64_t piece_bytes = bytes_for_range_chunk(*total_length, piece_start, *length);
-        const std::uint64_t chunk_count =
-            (piece_bytes + aria2_inflight_chunk_size - 1) / aria2_inflight_chunk_size;
-        for (std::uint64_t chunk = 0; chunk < chunk_count; ++chunk) {
-            if (bitfield_bit_is_set(piece_bitfield, chunk)) {
-                downloaded += bytes_for_range_chunk(
-                    piece_bytes,
-                    chunk * aria2_inflight_chunk_size,
-                    aria2_inflight_chunk_size);
+    if (const std::optional<std::string> total = json_find_string(json, "totalLength")) {
+        try {
+            const std::uintmax_t value = static_cast<std::uintmax_t>(std::stoull(*total));
+            if (value > 0) {
+                out.total = value;
             }
+        } catch (const std::exception&) {
         }
     }
-
-    return static_cast<std::uintmax_t>(std::min<std::uint64_t>(downloaded, *total_length));
+    if (const std::optional<std::string> speed = json_find_string(json, "downloadSpeed")) {
+        try {
+            out.speed_bps = static_cast<double>(std::stoull(*speed));
+        } catch (const std::exception&) {
+        }
+    }
+    return out;
 }
 
-} // namespace
-
-std::uintmax_t download_progress_downloaded_bytes(const fs::path& part) {
-    const std::optional<std::uintmax_t> aria2_downloaded =
-        aria2_control_downloaded_bytes(part.string() + ".aria2");
-    if (aria2_downloaded.has_value()) {
-        return *aria2_downloaded;
+std::optional<Aria2RpcProgress> merge_aria2_rpc_progress(
+    const std::optional<Aria2RpcProgress>& previous,
+    const std::optional<Aria2RpcProgress>& current) {
+    if (current.has_value()) {
+        return current;
     }
+    return previous;
+}
 
-    std::error_code ec;
-    const std::uintmax_t downloaded = fs::file_size(part, ec);
-    if (ec) {
-        throw fs::filesystem_error("download progress file size", part, ec);
+std::optional<Aria2RpcProgress> query_aria2_rpc_progress(std::uint16_t port) {
+    const std::string url = "http://127.0.0.1:" + std::to_string(port) + "/jsonrpc";
+    const std::string body =
+        "{\"jsonrpc\":\"2.0\",\"id\":\"yai\",\"method\":\"aria2.tellActive\",\"params\":[]}";
+    const ProcessResult result = run_process_capture_timeout({
+        "curl",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "1",
+        "--header",
+        "Content-Type: application/json",
+        "--data",
+        body,
+        url,
+    }, 1500);
+    if (result.exit_code != 0 || result.timed_out) {
+        return std::nullopt;
     }
-    return downloaded;
+    return parse_aria2_tell_active_response(result.output);
 }
 
 double download_progress_recent_speed(
@@ -393,20 +286,45 @@ std::optional<DownloadProgressSnapshot> download_progress_snapshot(
     const fs::path& part,
     const fs::path& headers,
     const std::chrono::steady_clock::time_point& start,
-    DownloadProgressState& state) {
+    DownloadProgressState& state,
+    std::optional<std::uint16_t> aria2_rpc_port) {
     std::uintmax_t downloaded = 0;
-    try {
-        downloaded = download_progress_downloaded_bytes(part);
-    } catch (const fs::filesystem_error&) {
-        return std::nullopt;
+    std::optional<std::uintmax_t> total = download_total_from_headers(headers);
+    double rpc_speed = -1.0;
+
+    if (aria2_rpc_port.has_value()) {
+        const auto merged = merge_aria2_rpc_progress(
+            state.last_aria2_rpc,
+            query_aria2_rpc_progress(*aria2_rpc_port));
+        state.last_aria2_rpc = merged;
+        if (merged.has_value()) {
+            downloaded = merged->completed;
+            if (merged->total.has_value()) {
+                total = merged->total;
+            }
+            if (merged->speed_bps.has_value()) {
+                rpc_speed = *merged->speed_bps;
+            }
+        }
+    } else {
+        // curl/wget: sequential growth — file_size is correct.
+        std::error_code ec;
+        downloaded = fs::file_size(part, ec);
+        if (ec) {
+            return std::nullopt;
+        }
     }
 
     DownloadProgressSnapshot snapshot;
     snapshot.downloaded = downloaded;
-    snapshot.total = download_total_from_headers(headers);
+    snapshot.total = total;
     const std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     snapshot.elapsed = std::max(0.001, std::chrono::duration<double>(now - start).count());
-    snapshot.bytes_per_second = download_progress_recent_speed(state, now, downloaded);
+    if (rpc_speed >= 0) {
+        snapshot.bytes_per_second = rpc_speed;
+    } else {
+        snapshot.bytes_per_second = download_progress_recent_speed(state, now, downloaded);
+    }
 
     const bool knows_total = snapshot.total.has_value() && *snapshot.total > 0;
     if (knows_total) {
@@ -503,10 +421,11 @@ void render_download_progress(
     const std::chrono::steady_clock::time_point& start,
     int tick,
     std::size_t& last_width,
-    DownloadProgressState& state) {
+    DownloadProgressState& state,
+    std::optional<std::uint16_t> aria2_rpc_port) {
     const int event_fd = batch_event_fd();
     const std::optional<DownloadProgressSnapshot> snapshot =
-        download_progress_snapshot(part, headers, start, state);
+        download_progress_snapshot(part, headers, start, state, aria2_rpc_port);
     if (!snapshot.has_value()) {
         return;
     }

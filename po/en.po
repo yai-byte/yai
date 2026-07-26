@@ -841,6 +841,15 @@ msgstr "download process poll: waitpid failed: "
 msgid "download process output"
 msgstr "download process output"
 
+msgid "failed to allocate loopback TCP port: "
+msgstr "failed to allocate loopback TCP port: "
+
+msgid "failed to bind loopback TCP port: "
+msgstr "failed to bind loopback TCP port: "
+
+msgid "failed to read loopback TCP port: "
+msgstr "failed to read loopback TCP port: "
+
 msgid "failed to create directory "
 msgstr "failed to create directory "
 

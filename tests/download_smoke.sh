@@ -38,6 +38,8 @@ dir=""
 out=""
 url=""
 file_allocation=""
+enable_rpc=""
+rpc_port=""
 while (($#)); do
   case "$1" in
     --dir)
@@ -50,6 +52,14 @@ while (($#)); do
       ;;
     --file-allocation=*)
       file_allocation="${1#*=}"
+      shift
+      ;;
+    --enable-rpc|--enable-rpc=*)
+      enable_rpc="1"
+      shift
+      ;;
+    --rpc-listen-port=*)
+      rpc_port="${1#*=}"
       shift
       ;;
     --*)
@@ -65,7 +75,8 @@ if [[ -z "$dir" || -z "$out" ]]; then
   echo "missing aria2 output arguments" >&2
   exit 2
 fi
-printf 'aria2c\t%s\tfile-allocation=%s\n' "$url" "$file_allocation" >> "${FAKE_DOWNLOADER_LOG:?}"
+printf 'aria2c\t%s\tfile-allocation=%s\tenable-rpc=%s\trpc-port=%s\n' \
+  "$url" "$file_allocation" "${enable_rpc:-0}" "${rpc_port:-}" >> "${FAKE_DOWNLOADER_LOG:?}"
 mkdir -p "$dir"
 {
   echo '#!/usr/bin/env bash'
@@ -270,6 +281,8 @@ grep -q "fake downloader app" "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
 test ! -x "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
 grep -Fq $'curl-head\thttps://example.invalid/AutoDownload-x86_64.AppImage' "$TMP_HOME/auto-downloader.log"
 grep -Fq $'aria2c\thttps://example.invalid/AutoDownload-x86_64.AppImage\tfile-allocation=none' "$TMP_HOME/auto-downloader.log"
+grep -E $'aria2c\thttps://example.invalid/AutoDownload-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+$' \
+  "$TMP_HOME/auto-downloader.log"
 test ! -e "$TMP_HOME/.local/share/yai/apps/autodownload"
 
 HOME="$TMP_HOME" \
@@ -282,6 +295,8 @@ FAKE_DOWNLOADER_LOG="$TMP_HOME/install-downloader.log" \
 
 grep -Fq $'curl-head\thttps://example.invalid/AutoInstall-x86_64.AppImage' "$TMP_HOME/install-downloader.log"
 grep -Fq $'aria2c\thttps://example.invalid/AutoInstall-x86_64.AppImage\tfile-allocation=none' "$TMP_HOME/install-downloader.log"
+grep -E $'aria2c\thttps://example.invalid/AutoInstall-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+$' \
+  "$TMP_HOME/install-downloader.log"
 grep -Fq '"download_url": "https://example.invalid/AutoInstall-x86_64.AppImage"' \
   "$TMP_HOME/.local/share/yai/apps/auto-downloader-install/metadata.json"
 # Regression: non-curl body download still captures ETag from prefetch HEAD

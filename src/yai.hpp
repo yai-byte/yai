@@ -160,9 +160,16 @@ struct DownloadProgressSample {
     std::uintmax_t downloaded = 0;
 };
 
+struct Aria2RpcProgress {
+    std::uintmax_t completed = 0;
+    std::optional<std::uintmax_t> total;
+    std::optional<double> speed_bps;
+};
+
 struct DownloadProgressState {
     std::vector<DownloadProgressSample> samples;
     std::optional<std::chrono::steady_clock::time_point> last_progress_time;
+    std::optional<Aria2RpcProgress> last_aria2_rpc;
     double bytes_per_second = 0.0;
 };
 
@@ -273,7 +280,26 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
 HttpValidators validators_from_metadata(const fs::path& metadata);
 
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
-std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
+
+std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json);
+std::optional<Aria2RpcProgress> merge_aria2_rpc_progress(
+    const std::optional<Aria2RpcProgress>& previous,
+    const std::optional<Aria2RpcProgress>& current);
+std::optional<Aria2RpcProgress> query_aria2_rpc_progress(std::uint16_t port);
+
+std::uint16_t allocate_loopback_tcp_port();
+
+struct DownloadToolCommand {
+    std::vector<std::string> args;
+    std::optional<std::uint16_t> aria2_rpc_port;
+};
+
+DownloadToolCommand build_downloader_command(
+    const std::string& downloader,
+    const std::string& url,
+    const fs::path& part,
+    const fs::path& headers);
+
 double download_progress_recent_speed(
     DownloadProgressState& state,
     const std::chrono::steady_clock::time_point& now,
@@ -289,7 +315,8 @@ void render_download_progress(
     const std::chrono::steady_clock::time_point& start,
     int tick,
     std::size_t& last_width,
-    DownloadProgressState& state);
+    DownloadProgressState& state,
+    std::optional<std::uint16_t> aria2_rpc_port = std::nullopt);
 void clear_download_progress(std::size_t& last_width);
 
 struct BatchProgressEvent {
@@ -351,7 +378,8 @@ StreamingBatchResult run_batch_task_streaming(
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
-    const fs::path& headers);
+    const fs::path& headers,
+    std::optional<std::uint16_t> aria2_rpc_port = std::nullopt);
 std::string normalize_arch(const std::string& value);
 bool is_supported_arch(const std::string& value);
 std::string supported_arch_list();
