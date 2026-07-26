@@ -370,9 +370,7 @@ void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& sou
         print_already_up_to_date(context);
         return;
     }
-    if (probe.status == UrlFreshness::Error) {
-        throw std::runtime_error(probe.detail);
-    }
+    // Error (e.g. HEAD unsupported) falls through like Unknown: GET + sha256.
 
     source.source_url = candidate_url;
     source.download_url = candidate_url;
@@ -381,7 +379,6 @@ void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& sou
     const InstallPaths candidate_paths = update_candidate_paths(context.paths);
     cleanup_update_candidate(candidate_paths);
 
-    print_update_start(context, source, effective_options);
     const RepairResult repair = download_and_probe_update_candidate(source, effective_options, candidate_paths);
 
     const std::string current_sha = metadata_value(metadata, "sha256").value_or("");
@@ -397,6 +394,7 @@ void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& sou
         return;
     }
 
+    print_update_start(context, source, effective_options);
     commit_update_transaction(context, candidate_paths, source, repair);
     cleanup_update_candidate(candidate_paths);
     print_update_result(context, source, repair);

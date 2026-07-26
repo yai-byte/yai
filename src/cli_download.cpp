@@ -362,7 +362,10 @@ void prefetch_download_headers(const std::string& url, const fs::path& headers) 
         "/dev/null",
         url,
     }, 12000);
-    if (result.exit_code != 0 || result.timed_out || !download_total_from_headers(headers).has_value()) {
+    // Keep the headers dump even when Content-Length is absent so non-curl
+    // downloaders can still persist ETag / Last-Modified from a successful HEAD.
+    // Only discard on hard HEAD failure (aria2/wget never rewrite this file).
+    if (result.exit_code != 0 || result.timed_out) {
         const bool removed = remove_best_effort(headers);
         (void)removed;
     }

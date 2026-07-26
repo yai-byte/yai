@@ -106,9 +106,12 @@ if [[ -z "$headers" || -z "$url" ]]; then
   exit 2
 fi
 printf 'curl-head\t%s\n' "$url" >> "${FAKE_DOWNLOADER_LOG:?}"
+# Emit ETag/Last-Modified without Content-Length: prefetch must keep this dump
+# so aria2c/wget installs can still persist strong validators into metadata.
 {
   echo 'HTTP/2 200'
-  echo 'Content-Length: 128'
+  echo 'ETag: "prefetch-etag"'
+  echo 'Last-Modified: Sun, 26 Jul 2026 08:00:00 GMT'
   echo
 } > "$headers"
 SH
@@ -281,7 +284,36 @@ grep -Fq $'curl-head\thttps://example.invalid/AutoInstall-x86_64.AppImage' "$TMP
 grep -Fq $'aria2c\thttps://example.invalid/AutoInstall-x86_64.AppImage\tfile-allocation=none' "$TMP_HOME/install-downloader.log"
 grep -Fq '"download_url": "https://example.invalid/AutoInstall-x86_64.AppImage"' \
   "$TMP_HOME/.local/share/yai/apps/auto-downloader-install/metadata.json"
+# Regression: non-curl body download still captures ETag from prefetch HEAD
+# even when the HEAD response omitted Content-Length.
+grep -Fq '"http_etag": "\"prefetch-etag\""' \
+  "$TMP_HOME/.local/share/yai/apps/auto-downloader-install/metadata.json"
+grep -Fq '"http_last_modified": "Sun, 26 Jul 2026 08:00:00 GMT"' \
+  "$TMP_HOME/.local/share/yai/apps/auto-downloader-install/metadata.json"
 HOME="$TMP_HOME" "$TMP_HOME/.local/bin/auto-downloader-install" | grep -q "fake downloader app"
+
+# upgrade: HEAD Error should fall through to GET + sha256 (already current).
+mkdir -p "$TMP_HOME/head-fail-bin"
+cat > "$TMP_HOME/head-fail-bin/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  if [[ "$arg" == "--head" ]]; then
+    echo "fake curl: HEAD unsupported" >&2
+    exit 22
+  fi
+done
+echo "fake curl: unexpected non-HEAD invocation" >&2
+exit 2
+SH
+chmod +x "$TMP_HOME/head-fail-bin/curl"
+cp "$FAKE_BIN/aria2c" "$TMP_HOME/head-fail-bin/aria2c"
+HOME="$TMP_HOME" \
+PATH="$TMP_HOME/head-fail-bin:$PATH" \
+FAKE_DOWNLOADER_LOG="$TMP_HOME/upgrade-head-fail.log" \
+"$ROOT/yai" upgrade auto-downloader-install --yes --downloader aria2c \
+  > "$TMP_HOME/upgrade-head-fail.out"
+grep -q 'already up to date' "$TMP_HOME/upgrade-head-fail.out"
 
 if HOME="$TMP_HOME" "$ROOT/yai" download "https://example.invalid/$AUTO_DOWNLOAD_ASSET" --downloader bad 2>"$TMP_HOME/bad-downloader.err"; then
   echo "download accepted an unsupported downloader" >&2

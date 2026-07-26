@@ -21,6 +21,14 @@ Last-Modified: Sat, 01 Jan 2026 00:00:00 GMT
 Content-Length: 42
 HEADERS
 
+# Prefetch may keep a HEAD dump that has validators but no Content-Length
+# (progress total unknown). Parse must still recover ETag / Last-Modified.
+cat > "$TMP_DIR/headers_no_cl.txt" <<'HEADERS'
+HTTP/1.1 200 OK
+ETag: "no-cl-etag"
+Last-Modified: Sun, 26 Jul 2026 00:00:00 GMT
+HEADERS
+
 cat > "$TMP_DIR/url_freshness_test.cpp" <<'CPP'
 #include "yai.hpp"
 
@@ -36,11 +44,18 @@ static void require(bool condition, const char* message) {
 
 int main() {
     const fs::path headers = "HEADERS_PATH";
+    const fs::path headers_no_cl = "HEADERS_NO_CL_PATH";
 
     HttpValidators v = parse_http_validators_from_headers(headers);
     require(v.etag == "\"abc\"", "etag");
     require(v.last_modified == "Sat, 01 Jan 2026 00:00:00 GMT", "lm");
     require(v.content_length == "42", "len");
+
+    HttpValidators no_cl = parse_http_validators_from_headers(headers_no_cl);
+    require(no_cl.etag == "\"no-cl-etag\"", "etag without content-length");
+    require(no_cl.last_modified == "Sun, 26 Jul 2026 00:00:00 GMT", "lm without content-length");
+    require(no_cl.content_length.empty(), "missing content-length stays empty");
+    require(!http_validators_empty(no_cl), "validators without CL are usable");
 
     HttpValidators stored{"\"abc\"", "Sat, 01 Jan 2026 00:00:00 GMT", "42"};
     require(compare_http_validators(stored, v) == UrlFreshness::Unchanged, "unchanged");
@@ -82,6 +97,7 @@ int main() {
 CPP
 
 sed -i "s|HEADERS_PATH|$TMP_DIR/headers.txt|g" "$TMP_DIR/url_freshness_test.cpp"
+sed -i "s|HEADERS_NO_CL_PATH|$TMP_DIR/headers_no_cl.txt|g" "$TMP_DIR/url_freshness_test.cpp"
 sed -i "s|PROBE_FILE_PATH|$TMP_DIR/probe.bin|g" "$TMP_DIR/url_freshness_test.cpp"
 
 g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
