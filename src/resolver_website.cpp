@@ -115,6 +115,8 @@ struct WebsiteQueueItem {
     int priority = 0;
     bool speculative = false;
     std::uint64_t seq = 0;
+    std::optional<std::int64_t> mtime;
+    int stale_penalty = 0;
 };
 
 int website_url_priority(const std::string& url) {
@@ -141,6 +143,15 @@ constexpr std::size_t kWebsiteFetchConcurrency = 4;
 constexpr std::size_t kWebsiteMaxPages = 96;
 
 bool queue_item_better(const WebsiteQueueItem& a, const WebsiteQueueItem& b) {
+    if (a.stale_penalty != b.stale_penalty) {
+        return a.stale_penalty < b.stale_penalty;
+    }
+    if (a.mtime.has_value() != b.mtime.has_value()) {
+        return a.mtime.has_value();
+    }
+    if (a.mtime.has_value() && b.mtime.has_value() && *a.mtime != *b.mtime) {
+        return *a.mtime > *b.mtime;
+    }
     if (a.priority != b.priority) {
         return a.priority > b.priority;
     }
@@ -150,7 +161,7 @@ bool queue_item_better(const WebsiteQueueItem& a, const WebsiteQueueItem& b) {
 struct WebsiteSearchState {
     std::vector<WebsiteQueueItem> queue;
     std::vector<std::string> seen;
-    std::vector<std::string> appimage_urls;
+    std::vector<WebsiteLinkMeta> appimage_candidates;
     std::vector<std::string> allowed_hosts;
     std::uint64_t next_seq = 0;
 };
@@ -170,7 +181,9 @@ bool queue_website_url(
     const std::string& url,
     int depth,
     int priority,
-    bool speculative) {
+    bool speculative,
+    std::optional<std::int64_t> mtime = std::nullopt,
+    std::optional<int> stale_penalty = std::nullopt) {
     if (url.empty() ||
         vector_contains(state.seen, url) ||
         queue_contains_url(state.queue, url) ||
@@ -183,6 +196,8 @@ bool queue_website_url(
         priority,
         speculative,
         state.next_seq++,
+        mtime,
+        stale_penalty.value_or(website_link_stale_penalty(url)),
     });
     progress.queued();
     return true;
@@ -263,28 +278,25 @@ WebsiteSearchState initial_website_search_state(
     return state;
 }
 
-std::optional<std::vector<std::string>> fetch_website_links(
+std::optional<std::vector<WebsiteLinkMeta>> fetch_website_links(
     const std::string& page_url,
     bool speculative) {
     try {
         const int timeout_ms =
             speculative ? kFetchTextSpeculativeTimeoutMs : kFetchTextDefaultTimeoutMs;
-        std::vector<std::string> links =
-            html_href_urls(fetch_text(page_url, timeout_ms), page_url);
-        if (is_kde_stable_download_url(page_url)) {
-            std::reverse(links.begin(), links.end());
-        }
-        return links;
+        return website_page_link_metas(fetch_text(page_url, timeout_ms), page_url);
     } catch (const std::exception&) {
         return std::nullopt;
     }
 }
 
 void record_appimage_candidate(
-    const std::string& link,
+    WebsiteLinkMeta meta,
     WebsiteSearchState& state,
     WebsiteSearchProgress& progress) {
-    state.appimage_urls.push_back(link);
+    meta.stale_penalty =
+        std::max(meta.stale_penalty, website_link_stale_penalty(meta.url));
+    state.appimage_candidates.push_back(std::move(meta));
     progress.candidate();
 }
 
@@ -333,11 +345,12 @@ bool should_queue_website_link(
 }
 
 void queue_website_link(
-    const std::string& link,
+    const WebsiteLinkMeta& meta,
     const RepoPackage& package,
     const WebsiteQueueItem& page,
     WebsiteSearchState& state,
     WebsiteSearchProgress& progress) {
+    const std::string& link = meta.url;
     if (is_appimage_catalog_url(page.url) && package_name_matches_url(package, link)) {
         // AppImageHub/AppImage catalog pages are allowed to hand off to a
         // matching project site once; later pages must stay inside the
@@ -351,7 +364,9 @@ void queue_website_link(
         link,
         page.depth + 1,
         website_url_priority(link),
-        false);
+        false,
+        meta.mtime,
+        meta.stale_penalty);
 }
 
 std::optional<std::size_t> next_website_queue_index(const WebsiteSearchState& state) {
@@ -368,31 +383,30 @@ std::optional<std::size_t> next_website_queue_index(const WebsiteSearchState& st
 }
 
 void collect_appimage_candidates(
-    const std::vector<std::string>& links,
+    const std::vector<WebsiteLinkMeta>& links,
     const RepoPackage& package,
     const WebsiteQueueItem& page,
     WebsiteSearchState& state,
     WebsiteSearchProgress& progress,
     const std::string& arch) {
-    for (const std::string& link : links) {
-        if (is_allowed_appimage_candidate(link, package, state.allowed_hosts)) {
-            record_appimage_candidate(
-                resolved_appimage_candidate(link, package, arch),
-                state,
-                progress);
+    for (const WebsiteLinkMeta& meta : links) {
+        if (is_allowed_appimage_candidate(meta.url, package, state.allowed_hosts)) {
+            WebsiteLinkMeta candidate = meta;
+            candidate.url = resolved_appimage_candidate(meta.url, package, arch);
+            record_appimage_candidate(std::move(candidate), state, progress);
             continue;
         }
-        if (should_queue_website_link(link, package, page, state)) {
-            queue_website_link(link, package, page, state, progress);
+        if (should_queue_website_link(meta.url, package, page, state)) {
+            queue_website_link(meta, package, page, state, progress);
         }
     }
 }
 
 std::string selected_website_candidate(
-    const std::vector<std::string>& appimage_urls,
+    const std::vector<WebsiteLinkMeta>& appimage_candidates,
     const std::string& arch,
     WebsiteSearchProgress& progress) {
-    const std::string best = best_appimage_url_from_candidates(appimage_urls, arch);
+    const std::string best = best_website_appimage_url(appimage_candidates, arch);
     if (!best.empty()) {
         progress.selected(best);
     }
@@ -426,7 +440,7 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
             break;
         }
 
-        std::vector<std::optional<std::vector<std::string>>> outcomes(batch.size());
+        std::vector<std::optional<std::vector<WebsiteLinkMeta>>> outcomes(batch.size());
         std::vector<std::thread> workers;
         workers.reserve(batch.size());
         for (std::size_t i = 0; i < batch.size(); ++i) {
@@ -470,8 +484,11 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
             collect_appimage_candidates(
                 *outcomes[i], package, page, state, progress, arch);
 
+            // Temporary early-return until Task 5 pool/early-stop; selection still
+            // uses best_website_appimage_url so mtime/stale scoring applies within
+            // candidates already discovered on checked pages.
             const std::string best =
-                selected_website_candidate(state.appimage_urls, arch, progress);
+                selected_website_candidate(state.appimage_candidates, arch, progress);
             if (!best.empty()) {
                 return best;
             }
