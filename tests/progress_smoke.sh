@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export YAI_LANG=en
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
 
@@ -53,6 +55,43 @@ int main(int argc, char** argv) {
                     "{\"id\":\"yai\",\"jsonrpc\":\"2.0\",\"result\":[]}").has_value(),
                 "empty tellActive");
         require(!parse_aria2_tell_active_response("not-json").has_value(), "reject junk");
+
+        // tellStopped uses the same download-list shape once the transfer leaves
+        // tellActive; completed downloads must still yield final byte counts.
+        const std::string stopped =
+            "{\"id\":\"yai\",\"jsonrpc\":\"2.0\",\"result\":[{"
+            "\"gid\":\"done\","
+            "\"status\":\"complete\","
+            "\"completedLength\":\"213744120\","
+            "\"totalLength\":\"213744120\","
+            "\"downloadSpeed\":\"0\""
+            "}]}";
+        const auto done = parse_aria2_tell_active_response(stopped);
+        require(done.has_value() && done->completed == 213744120, "tellStopped completedLength");
+        require(done->total.has_value() && *done->total == 213744120, "tellStopped totalLength");
+    }
+
+    {
+        const auto idle = parse_aria2_global_stat(
+            "{\"id\":\"1\",\"jsonrpc\":\"2.0\",\"result\":{"
+            "\"downloadSpeed\":\"0\",\"numActive\":\"0\",\"numStopped\":\"1\","
+            "\"numWaiting\":\"0\",\"uploadSpeed\":\"0\"}}");
+        require(idle.has_value(), "parse globalStat");
+        require(idle->num_active == 0 && idle->num_waiting == 0 && idle->num_stopped == 1,
+                "globalStat fields");
+        require(aria2_rpc_session_finished(*idle), "idle with stopped => finished");
+
+        const auto active = parse_aria2_global_stat(
+            "{\"id\":\"1\",\"jsonrpc\":\"2.0\",\"result\":{"
+            "\"numActive\":\"1\",\"numStopped\":\"0\",\"numWaiting\":\"0\"}}");
+        require(active.has_value() && !aria2_rpc_session_finished(*active),
+                "active download not finished");
+        const auto empty = parse_aria2_global_stat(
+            "{\"id\":\"1\",\"jsonrpc\":\"2.0\",\"result\":{"
+            "\"numActive\":\"0\",\"numStopped\":\"0\",\"numWaiting\":\"0\"}}");
+        require(empty.has_value() && !aria2_rpc_session_finished(*empty),
+                "pre-start empty session not finished");
+        require(!parse_aria2_global_stat("not-json").has_value(), "reject junk globalStat");
     }
 
     {
@@ -197,3 +236,52 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   "$ROOT/src/process.cpp"
 
 "$TMP_DIR/progress_test" "$TMP_DIR"
+
+# Regression: aria2 with --enable-rpc finishes the file but stays in RPC mode.
+# yai must shut it down so waitpid returns and the .part can be finalized.
+if command -v aria2c >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  make -C "$ROOT" -j"$(nproc)" >/tmp/yai-progress-make.out 2>/tmp/yai-progress-make.err
+  dd if=/dev/urandom of="$TMP_DIR/payload.bin" bs=64k count=8 status=none
+  export YAI_HTTP_ROOT="$TMP_DIR"
+  export YAI_HTTP_PORT_FILE="$TMP_DIR/http.port"
+  python3 - <<'PY' &
+import http.server, os, socketserver
+os.chdir(os.environ["YAI_HTTP_ROOT"])
+httpd = socketserver.TCPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
+with open(os.environ["YAI_HTTP_PORT_FILE"], "w", encoding="utf-8") as fh:
+    fh.write(str(httpd.server_address[1]))
+httpd.serve_forever()
+PY
+  HTTP_PID=$!
+  for _ in $(seq 1 100); do
+    if [[ -s "$TMP_DIR/http.port" ]]; then
+      break
+    fi
+    sleep 0.05
+  done
+  HTTP_PORT="$(cat "$TMP_DIR/http.port")"
+  WORK="$TMP_DIR/dl"
+  mkdir -p "$WORK"
+  # Bound the hang: without the fix, aria2 stays in RPC mode forever.
+  if ! (
+    cd "$WORK"
+    timeout 25 "$ROOT/yai" download \
+      "http://127.0.0.1:${HTTP_PORT}/payload.bin" \
+      --downloader aria2c
+  ); then
+    kill "$HTTP_PID" 2>/dev/null || true
+    wait "$HTTP_PID" 2>/dev/null || true
+    echo "aria2 rpc exit regression failed (download hung or errored)" >&2
+    exit 1
+  fi
+  if [[ ! -s "$WORK/payload.bin.AppImage" ]]; then
+    find "$WORK" -type f -printf '%p %s\n' >&2 || true
+    kill "$HTTP_PID" 2>/dev/null || true
+    wait "$HTTP_PID" 2>/dev/null || true
+    echo "aria2 rpc exit regression failed (output file missing)" >&2
+    exit 1
+  fi
+  kill "$HTTP_PID" 2>/dev/null || true
+  wait "$HTTP_PID" 2>/dev/null || true
+  echo "aria2 rpc exit regression passed"
+fi

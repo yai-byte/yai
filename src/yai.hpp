@@ -166,6 +166,12 @@ struct Aria2RpcProgress {
     std::optional<double> speed_bps;
 };
 
+struct Aria2GlobalStat {
+    std::uintmax_t num_active = 0;
+    std::uintmax_t num_waiting = 0;
+    std::uintmax_t num_stopped = 0;
+};
+
 struct DownloadProgressState {
     std::vector<DownloadProgressSample> samples;
     std::optional<std::chrono::steady_clock::time_point> last_progress_time;
@@ -282,10 +288,13 @@ HttpValidators validators_from_metadata(const fs::path& metadata);
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 
 std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json);
+std::optional<Aria2GlobalStat> parse_aria2_global_stat(const std::string& json);
+bool aria2_rpc_session_finished(const Aria2GlobalStat& stat);
 std::optional<Aria2RpcProgress> merge_aria2_rpc_progress(
     const std::optional<Aria2RpcProgress>& previous,
     const std::optional<Aria2RpcProgress>& current);
 std::optional<Aria2RpcProgress> query_aria2_rpc_progress(std::uint16_t port);
+void request_aria2_force_shutdown(std::uint16_t port);
 
 std::uint16_t allocate_loopback_tcp_port();
 

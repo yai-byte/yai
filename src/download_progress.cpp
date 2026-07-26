@@ -137,7 +137,8 @@ std::optional<std::uintmax_t> download_total_from_headers(const fs::path& header
 }
 
 std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json) {
-    // aria2 encodes lengths/speeds as JSON strings. Empty result[] means not ready.
+    // aria2 encodes lengths/speeds as JSON strings. Empty result[] means not ready
+    // (or the download already moved to tellStopped after completion).
     if (json.find("\"result\":[]") != std::string::npos) {
         return std::nullopt;
     }
@@ -169,20 +170,23 @@ std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::stri
     return out;
 }
 
-std::optional<Aria2RpcProgress> merge_aria2_rpc_progress(
-    const std::optional<Aria2RpcProgress>& previous,
-    const std::optional<Aria2RpcProgress>& current) {
-    if (current.has_value()) {
-        return current;
+namespace {
+
+std::optional<std::uintmax_t> aria2_json_u64_string(const std::string& json, const char* key) {
+    const std::optional<std::string> value = json_find_string(json, key);
+    if (!value.has_value() || value->empty()) {
+        return std::nullopt;
     }
-    return previous;
+    try {
+        return static_cast<std::uintmax_t>(std::stoull(*value));
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
 }
 
-std::optional<Aria2RpcProgress> query_aria2_rpc_progress(std::uint16_t port) {
+ProcessResult aria2_json_rpc(std::uint16_t port, const std::string& body) {
     const std::string url = "http://127.0.0.1:" + std::to_string(port) + "/jsonrpc";
-    const std::string body =
-        "{\"jsonrpc\":\"2.0\",\"id\":\"yai\",\"method\":\"aria2.tellActive\",\"params\":[]}";
-    const ProcessResult result = run_process_capture_timeout({
+    return run_process_capture_timeout({
         "curl",
         "--silent",
         "--show-error",
@@ -194,10 +198,82 @@ std::optional<Aria2RpcProgress> query_aria2_rpc_progress(std::uint16_t port) {
         body,
         url,
     }, 1500);
-    if (result.exit_code != 0 || result.timed_out) {
+}
+
+} // namespace
+
+std::optional<Aria2GlobalStat> parse_aria2_global_stat(const std::string& json) {
+    const auto active = aria2_json_u64_string(json, "numActive");
+    const auto waiting = aria2_json_u64_string(json, "numWaiting");
+    const auto stopped = aria2_json_u64_string(json, "numStopped");
+    if (!active.has_value() || !waiting.has_value() || !stopped.has_value()) {
         return std::nullopt;
     }
-    return parse_aria2_tell_active_response(result.output);
+    Aria2GlobalStat out;
+    out.num_active = *active;
+    out.num_waiting = *waiting;
+    out.num_stopped = *stopped;
+    return out;
+}
+
+bool aria2_rpc_session_finished(const Aria2GlobalStat& stat) {
+    // With --enable-rpc, aria2 keeps running after transfers finish. Detect the
+    // idle-but-stopped state so yai can forceShutdown and waitpid can return.
+    return stat.num_active == 0 && stat.num_waiting == 0 && stat.num_stopped > 0;
+}
+
+std::optional<Aria2RpcProgress> merge_aria2_rpc_progress(
+    const std::optional<Aria2RpcProgress>& previous,
+    const std::optional<Aria2RpcProgress>& current) {
+    if (current.has_value()) {
+        return current;
+    }
+    return previous;
+}
+
+void request_aria2_force_shutdown(std::uint16_t port) {
+    const std::string body =
+        "{\"jsonrpc\":\"2.0\",\"id\":\"yai\",\"method\":\"aria2.forceShutdown\",\"params\":[]}";
+    (void)aria2_json_rpc(port, body);
+}
+
+std::optional<Aria2RpcProgress> query_aria2_rpc_progress(std::uint16_t port) {
+    const ProcessResult active = aria2_json_rpc(
+        port,
+        "{\"jsonrpc\":\"2.0\",\"id\":\"yai\",\"method\":\"aria2.tellActive\",\"params\":[]}");
+    if (active.exit_code == 0 && !active.timed_out) {
+        if (const auto progress = parse_aria2_tell_active_response(active.output)) {
+            return progress;
+        }
+    }
+
+    // tellActive is empty once the download moves to the stopped list. Probe
+    // global stats so a completed (or failed) session can be shut down instead
+    // of leaving aria2 parked in RPC-only mode forever.
+    const ProcessResult stats = aria2_json_rpc(
+        port,
+        "{\"jsonrpc\":\"2.0\",\"id\":\"yai\",\"method\":\"aria2.getGlobalStat\",\"params\":[]}");
+    if (stats.exit_code != 0 || stats.timed_out) {
+        return std::nullopt;
+    }
+    const auto global = parse_aria2_global_stat(stats.output);
+    if (!global.has_value() || !aria2_rpc_session_finished(*global)) {
+        return std::nullopt;
+    }
+
+    const ProcessResult stopped = aria2_json_rpc(
+        port,
+        "{\"jsonrpc\":\"2.0\",\"id\":\"yai\",\"method\":\"aria2.tellStopped\","
+        "\"params\":[0,1,[\"completedLength\",\"totalLength\",\"downloadSpeed\"]]}");
+    std::optional<Aria2RpcProgress> progress;
+    if (stopped.exit_code == 0 && !stopped.timed_out) {
+        progress = parse_aria2_tell_active_response(stopped.output);
+        if (progress.has_value()) {
+            progress->speed_bps = 0.0;
+        }
+    }
+    request_aria2_force_shutdown(port);
+    return progress;
 }
 
 double download_progress_recent_speed(
