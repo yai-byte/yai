@@ -294,6 +294,10 @@ struct DownloadToolCommand {
     std::optional<std::uint16_t> aria2_rpc_port;
 };
 
+// GitHub (+ known GitHub mirrors) keep high aria2 concurrency; other CDNs use a
+// lower split to reduce mid-transfer throttling on Range-sensitive hosts.
+int aria2_connections_for_url(const std::string& url);
+
 DownloadToolCommand build_downloader_command(
     const std::string& downloader,
     const std::string& url,

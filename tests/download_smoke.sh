@@ -40,6 +40,8 @@ url=""
 file_allocation=""
 enable_rpc=""
 rpc_port=""
+split=""
+max_conn=""
 while (($#)); do
   case "$1" in
     --dir)
@@ -62,6 +64,14 @@ while (($#)); do
       rpc_port="${1#*=}"
       shift
       ;;
+    --split=*)
+      split="${1#*=}"
+      shift
+      ;;
+    --max-connection-per-server=*)
+      max_conn="${1#*=}"
+      shift
+      ;;
     --*)
       shift
       ;;
@@ -75,8 +85,9 @@ if [[ -z "$dir" || -z "$out" ]]; then
   echo "missing aria2 output arguments" >&2
   exit 2
 fi
-printf 'aria2c\t%s\tfile-allocation=%s\tenable-rpc=%s\trpc-port=%s\n' \
-  "$url" "$file_allocation" "${enable_rpc:-0}" "${rpc_port:-}" >> "${FAKE_DOWNLOADER_LOG:?}"
+printf 'aria2c\t%s\tfile-allocation=%s\tenable-rpc=%s\trpc-port=%s\tsplit=%s\tmax-conn=%s\n' \
+  "$url" "$file_allocation" "${enable_rpc:-0}" "${rpc_port:-}" "${split:-}" "${max_conn:-}" \
+  >> "${FAKE_DOWNLOADER_LOG:?}"
 mkdir -p "$dir"
 {
   echo '#!/usr/bin/env bash'
@@ -281,7 +292,8 @@ grep -q "fake downloader app" "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
 test ! -x "$AUTO_DOWNLOAD_DIR/autodownload.AppImage"
 grep -Fq $'curl-head\thttps://example.invalid/AutoDownload-x86_64.AppImage' "$TMP_HOME/auto-downloader.log"
 grep -Fq $'aria2c\thttps://example.invalid/AutoDownload-x86_64.AppImage\tfile-allocation=none' "$TMP_HOME/auto-downloader.log"
-grep -E $'aria2c\thttps://example.invalid/AutoDownload-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+$' \
+# Non-GitHub CDN hosts use lower aria2 concurrency to avoid mid-transfer throttling.
+grep -E $'aria2c\thttps://example.invalid/AutoDownload-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+\tsplit=4\tmax-conn=4$' \
   "$TMP_HOME/auto-downloader.log"
 test ! -e "$TMP_HOME/.local/share/yai/apps/autodownload"
 
@@ -295,7 +307,7 @@ FAKE_DOWNLOADER_LOG="$TMP_HOME/install-downloader.log" \
 
 grep -Fq $'curl-head\thttps://example.invalid/AutoInstall-x86_64.AppImage' "$TMP_HOME/install-downloader.log"
 grep -Fq $'aria2c\thttps://example.invalid/AutoInstall-x86_64.AppImage\tfile-allocation=none' "$TMP_HOME/install-downloader.log"
-grep -E $'aria2c\thttps://example.invalid/AutoInstall-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+$' \
+grep -E $'aria2c\thttps://example.invalid/AutoInstall-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+\tsplit=4\tmax-conn=4$' \
   "$TMP_HOME/install-downloader.log"
 grep -Fq '"download_url": "https://example.invalid/AutoInstall-x86_64.AppImage"' \
   "$TMP_HOME/.local/share/yai/apps/auto-downloader-install/metadata.json"
@@ -306,6 +318,40 @@ grep -Fq '"http_etag": "\"prefetch-etag\""' \
 grep -Fq '"http_last_modified": "Sun, 26 Jul 2026 08:00:00 GMT"' \
   "$TMP_HOME/.local/share/yai/apps/auto-downloader-install/metadata.json"
 HOME="$TMP_HOME" "$TMP_HOME/.local/bin/auto-downloader-install" | grep -q "fake downloader app"
+
+# GitHub release hosts keep high aria2 concurrency; KDE CDN stays low.
+GITHUB_CONN_DIR="$TMP_HOME/github-conn"
+KDE_CONN_DIR="$TMP_HOME/kde-conn"
+mkdir -p "$GITHUB_CONN_DIR" "$KDE_CONN_DIR"
+(
+  cd "$GITHUB_CONN_DIR"
+  HOME="$TMP_HOME" \
+  PATH="$FAKE_BIN:$PATH" \
+  FAKE_DOWNLOADER_LOG="$TMP_HOME/github-conn.log" \
+  "$ROOT/yai" download "https://github.com/acme/demo/releases/download/v1/GithubConn-x86_64.AppImage"
+)
+grep -E $'aria2c\thttps://github.com/acme/demo/releases/download/v1/GithubConn-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+\tsplit=16\tmax-conn=16$' \
+  "$TMP_HOME/github-conn.log"
+(
+  cd "$KDE_CONN_DIR"
+  HOME="$TMP_HOME" \
+  PATH="$FAKE_BIN:$PATH" \
+  FAKE_DOWNLOADER_LOG="$TMP_HOME/kde-conn.log" \
+  "$ROOT/yai" download "https://download.kde.org/stable/krita/KritaConn-x86_64.AppImage"
+)
+grep -E $'aria2c\thttps://download.kde.org/stable/krita/KritaConn-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+\tsplit=4\tmax-conn=4$' \
+  "$TMP_HOME/kde-conn.log"
+(
+  cd "$TMP_HOME"
+  mkdir -p mirror-conn
+  cd mirror-conn
+  HOME="$TMP_HOME" \
+  PATH="$FAKE_BIN:$PATH" \
+  FAKE_DOWNLOADER_LOG="$TMP_HOME/mirror-conn.log" \
+  "$ROOT/yai" download "https://ghfast.top/https://github.com/acme/demo/releases/download/v1/MirrorConn-x86_64.AppImage"
+)
+grep -E $'aria2c\thttps://ghfast.top/https://github.com/acme/demo/releases/download/v1/MirrorConn-x86_64.AppImage\tfile-allocation=none\tenable-rpc=1\trpc-port=[0-9]+\tsplit=16\tmax-conn=16$' \
+  "$TMP_HOME/mirror-conn.log"
 
 # upgrade: HEAD Error should fall through to GET + sha256 (already current).
 mkdir -p "$TMP_HOME/head-fail-bin"

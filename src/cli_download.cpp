@@ -310,6 +310,37 @@ std::uint16_t allocate_loopback_tcp_port() {
     return ntohs(addr.sin_port);
 }
 
+namespace {
+
+bool host_allows_aria2_high_concurrency(const std::string& host) {
+    if (host.empty()) {
+        return false;
+    }
+    if (host == "github.com") {
+        return true;
+    }
+    const std::string githubusercontent_suffix = ".githubusercontent.com";
+    if (host.size() >= githubusercontent_suffix.size() &&
+        host.compare(
+            host.size() - githubusercontent_suffix.size(),
+            githubusercontent_suffix.size(),
+            githubusercontent_suffix) == 0) {
+        return true;
+    }
+    // Built-in GitHub release mirrors (see built_in_mirror_providers).
+    return host == "ghfast.top" ||
+           host == "github.chenc.dev" ||
+           host == "download.fastgit.org" ||
+           host == "git.yylx.win" ||
+           host == "gh.llkk.cc";
+}
+
+}  // namespace
+
+int aria2_connections_for_url(const std::string& url) {
+    return host_allows_aria2_high_concurrency(url_host(url)) ? 16 : 4;
+}
+
 DownloadToolCommand build_downloader_command(
     const std::string& downloader,
     const std::string& url,
@@ -349,6 +380,8 @@ DownloadToolCommand build_downloader_command(
     }
     if (downloader == "aria2c") {
         const std::uint16_t port = allocate_loopback_tcp_port();
+        const int connections = aria2_connections_for_url(url);
+        const std::string connections_arg = std::to_string(connections);
         cmd.aria2_rpc_port = port;
         cmd.args = {
             "aria2c",
@@ -361,8 +394,8 @@ DownloadToolCommand build_downloader_command(
             "--auto-file-renaming=false",
             "--continue=true",
             "--file-allocation=none",
-            "--max-connection-per-server=16",
-            "--split=16",
+            "--max-connection-per-server=" + connections_arg,
+            "--split=" + connections_arg,
             "--max-tries=3",
             "--retry-wait=1",
             "--enable-rpc=true",
