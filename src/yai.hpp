@@ -533,6 +533,13 @@ std::vector<WebsiteLinkMeta> html_directory_listing_links(
 std::vector<WebsiteLinkMeta> website_page_link_metas(
     const std::string& html,
     const std::string& base_url);
+bool website_candidate_better(
+    const WebsiteLinkMeta& a,
+    const WebsiteLinkMeta& b,
+    const std::string& arch);
+std::string best_website_appimage_url(
+    const std::vector<WebsiteLinkMeta>& candidates,
+    const std::string& arch = "");
 bool is_kde_stable_download_url(const std::string& url);
 bool is_appimage_download_url(const std::string& url);
 bool vector_contains(const std::vector<std::string>& values, const std::string& value);

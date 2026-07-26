@@ -61,6 +61,19 @@ int main() {
     require(old->stale_penalty == 1, "attic/older penalty");
     require(v53->stale_penalty == 0, "version dir not stale");
 
+    WebsiteLinkMeta newer{"file:///a/krita-5.3.2.1-x86_64.AppImage", 200, 0};
+    WebsiteLinkMeta older{"file:///b/krita-6.0.2-x86_64.AppImage", 100, 0};
+    WebsiteLinkMeta stale{"file:///old/krita-9.0.0-x86_64.AppImage", 300, 1};
+    require(website_candidate_better(newer, older, "x86_64"), "mtime wins");
+    require(website_candidate_better(newer, stale, "x86_64"), "non-stale wins");
+    require(
+        best_website_appimage_url({stale, older, newer}, "x86_64")
+            .find("5.3.2.1") != std::string::npos,
+        "best picks newer non-stale");
+    require(
+        best_website_appimage_url({stale}, "x86_64").find("9.0.0") != std::string::npos,
+        "stale-only fallback");
+
     std::cout << "website mtime unit smoke passed\n";
     return 0;
 }

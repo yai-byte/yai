@@ -387,6 +387,47 @@ std::vector<WebsiteLinkMeta> website_page_link_metas(
     return links;
 }
 
+bool website_candidate_better(
+    const WebsiteLinkMeta& a,
+    const WebsiteLinkMeta& b,
+    const std::string& arch) {
+    const std::string effective = arch.empty() ? current_arch() : normalize_arch(arch);
+    const int sa = appimage_asset_score(basename_from_url(a.url), effective);
+    const int sb = appimage_asset_score(basename_from_url(b.url), effective);
+    if (sa != sb) {
+        return sa > sb;
+    }
+    if (a.stale_penalty != b.stale_penalty) {
+        return a.stale_penalty < b.stale_penalty;
+    }
+    if (a.mtime.has_value() != b.mtime.has_value()) {
+        return a.mtime.has_value();
+    }
+    if (a.mtime.has_value() && b.mtime.has_value() && *a.mtime != *b.mtime) {
+        return *a.mtime > *b.mtime;
+    }
+    return false;
+}
+
+std::string best_website_appimage_url(
+    const std::vector<WebsiteLinkMeta>& candidates,
+    const std::string& arch) {
+    const std::string effective = arch.empty() ? current_arch() : normalize_arch(arch);
+    const WebsiteLinkMeta* best = nullptr;
+    for (const WebsiteLinkMeta& candidate : candidates) {
+        if (!is_appimage_download_url(candidate.url)) {
+            continue;
+        }
+        if (appimage_asset_score(basename_from_url(candidate.url), effective) < 0) {
+            continue;
+        }
+        if (best == nullptr || website_candidate_better(candidate, *best, arch)) {
+            best = &candidate;
+        }
+    }
+    return best == nullptr ? "" : best->url;
+}
+
 bool is_kde_stable_download_url(const std::string& url) {
     const std::string lower = to_lower(strip_url_fragment_query(url));
     return lower.find("download.kde.org/stable/kdenlive/") != std::string::npos ||
