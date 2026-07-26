@@ -1,10 +1,10 @@
-# SDD Progress — batch progress UI
+# SDD Progress — website listing top-N prune
 
-Workspace: `/home/fsx/yai/.worktrees/batch-progress-ui`
-Branch: `feature/batch-progress-ui`
-Plan: `docs/superpowers/plans/2026-07-26-batch-progress-ui.md`
-Spec: `docs/superpowers/specs/2026-07-26-batch-progress-ui-design.md`
-Base: `98802b1`
+Workspace: `/home/fsx/yai/.worktrees/website-listing-topn-prune`
+Branch: `feature/website-listing-topn-prune`
+Plan: `docs/superpowers/plans/2026-07-26-website-listing-topn-prune.md`
+Spec: `docs/superpowers/specs/2026-07-26-website-listing-topn-prune-design.md`
+Base: PLACEHOLDER
 
 ## Tasks
 
