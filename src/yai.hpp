@@ -285,6 +285,37 @@ UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpVal
 UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidators& stored);
 HttpValidators validators_from_metadata(const fs::path& metadata);
 
+constexpr std::int64_t kWebsiteResolveCacheTtlSeconds = 7 * 24 * 60 * 60;
+
+struct WebsiteResolveCacheEntry {
+    std::string package_id;
+    std::string arch;
+    std::string source_url;
+    std::string download_url;
+    std::int64_t resolved_at = 0;
+    HttpValidators validators;
+};
+
+fs::path website_resolve_cache_path();
+std::string website_resolve_cache_key(
+    const std::string& package_id,
+    const std::string& arch,
+    const std::string& source_url);
+std::vector<WebsiteResolveCacheEntry> load_website_resolve_cache();
+void save_website_resolve_cache(const std::vector<WebsiteResolveCacheEntry>& entries);
+std::optional<WebsiteResolveCacheEntry> find_website_resolve_cache_entry(
+    const std::vector<WebsiteResolveCacheEntry>& entries,
+    const std::string& package_id,
+    const std::string& arch,
+    const std::string& source_url);
+bool website_resolve_cache_entry_expired(
+    const WebsiteResolveCacheEntry& entry,
+    std::int64_t now_epoch_seconds);
+void upsert_website_resolve_cache_entry(WebsiteResolveCacheEntry entry);
+bool website_cached_download_url_usable(
+    const std::string& download_url,
+    const HttpValidators& stored);
+
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 
 std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json);
