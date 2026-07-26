@@ -85,6 +85,43 @@ int main() {
     require(!probe_url_last_modified_mtime("file:///tmp/listing-driven.AppImage").has_value(),
             "file:// HEAD stays listing-driven");
 
+    // Listing top-N follow prune
+    require(website_url_priority("https://x.example/download/foo") == 2, "priority download");
+    require(website_url_priority("https://x.example/AppImage/bar") == 3, "priority appimage");
+    require(website_url_priority("https://x.example/other") == 0, "priority other");
+
+    WebsiteLinkMeta d1{"file:///download/v1/", 100, 0};
+    WebsiteLinkMeta d2{"file:///download/v2/", 200, 0};
+    WebsiteLinkMeta d3{"file:///download/v3/", 300, 0};
+    WebsiteLinkMeta d4{"file:///download/v4/", 400, 0};
+    WebsiteLinkMeta d5{"file:///download/v5/", 500, 0};
+    WebsiteLinkMeta no_mt{"file:///download/unknown/", std::nullopt, 0};
+    WebsiteLinkMeta attic{"file:///download/older_versions_are_in_the_attic/", 50, 1};
+    WebsiteLinkMeta attic2{"file:///download/old/archive/", 40, 1};
+
+    require(website_follow_meta_better(d5, d4), "newer follow better");
+    require(website_follow_meta_better(d1, attic), "non-stale follow better");
+    require(website_follow_meta_better(d2, no_mt), "known mtime beats unknown");
+
+    require(!website_listing_follow_prune_applies({no_mt, attic}), "no prune without non-stale mtime");
+    require(website_listing_follow_prune_applies({d1, no_mt}), "prune applies with one timed non-stale");
+
+    const auto kept = select_listing_follow_metas_for_enqueue(
+        {d1, d2, d3, d4, d5, no_mt, attic, attic2}, 3, 1);
+    require(kept.size() == 4, "3 non-stale + 1 stale");
+    require(kept[0].url.find("v5") != std::string::npos, "first is newest");
+    require(kept[1].url.find("v4") != std::string::npos, "second");
+    require(kept[2].url.find("v3") != std::string::npos, "third");
+    require(kept[3].stale_penalty == 1, "one stale kept");
+    require(kept[3].url.find("older_versions") != std::string::npos, "best stale by mtime");
+    for (const auto& m : kept) {
+        require(m.url.find("unknown") == std::string::npos, "unknown mtime dropped when prune on");
+        require(m.url.find("/old/archive") == std::string::npos, "second stale dropped");
+    }
+
+    const auto passthrough = select_listing_follow_metas_for_enqueue({no_mt, attic}, 3, 1);
+    require(passthrough.size() == 2, "no-prune passthrough keeps all");
+
     std::cout << "website mtime unit smoke passed\n";
     return 0;
 }

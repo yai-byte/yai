@@ -119,25 +119,6 @@ struct WebsiteQueueItem {
     int stale_penalty = 0;
 };
 
-int website_url_priority(const std::string& url) {
-    const std::string clean = strip_url_fragment_query(url);
-    const std::size_t scheme = clean.find("://");
-    const std::size_t path_start =
-        scheme == std::string::npos ? 0 : clean.find('/', scheme + 3);
-    const std::string lower =
-        to_lower(path_start == std::string::npos ? "" : clean.substr(path_start));
-    if (lower.find("appimage") != std::string::npos) {
-        return 3;
-    }
-    if (lower.find("download") != std::string::npos) {
-        return 2;
-    }
-    if (lower.find("linux") != std::string::npos) {
-        return 1;
-    }
-    return 0;
-}
-
 constexpr int kWebsiteSeedPriority = 100;
 constexpr std::size_t kWebsiteFetchConcurrency = 4;
 constexpr std::size_t kWebsiteMaxPages = 96;

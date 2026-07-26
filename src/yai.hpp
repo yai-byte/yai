@@ -517,6 +517,13 @@ struct WebsiteLinkMeta {
 };
 bool website_url_looks_stale(const std::string& url);
 int website_link_stale_penalty(const std::string& url);
+int website_url_priority(const std::string& url);
+bool website_follow_meta_better(const WebsiteLinkMeta& a, const WebsiteLinkMeta& b);
+bool website_listing_follow_prune_applies(const std::vector<WebsiteLinkMeta>& follow_metas);
+std::vector<WebsiteLinkMeta> select_listing_follow_metas_for_enqueue(
+    const std::vector<WebsiteLinkMeta>& follow_metas,
+    std::size_t non_stale_max = 3,
+    std::size_t stale_max = 1);
 std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text);
 std::optional<std::int64_t> parse_http_last_modified_mtime(const std::string& text);
 std::optional<std::int64_t> probe_url_last_modified_mtime(const std::string& url);

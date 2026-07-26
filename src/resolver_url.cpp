@@ -66,6 +66,84 @@ int website_link_stale_penalty(const std::string& url) {
     return website_url_looks_stale(url) ? 1 : 0;
 }
 
+int website_url_priority(const std::string& url) {
+    const std::string clean = strip_url_fragment_query(url);
+    const std::size_t scheme = clean.find("://");
+    const std::size_t path_start =
+        scheme == std::string::npos ? 0 : clean.find('/', scheme + 3);
+    const std::string lower =
+        to_lower(path_start == std::string::npos ? "" : clean.substr(path_start));
+    if (lower.find("appimage") != std::string::npos) {
+        return 3;
+    }
+    if (lower.find("download") != std::string::npos) {
+        return 2;
+    }
+    if (lower.find("linux") != std::string::npos) {
+        return 1;
+    }
+    return 0;
+}
+
+bool website_follow_meta_better(const WebsiteLinkMeta& a, const WebsiteLinkMeta& b) {
+    if (a.stale_penalty != b.stale_penalty) {
+        return a.stale_penalty < b.stale_penalty;
+    }
+    if (a.mtime.has_value() != b.mtime.has_value()) {
+        return a.mtime.has_value();
+    }
+    if (a.mtime.has_value() && b.mtime.has_value() && *a.mtime != *b.mtime) {
+        return *a.mtime > *b.mtime;
+    }
+    const int pa = website_url_priority(a.url);
+    const int pb = website_url_priority(b.url);
+    if (pa != pb) {
+        return pa > pb;
+    }
+    return false;
+}
+
+bool website_listing_follow_prune_applies(
+    const std::vector<WebsiteLinkMeta>& follow_metas) {
+    for (const WebsiteLinkMeta& meta : follow_metas) {
+        if (meta.stale_penalty == 0 && meta.mtime.has_value()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<WebsiteLinkMeta> select_listing_follow_metas_for_enqueue(
+    const std::vector<WebsiteLinkMeta>& follow_metas,
+    std::size_t non_stale_max,
+    std::size_t stale_max) {
+    if (!website_listing_follow_prune_applies(follow_metas)) {
+        return follow_metas;
+    }
+    std::vector<WebsiteLinkMeta> non_stale;
+    std::vector<WebsiteLinkMeta> stale;
+    for (const WebsiteLinkMeta& meta : follow_metas) {
+        if (meta.stale_penalty != 0) {
+            stale.push_back(meta);
+        } else if (meta.mtime.has_value()) {
+            non_stale.push_back(meta);
+        }
+    }
+    auto by_better = [](const WebsiteLinkMeta& a, const WebsiteLinkMeta& b) {
+        return website_follow_meta_better(a, b);
+    };
+    std::stable_sort(non_stale.begin(), non_stale.end(), by_better);
+    std::stable_sort(stale.begin(), stale.end(), by_better);
+    if (non_stale.size() > non_stale_max) {
+        non_stale.resize(non_stale_max);
+    }
+    if (stale.size() > stale_max) {
+        stale.resize(stale_max);
+    }
+    non_stale.insert(non_stale.end(), stale.begin(), stale.end());
+    return non_stale;
+}
+
 std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text) {
     int year = 0;
     int month = 0;
