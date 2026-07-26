@@ -20,6 +20,8 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
+#include <mutex>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -304,6 +306,34 @@ std::string format_batch_progress_event(
     double rate_bps);
 std::string format_batch_progress_clear_event();
 int batch_event_fd();
+
+class BatchTerminalUi {
+public:
+    explicit BatchTerminalUi(std::size_t total_tasks);
+
+    void log_parent(const std::string& message);
+    void log_line(std::size_t index, const std::string& target, const std::string& message);
+    void apply_event(std::size_t index, const std::string& target, const BatchProgressEvent& event);
+    void clear_task(std::size_t index);
+    void shutdown();
+
+private:
+    struct ProgressRow {
+        std::string target;
+        BatchProgressEvent event;
+    };
+
+    std::string task_prefix(std::size_t index, const std::string& target) const;
+    void clear_footer_locked();
+    void redraw_footer_locked();
+    std::string format_footer_row(std::size_t index, const ProgressRow& row) const;
+
+    std::mutex mutex_;
+    std::size_t total_ = 0;
+    bool tty_ = false;
+    std::map<std::size_t, ProgressRow> active_;
+    std::size_t footer_lines_ = 0;
+};
 
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
