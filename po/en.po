@@ -530,6 +530,12 @@ msgstr "removing installed package file"
 msgid "remove requires exactly one package id"
 msgstr "remove requires exactly one package id"
 
+msgid "remove accepts one package id or quoted pattern; quote wildcards like 'name*' so the shell does not expand them"
+msgstr "remove accepts one package id or quoted pattern; quote wildcards like 'name*' so the shell does not expand them"
+
+msgid "remove matches installed package ids only; quote wildcards like 'name*' so the shell does not expand them"
+msgstr "remove matches installed package ids only; quote wildcards like 'name*' so the shell does not expand them"
+
 msgid "unknown remove option: "
 msgstr "unknown remove option: "
 

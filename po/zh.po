@@ -530,6 +530,12 @@ msgstr "正在删除已安装包文件"
 msgid "remove requires exactly one package id"
 msgstr "remove 恰好需要一个包 id"
 
+msgid "remove accepts one package id or quoted pattern; quote wildcards like 'name*' so the shell does not expand them"
+msgstr "remove 只接受一个包 id 或加引号的模式；请写成 'name*'，避免 shell 先按当前目录展开通配符"
+
+msgid "remove matches installed package ids only; quote wildcards like 'name*' so the shell does not expand them"
+msgstr "remove 只匹配已安装的包 id；请写成 'name*'，避免 shell 先按当前目录展开通配符"
+
 msgid "unknown remove option: "
 msgstr "未知的 remove 选项："
 
