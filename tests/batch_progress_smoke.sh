@@ -109,3 +109,122 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
 grep -q '\[1/1 pkg\] hello-out' "$TMP_DIR/stream_err"
 grep -q '\[1/1 pkg\] hello-err' "$TMP_DIR/stream_err"
 echo "batch streaming section passed"
+
+# --- live yai CLI section (non-TTY prefixes, no CR, artifacts) ---
+make -C "$ROOT" yai >/dev/null
+
+TMP_HOME="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR" "$TMP_HOME"' EXIT
+API_ROOT="$TMP_HOME/api"
+ORIGINAL_ROOT="$TMP_HOME/original"
+PARALLEL_DOWNLOAD_DIR="$TMP_HOME/parallel-downloads"
+PARALLEL_ONE_LATEST="$API_ROOT/repos/acme/parallel-one/releases/latest"
+PARALLEL_TWO_LATEST="$API_ROOT/repos/acme/parallel-two/releases/latest"
+PARALLEL_ONE_ASSET="ParallelOne-x86_64.AppImage"
+PARALLEL_TWO_ASSET="ParallelTwo-x86_64.AppImage"
+
+mkdir -p "$(dirname "$PARALLEL_ONE_LATEST")" "$(dirname "$PARALLEL_TWO_LATEST")" \
+  "$ORIGINAL_ROOT" "$PARALLEL_DOWNLOAD_DIR"
+
+cat > "$ORIGINAL_ROOT/$PARALLEL_ONE_ASSET" <<'APP'
+#!/usr/bin/env bash
+echo "parallel one app"
+APP
+chmod +x "$ORIGINAL_ROOT/$PARALLEL_ONE_ASSET"
+
+cat > "$ORIGINAL_ROOT/$PARALLEL_TWO_ASSET" <<'APP'
+#!/usr/bin/env bash
+echo "parallel two app"
+APP
+chmod +x "$ORIGINAL_ROOT/$PARALLEL_TWO_ASSET"
+
+cat > "$PARALLEL_ONE_LATEST" <<JSON
+{
+  "tag_name": "v1.0.0",
+  "assets": [
+    {
+      "name": "$PARALLEL_ONE_ASSET",
+      "browser_download_url": "file://$ORIGINAL_ROOT/$PARALLEL_ONE_ASSET"
+    }
+  ]
+}
+JSON
+
+cat > "$PARALLEL_TWO_LATEST" <<JSON
+{
+  "tag_name": "v1.0.0",
+  "assets": [
+    {
+      "name": "$PARALLEL_TWO_ASSET",
+      "browser_download_url": "file://$ORIGINAL_ROOT/$PARALLEL_TWO_ASSET"
+    }
+  ]
+}
+JSON
+
+(
+  cd "$PARALLEL_DOWNLOAD_DIR"
+  HOME="$TMP_HOME" YAI_GITHUB_API_BASE="file://$API_ROOT" \
+    "$ROOT/yai" download acme/parallel-one acme/parallel-two --jobs 2 \
+    >"$TMP_DIR/cli.out" 2>"$TMP_DIR/cli.err"
+)
+grep -E '\[1/2 .+\] ' "$TMP_DIR/cli.err"
+grep -E '\[2/2 .+\] ' "$TMP_DIR/cli.err"
+if grep -q $'\r' "$TMP_DIR/cli.err"; then
+  echo "CR in non-TTY batch stderr" >&2
+  exit 1
+fi
+test -f "$PARALLEL_DOWNLOAD_DIR/parallel-one.AppImage"
+test -f "$PARALLEL_DOWNLOAD_DIR/parallel-two.AppImage"
+echo "batch CLI parallel download section passed"
+
+# Wildcard sequential: stop-on-first failure (pack-a succeeds, pack-b unavailable).
+ASSET_DIR="$TMP_HOME/assets"
+INDEX="$TMP_HOME/multi-index.json"
+mkdir -p "$ASSET_DIR"
+cat >"$ASSET_DIR/PackA.AppImage" <<'APP'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--appimage-version" ]]; then
+  echo "PackA 1.0.0"
+  exit 0
+fi
+echo "PackA app"
+APP
+chmod +x "$ASSET_DIR/PackA.AppImage"
+cat >"$INDEX" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-25T00:00:00Z",
+  "packages": [
+    {
+      "id": "pack-a",
+      "name": "Pack A",
+      "summary": "Installable first package",
+      "homepage": "https://example.com/pack-a",
+      "license": "Unknown",
+      "source": {"type": "direct_url", "url": "file://$ASSET_DIR/PackA.AppImage"}
+    },
+    {
+      "id": "pack-b",
+      "name": "Pack B",
+      "summary": "Unavailable second package",
+      "homepage": "https://example.com/pack-b",
+      "license": "Unknown",
+      "source": {"type": "unavailable", "reason": "mid-batch failure fixture"}
+    }
+  ]
+}
+JSON
+
+if HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+  "$ROOT/yai" install 'pack-*' --yes >"$TMP_DIR/install-multi.out" 2>"$TMP_DIR/install-multi.err"; then
+  echo "expected multi install to fail on unavailable pack-b" >&2
+  exit 1
+fi
+grep -q "task failed: install pack-b" "$TMP_DIR/install-multi.err"
+grep -E '\[1/2 pack-a\] ' "$TMP_DIR/install-multi.err"
+test -x "$TMP_HOME/.local/share/yai/apps/pack-a/current.AppImage"
+test ! -e "$TMP_HOME/.local/share/yai/apps/pack-b"
+echo "batch CLI sequential failure section passed"
+
+echo "batch progress smoke passed"

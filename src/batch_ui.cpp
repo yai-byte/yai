@@ -86,9 +86,13 @@ void BatchTerminalUi::redraw_footer_locked() {
 }
 
 void BatchTerminalUi::log_parent(const std::string& message) {
+    std::string text = message;
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+        text.pop_back();
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     clear_footer_locked();
-    std::cerr << message << '\n';
+    std::cerr << text << '\n';
     redraw_footer_locked();
 }
 
@@ -96,9 +100,13 @@ void BatchTerminalUi::log_line(
     std::size_t index,
     const std::string& target,
     const std::string& message) {
+    std::string text = message;
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+        text.pop_back();
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     clear_footer_locked();
-    std::cerr << task_prefix(index, target) << message << '\n';
+    std::cerr << task_prefix(index, target) << text << '\n';
     redraw_footer_locked();
 }
 
