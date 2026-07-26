@@ -510,6 +510,15 @@ std::string download_with_strategy(
     const InstallOptions& options,
     const fs::path& target);
 std::string strip_url_fragment_query(std::string value);
+struct WebsiteLinkMeta {
+    std::string url;
+    std::optional<std::int64_t> mtime;
+    int stale_penalty = 0;
+};
+bool website_url_looks_stale(const std::string& url);
+int website_link_stale_penalty(const std::string& url);
+std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text);
+std::optional<std::int64_t> parse_http_last_modified_mtime(const std::string& text);
 std::string url_origin(const std::string& url);
 std::string url_host(const std::string& url);
 bool is_file_url(const std::string& url);

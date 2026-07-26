@@ -1,6 +1,181 @@
 #include "yai.hpp"
 
+#include <cstdio>
+#include <ctime>
+
 // URL/HTML parsing helpers for AppImage candidate discovery.
+
+namespace {
+
+std::optional<std::int64_t> tm_to_utc_epoch(std::tm tm) {
+    tm.tm_isdst = 0;
+#if defined(_WIN32)
+    const time_t t = _mkgmtime(&tm);
+#else
+    const time_t t = timegm(&tm);
+#endif
+    if (t == static_cast<time_t>(-1)) {
+        return std::nullopt;
+    }
+    return static_cast<std::int64_t>(t);
+}
+
+bool trailing_whitespace_only(const std::string& text, int consumed) {
+    if (consumed < 0) {
+        return false;
+    }
+    for (std::size_t i = static_cast<std::size_t>(consumed); i < text.size(); ++i) {
+        if (!std::isspace(static_cast<unsigned char>(text[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+}  // namespace
+
+bool website_url_looks_stale(const std::string& url) {
+    const std::string lower = to_lower(strip_url_fragment_query(url));
+    std::string path = lower;
+    const std::size_t scheme = path.find("://");
+    if (scheme != std::string::npos) {
+        const std::size_t path_start = path.find('/', scheme + 3);
+        path = path_start == std::string::npos ? "" : path.substr(path_start);
+    }
+    if (path.find("older") != std::string::npos) {
+        return true;
+    }
+    std::size_t i = 0;
+    while (i < path.size()) {
+        while (i < path.size() && path[i] == '/') {
+            ++i;
+        }
+        const std::size_t start = i;
+        while (i < path.size() && path[i] != '/') {
+            ++i;
+        }
+        const std::string seg = path.substr(start, i - start);
+        if (seg == "old" || seg == "attic") {
+            return true;
+        }
+    }
+    return false;
+}
+
+int website_link_stale_penalty(const std::string& url) {
+    return website_url_looks_stale(url) ? 1 : 0;
+}
+
+std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text) {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    int consumed = 0;
+    if (std::sscanf(
+            text.c_str(),
+            "%d-%d-%d %d:%d:%d%n",
+            &year,
+            &month,
+            &day,
+            &hour,
+            &minute,
+            &second,
+            &consumed) >= 6) {
+        if (!trailing_whitespace_only(text, consumed)) {
+            return std::nullopt;
+        }
+    } else if (std::sscanf(
+                   text.c_str(),
+                   "%d-%d-%d %d:%d%n",
+                   &year,
+                   &month,
+                   &day,
+                   &hour,
+                   &minute,
+                   &consumed) == 5) {
+        second = 0;
+        if (!trailing_whitespace_only(text, consumed)) {
+            return std::nullopt;
+        }
+    } else {
+        return std::nullopt;
+    }
+
+    if (month < 1 || month > 12 || day < 1 || day > 31 ||
+        hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
+        second < 0 || second > 59) {
+        return std::nullopt;
+    }
+
+    std::tm tm = {};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = minute;
+    tm.tm_sec = second;
+    return tm_to_utc_epoch(tm);
+}
+
+std::optional<std::int64_t> parse_http_last_modified_mtime(const std::string& text) {
+    char month_text[4] = {};
+    int day = 0;
+    int year = 0;
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    char tz[8] = {};
+    if (std::sscanf(
+            text.c_str(),
+            "%*3[a-zA-Z], %d %3[a-zA-Z] %d %d:%d:%d %7s",
+            &day,
+            month_text,
+            &year,
+            &hour,
+            &minute,
+            &second,
+            tz) != 7) {
+        return std::nullopt;
+    }
+
+    static const char* const months[] = {
+        "jan", "feb", "mar", "apr", "may", "jun",
+        "jul", "aug", "sep", "oct", "nov", "dec",
+    };
+    const std::string month_lower = to_lower(std::string(month_text, 3));
+    int month = -1;
+    for (int i = 0; i < 12; ++i) {
+        if (month_lower == months[i]) {
+            month = i;
+            break;
+        }
+    }
+    if (month < 0) {
+        return std::nullopt;
+    }
+
+    const std::string tz_lower = to_lower(std::string(tz));
+    if (tz_lower != "gmt" && tz_lower != "utc") {
+        return std::nullopt;
+    }
+
+    if (day < 1 || day > 31 || hour < 0 || hour > 23 ||
+        minute < 0 || minute > 59 || second < 0 || second > 59) {
+        return std::nullopt;
+    }
+
+    std::tm tm = {};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = minute;
+    tm.tm_sec = second;
+    return tm_to_utc_epoch(tm);
+}
 
 std::string strip_url_fragment_query(std::string value) {
     const std::size_t fragment = value.find('#');
