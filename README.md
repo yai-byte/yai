@@ -99,13 +99,18 @@ This only chooses the downloaded asset and does not make non-native AppImages
 runnable on the host. `upgrade` reuses the installed package's recorded
 architecture from metadata.
 
-`update [id]` previews available upgrades without downloading, probing, writing
-metadata, or replacing installed files. With no id, it previews all installed
-packages; with an id or pattern, it previews every matching package. GitHub
-Release installs compare the latest release tag. Repository `direct_url` and
-`website_page` installs re-resolve the current repo package and compare the
-selected AppImage file name or URL; plain URL and local-path installs remain
-unsupported for update because yai has no stable package source to query.
+`update [id]` previews available upgrades without downloading AppImage bodies,
+probing candidates, writing metadata, or replacing installed files. With no id,
+it previews all installed packages; with an id or pattern, it previews every
+matching package. GitHub Release installs compare the latest release tag.
+Repository `direct_url` and `website_page` installs re-resolve the current repo
+package and compare the selected AppImage file name or URL. For
+`repo_direct_url`, index URL changes still win; when the URL is unchanged,
+yai probes remote freshness via HTTP validators (or file size for `file://`).
+Plain URL installs use the recorded `source_url` / `download_url`; `update`
+probes HTTP validators (or file size for `file://`) and may report
+`download verification required` without downloading. `upgrade` re-fetches
+and compares sha256. Local-path installs remain unsupported for update.
 The preview output always includes status and reason columns so unsupported
 packages explain why they cannot be upgraded.
 

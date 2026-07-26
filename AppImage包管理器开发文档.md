@@ -583,6 +583,12 @@ GitHub Release 来源升级流程：
 
 repo `direct_url` 和 `website_page` 来源没有 release API。它们的更新预览和升级会重新解析当前 repo index 中同 ID 的包，并比较解析得到的 AppImage 文件名或 URL；发生变化时才把候选文件下载到临时位置并复用同一套运行探测、事务提交和回滚流程。
 
+`source_kind=url` 的普通 URL 直装使用 metadata 中记录的 `source_url` / `download_url`。`yai update` 通过 HTTP 校验头（`http_etag`、`http_last_modified`、`http_content_length`）或 `file://` 的文件大小探测远程内容是否变化，必要时标记为 `download verification required`，但不下载 AppImage 正文。`yai upgrade` 会重新下载并比较 sha256；安装或升级成功后会写回新的 `sha256` 和 `http_*` 字段。
+
+`source_kind=repo_direct_url` 仍优先跟随 repo index 中的 URL 变化；当 index URL 与已安装 `source_url` 相同时，复用上述 URL freshness 探测，而不是仅凭版本字符串或文件名判断。
+
+`source_kind=local_path` 仍不支持更新预览和升级。
+
 失败回滚：
 
 - 新版本下载失败：不改变当前安装。
@@ -892,8 +898,8 @@ MVP 暂不做：
 
 当前阶段五实现范围：
 
-- `yai update [id]` 会查询 GitHub latest release 并输出预览结果；对 repo `direct_url` 和 `website_page` 安装会重新解析当前 repo index 并比较 AppImage 文件名或 URL；对本地路径、普通 URL 直装等无法确定升级来源的安装输出 `unsupported`。
-- `yai upgrade <id>` 支持升级通过 GitHub Release 安装的应用，包括直接 `owner/repo` 安装和来自阶段四包源索引的 `repo_github_release` 安装；也支持升级 repo `direct_url` 和 `website_page` 安装，只要当前 repo index 解析出的候选 AppImage 发生变化。
+- `yai update [id]` 会查询 GitHub latest release 并输出预览结果；对 repo `direct_url` 和 `website_page` 安装会重新解析当前 repo index 并比较 AppImage 文件名或 URL；对 `repo_direct_url` 在 index URL 不变时会探测 HTTP 校验头或 `file://` 文件大小；对 `source_kind=url` 的普通 URL 直装使用记录的 `source_url` / `download_url` 做 freshness 探测，必要时标记 `download verification required` 但不下载正文；对 `source_kind=local_path` 输出 `unsupported`。
+- `yai upgrade <id>` 支持升级通过 GitHub Release 安装的应用，包括直接 `owner/repo` 安装和来自阶段四包源索引的 `repo_github_release` 安装；也支持升级 repo `direct_url` 和 `website_page` 安装，只要当前 repo index 解析出的候选 AppImage 发生变化；也支持 `source_kind=url` 和 same-URL `repo_direct_url` 安装，通过重新下载并比较 sha256 确认内容变化。
 - `yai upgrade --all` 会复用 `yai update` 的预览结果，只升级 `upgradable` 项；执行前默认提示确认，除非传入 `--yes` 或 `-y`。
 - 批量升级遇到单个包失败时继续尝试剩余可升级包，最后汇总失败数量并返回失败。
 - 升级时先下载到应用目录内的 `update.AppImage`，并先完成运行模式探测；探测失败不会替换当前版本。
@@ -907,8 +913,8 @@ MVP 暂不做：
 
 - 不实现完整版本比较，只比较 GitHub latest release 的 tag 是否和本地 `version` 相同。
 - 不保留多历史版本，只保留最近一次更新前的 `previous`。
-- 不对普通 URL 直装、本地路径安装且缺少 repo 包源身份的应用做升级。
-- 不实现 SHA256 校验和签名验证。
+- 不对 `source_kind=local_path` 安装做升级。
+- 不实现 release digest 或 `.sha256` sidecar 的可信校验；URL 升级路径使用安装 metadata 中的 sha256 比较。
 
 ### 阶段六：GUI 或 TUI
 
