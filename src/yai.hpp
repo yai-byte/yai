@@ -282,6 +282,19 @@ struct Aria2RpcProgress {
 
 std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json);
 
+std::uint16_t allocate_loopback_tcp_port();
+
+struct DownloadToolCommand {
+    std::vector<std::string> args;
+    std::optional<std::uint16_t> aria2_rpc_port;
+};
+
+DownloadToolCommand build_downloader_command(
+    const std::string& downloader,
+    const std::string& url,
+    const fs::path& part,
+    const fs::path& headers);
+
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
 double download_progress_recent_speed(
     DownloadProgressState& state,
@@ -360,7 +373,8 @@ StreamingBatchResult run_batch_task_streaming(
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
-    const fs::path& headers);
+    const fs::path& headers,
+    std::optional<std::uint16_t> aria2_rpc_port = std::nullopt);
 std::string normalize_arch(const std::string& value);
 bool is_supported_arch(const std::string& value);
 std::string supported_arch_list();

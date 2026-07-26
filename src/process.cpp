@@ -502,7 +502,9 @@ ProcessResult run_process_capture_timeout(
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
-    const fs::path& headers) {
+    const fs::path& headers,
+    std::optional<std::uint16_t> aria2_rpc_port) {
+    (void)aria2_rpc_port;
     if (args.empty()) {
         return ProcessResult{1, ""};
     }
