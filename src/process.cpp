@@ -1,5 +1,7 @@
 #include "yai.hpp"
 
+#include <poll.h>
+
 // Child-process execution and captured downloads (including progress-aware capture).
 
 namespace {
@@ -226,6 +228,91 @@ void terminate_for_timeout(pid_t pid, int& status) {
     } else {
         signal_process_best_effort(-pid, SIGKILL);
         signal_process_best_effort(pid, SIGKILL);
+    }
+}
+
+constexpr std::size_t kBatchStreamMaxLineBytes = 64 * 1024;
+
+void strip_trailing_cr(std::string& line) {
+    if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+    }
+}
+
+enum class BatchStreamChannel {
+    Log,
+    Event,
+};
+
+void flush_batch_stream_line(
+    BatchStreamChannel channel,
+    std::string line,
+    std::size_t index,
+    const std::string& target,
+    BatchTerminalUi& ui) {
+    if (channel == BatchStreamChannel::Event) {
+        const auto event = parse_batch_progress_event(line);
+        if (event.has_value()) {
+            ui.apply_event(index, target, *event);
+        }
+        return;
+    }
+    strip_trailing_cr(line);
+    ui.log_line(index, target, line);
+}
+
+void dispatch_batch_stream_buffer(
+    std::string& buffer,
+    BatchStreamChannel channel,
+    std::size_t index,
+    const std::string& target,
+    BatchTerminalUi& ui,
+    bool flush_remainder) {
+    while (true) {
+        const std::size_t newline = buffer.find('\n');
+        if (newline == std::string::npos) {
+            if (flush_remainder && !buffer.empty()) {
+                flush_batch_stream_line(channel, std::move(buffer), index, target, ui);
+                buffer.clear();
+            } else if (!flush_remainder && buffer.size() >= kBatchStreamMaxLineBytes) {
+                flush_batch_stream_line(channel, buffer.substr(0, kBatchStreamMaxLineBytes), index, target, ui);
+                buffer.erase(0, kBatchStreamMaxLineBytes);
+                continue;
+            }
+            break;
+        }
+        flush_batch_stream_line(
+            channel, buffer.substr(0, newline), index, target, ui);
+        buffer.erase(0, newline + 1);
+    }
+}
+
+bool read_batch_stream_fd(
+    int fd,
+    std::string& buffer,
+    BatchStreamChannel channel,
+    std::size_t index,
+    const std::string& target,
+    BatchTerminalUi& ui) {
+    char chunk[4096];
+    while (true) {
+        const ssize_t count = read(fd, chunk, sizeof(chunk));
+        if (count > 0) {
+            buffer.append(chunk, static_cast<std::size_t>(count));
+            dispatch_batch_stream_buffer(buffer, channel, index, target, ui, false);
+            continue;
+        }
+        if (count == 0) {
+            dispatch_batch_stream_buffer(buffer, channel, index, target, ui, true);
+            return true;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return false;
+        }
+        throw std::runtime_error(std::string(tr("read failed: ")) + std::strerror(errno));
     }
 }
 } // namespace
@@ -471,4 +558,206 @@ ProcessResult run_process_capture_download_progress(
         return ProcessResult{WEXITSTATUS(status), output};
     }
     return ProcessResult{128, output};
+}
+
+StreamingBatchResult run_batch_task_streaming(
+    const std::vector<std::string>& args,
+    const std::optional<fs::path>& cwd,
+    const std::vector<std::pair<std::string, std::string>>& base_env,
+    std::size_t index,
+    std::size_t total,
+    const std::string& target,
+    BatchTerminalUi& ui) {
+    (void)total;
+    if (args.empty()) {
+        ui.clear_task(index);
+        return StreamingBatchResult{1};
+    }
+
+    int stdout_pipe[2] = {-1, -1};
+    int stderr_pipe[2] = {-1, -1};
+    int event_pipe[2] = {-1, -1};
+
+    auto close_pipes_best_effort = [&]() {
+        close_fd_best_effort(stdout_pipe[0]);
+        close_fd_best_effort(stdout_pipe[1]);
+        close_fd_best_effort(stderr_pipe[0]);
+        close_fd_best_effort(stderr_pipe[1]);
+        close_fd_best_effort(event_pipe[0]);
+        close_fd_best_effort(event_pipe[1]);
+        stdout_pipe[0] = stdout_pipe[1] = -1;
+        stderr_pipe[0] = stderr_pipe[1] = -1;
+        event_pipe[0] = event_pipe[1] = -1;
+    };
+
+    if (pipe(stdout_pipe) != 0) {
+        throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(errno));
+    }
+    if (pipe(stderr_pipe) != 0) {
+        const int pipe_errno = errno;
+        close_pipes_best_effort();
+        throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(pipe_errno));
+    }
+    if (pipe(event_pipe) != 0) {
+        const int pipe_errno = errno;
+        close_pipes_best_effort();
+        throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(pipe_errno));
+    }
+
+    const pid_t pid = fork();
+    if (pid < 0) {
+        const int fork_errno = errno;
+        close_pipes_best_effort();
+        throw std::runtime_error(std::string(tr("fork failed: ")) + std::strerror(fork_errno));
+    }
+
+    if (pid == 0) {
+        if (setpgid(0, 0) != 0) {
+            std::_Exit(126);
+        }
+        if (close(stdout_pipe[0]) != 0 || close(stderr_pipe[0]) != 0 || close(event_pipe[0]) != 0) {
+            std::_Exit(126);
+        }
+        if (dup2(stdout_pipe[1], STDOUT_FILENO) < 0 ||
+            dup2(stderr_pipe[1], STDERR_FILENO) < 0) {
+            std::_Exit(126);
+        }
+        if (stdout_pipe[1] != STDOUT_FILENO && close(stdout_pipe[1]) != 0) {
+            std::_Exit(126);
+        }
+        if (stderr_pipe[1] != STDERR_FILENO && close(stderr_pipe[1]) != 0) {
+            std::_Exit(126);
+        }
+
+        std::vector<std::pair<std::string, std::string>> env = base_env;
+        env.emplace_back("YAI_BATCH_CHILD", "1");
+        env.emplace_back("YAI_BATCH_EVENT_FD", std::to_string(event_pipe[1]));
+        exec_child_process(args, cwd, env);
+    }
+
+    try {
+        if (setpgid(pid, pid) != 0 && errno != EACCES && errno != ESRCH) {
+            const int setpgid_errno = errno;
+            close_pipes_best_effort();
+            signal_process_best_effort(pid, SIGKILL);
+            reap_process_best_effort(pid);
+            ui.clear_task(index);
+            throw std::runtime_error(std::string(tr("setpgid failed: ")) + std::strerror(setpgid_errno));
+        }
+
+        close_fd_required(stdout_pipe[1], tr("batch stream stdout write"));
+        stdout_pipe[1] = -1;
+        close_fd_required(stderr_pipe[1], tr("batch stream stderr write"));
+        stderr_pipe[1] = -1;
+        close_fd_required(event_pipe[1], tr("batch stream event write"));
+        event_pipe[1] = -1;
+
+        set_nonblocking(stdout_pipe[0]);
+        set_nonblocking(stderr_pipe[0]);
+        set_nonblocking(event_pipe[0]);
+
+        std::string stdout_buf;
+        std::string stderr_buf;
+        std::string event_buf;
+        bool stdout_open = true;
+        bool stderr_open = true;
+        bool event_open = true;
+        bool exited = false;
+        int status = 0;
+
+        while (stdout_open || stderr_open || event_open || !exited) {
+            if (!exited) {
+                const pid_t wait_result = waitpid_nointr(pid, &status, WNOHANG);
+                if (wait_result == pid) {
+                    exited = true;
+                } else if (wait_result < 0) {
+                    throw std::runtime_error(
+                        std::string(tr("batch stream: waitpid failed: ")) + std::strerror(errno));
+                }
+            }
+
+            pollfd pfds[3];
+            nfds_t nfds = 0;
+            int stdout_slot = -1;
+            int stderr_slot = -1;
+            int event_slot = -1;
+            if (stdout_open) {
+                stdout_slot = static_cast<int>(nfds);
+                pfds[nfds++] = pollfd{stdout_pipe[0], POLLIN, 0};
+            }
+            if (stderr_open) {
+                stderr_slot = static_cast<int>(nfds);
+                pfds[nfds++] = pollfd{stderr_pipe[0], POLLIN, 0};
+            }
+            if (event_open) {
+                event_slot = static_cast<int>(nfds);
+                pfds[nfds++] = pollfd{event_pipe[0], POLLIN, 0};
+            }
+
+            const int timeout_ms = (nfds == 0) ? 0 : (exited ? 0 : 200);
+            if (nfds > 0) {
+                const int ready = poll(pfds, nfds, timeout_ms);
+                if (ready < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    throw std::runtime_error(
+                        std::string(tr("batch stream: poll failed: ")) + std::strerror(errno));
+                }
+            } else if (!exited) {
+                usleep(50 * 1000);
+                continue;
+            } else {
+                break;
+            }
+
+            auto handle_slot = [&](int slot, int& fd, bool& open_flag, std::string& buffer,
+                                   BatchStreamChannel channel) {
+                if (slot < 0 || !open_flag) {
+                    return;
+                }
+                const short revents = pfds[slot].revents;
+                if ((revents & (POLLERR | POLLNVAL)) != 0) {
+                    dispatch_batch_stream_buffer(buffer, channel, index, target, ui, true);
+                    close_fd_best_effort(fd);
+                    fd = -1;
+                    open_flag = false;
+                    return;
+                }
+                if ((revents & (POLLIN | POLLHUP)) == 0) {
+                    return;
+                }
+                if (read_batch_stream_fd(fd, buffer, channel, index, target, ui)) {
+                    close_fd_best_effort(fd);
+                    fd = -1;
+                    open_flag = false;
+                }
+            };
+
+            handle_slot(stdout_slot, stdout_pipe[0], stdout_open, stdout_buf, BatchStreamChannel::Log);
+            handle_slot(stderr_slot, stderr_pipe[0], stderr_open, stderr_buf, BatchStreamChannel::Log);
+            handle_slot(event_slot, event_pipe[0], event_open, event_buf, BatchStreamChannel::Event);
+        }
+
+        if (!exited) {
+            waitpid_required(pid, &status, 0, tr("batch stream"));
+            exited = true;
+        }
+
+        close_fd_best_effort(stdout_pipe[0]);
+        close_fd_best_effort(stderr_pipe[0]);
+        close_fd_best_effort(event_pipe[0]);
+        stdout_pipe[0] = stderr_pipe[0] = event_pipe[0] = -1;
+
+        ui.clear_task(index);
+        if (WIFEXITED(status)) {
+            return StreamingBatchResult{WEXITSTATUS(status)};
+        }
+        return StreamingBatchResult{128};
+    } catch (...) {
+        kill_and_reap(pid);
+        close_pipes_best_effort();
+        ui.clear_task(index);
+        throw;
+    }
 }

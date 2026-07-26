@@ -335,6 +335,19 @@ private:
     std::size_t footer_lines_ = 0;
 };
 
+struct StreamingBatchResult {
+    int exit_code = 1;
+};
+
+StreamingBatchResult run_batch_task_streaming(
+    const std::vector<std::string>& args,
+    const std::optional<fs::path>& cwd,
+    const std::vector<std::pair<std::string, std::string>>& base_env,
+    std::size_t index,
+    std::size_t total,
+    const std::string& target,
+    BatchTerminalUi& ui);
+
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
