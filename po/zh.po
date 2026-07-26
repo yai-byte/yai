@@ -835,6 +835,15 @@ msgstr "下载进程轮询：waitpid 失败："
 msgid "download process output"
 msgstr "下载进程输出"
 
+msgid "failed to allocate loopback TCP port: "
+msgstr "无法分配 loopback TCP 端口："
+
+msgid "failed to bind loopback TCP port: "
+msgstr "无法绑定 loopback TCP 端口："
+
+msgid "failed to read loopback TCP port: "
+msgstr "无法读取 loopback TCP 端口："
+
 msgid "failed to create directory "
 msgstr "无法创建目录 "
 

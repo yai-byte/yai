@@ -527,8 +527,8 @@ ProcessResult run_process_capture_download_progress(
     bool exited = false;
     while (!exited) {
         // curl output remains captured for errors. yai renders its own progress
-        // from the growing .part file and dumped headers, so stdout stays owned
-        // by the command result.
+        // from aria2 RPC when a port is set, otherwise from the growing .part file
+        // and dumped headers, so stdout stays owned by the command result.
         try {
             append_available_output(pipefd[0], output, pid);
         } catch (const std::exception&) {
