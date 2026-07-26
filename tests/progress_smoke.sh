@@ -55,6 +55,20 @@ int main(int argc, char** argv) {
         require(!parse_aria2_tell_active_response("not-json").has_value(), "reject junk");
     }
 
+    {
+        Aria2RpcProgress prev;
+        prev.completed = 1000;
+        prev.total = 5000;
+        prev.speed_bps = 10.0;
+        const auto held = merge_aria2_rpc_progress(prev, std::nullopt);
+        require(held.has_value() && held->completed == 1000, "hold last rpc progress");
+        Aria2RpcProgress next;
+        next.completed = 2000;
+        const auto advanced = merge_aria2_rpc_progress(prev, next);
+        require(advanced.has_value() && advanced->completed == 2000, "accept newer rpc progress");
+        require(!merge_aria2_rpc_progress(std::nullopt, std::nullopt).has_value(), "no rpc yet");
+    }
+
     DownloadProgressState state;
     const auto start = std::chrono::steady_clock::now();
     require(download_progress_recent_speed(state, start, 0) == 0.0, "initial speed should be zero");
