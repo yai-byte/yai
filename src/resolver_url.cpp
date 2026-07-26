@@ -394,8 +394,12 @@ bool website_candidate_better(
     const std::string effective = arch.empty() ? current_arch() : normalize_arch(arch);
     const int sa = appimage_asset_score(basename_from_url(a.url), effective);
     const int sb = appimage_asset_score(basename_from_url(b.url), effective);
-    if (sa != sb) {
-        return sa > sb;
+    // Reject invalid scores first; among valid (≥0) prefer non-stale, then mtime,
+    // then arch/basename as tie-break (design §5).
+    if (sa < 0 || sb < 0) {
+        if (sa != sb) {
+            return sa > sb;
+        }
     }
     if (a.stale_penalty != b.stale_penalty) {
         return a.stale_penalty < b.stale_penalty;
@@ -405,6 +409,9 @@ bool website_candidate_better(
     }
     if (a.mtime.has_value() && b.mtime.has_value() && *a.mtime != *b.mtime) {
         return *a.mtime > *b.mtime;
+    }
+    if (sa != sb) {
+        return sa > sb;
     }
     return false;
 }

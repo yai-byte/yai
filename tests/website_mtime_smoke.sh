@@ -64,12 +64,20 @@ int main() {
     WebsiteLinkMeta newer{"file:///a/krita-5.3.2.1-x86_64.AppImage", 200, 0};
     WebsiteLinkMeta older{"file:///b/krita-6.0.2-x86_64.AppImage", 100, 0};
     WebsiteLinkMeta stale{"file:///old/krita-9.0.0-x86_64.AppImage", 300, 1};
+    WebsiteLinkMeta stale_arch{"file:///attic/krita-x86_64.AppImage", 50, 1};
+    WebsiteLinkMeta fresh_generic{"file:///stable/krita.AppImage", 40, 0};
     require(website_candidate_better(newer, older, "x86_64"), "mtime wins");
     require(website_candidate_better(newer, stale, "x86_64"), "non-stale wins");
+    require(website_candidate_better(fresh_generic, stale_arch, "x86_64"),
+            "non-stale generic beats stale arch");
     require(
         best_website_appimage_url({stale, older, newer}, "x86_64")
             .find("5.3.2.1") != std::string::npos,
         "best picks newer non-stale");
+    require(
+        best_website_appimage_url({stale_arch, fresh_generic}, "x86_64")
+            .find("krita.AppImage") != std::string::npos,
+        "best prefers non-stale generic over stale arch");
     require(
         best_website_appimage_url({stale}, "x86_64").find("9.0.0") != std::string::npos,
         "stale-only fallback");
