@@ -273,6 +273,15 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
 HttpValidators validators_from_metadata(const fs::path& metadata);
 
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
+
+struct Aria2RpcProgress {
+    std::uintmax_t completed = 0;
+    std::optional<std::uintmax_t> total;
+    std::optional<double> speed_bps;
+};
+
+std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json);
+
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part);
 double download_progress_recent_speed(
     DownloadProgressState& state,

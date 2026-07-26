@@ -292,6 +292,39 @@ std::optional<std::uintmax_t> aria2_control_downloaded_bytes(const fs::path& con
 
 } // namespace
 
+std::optional<Aria2RpcProgress> parse_aria2_tell_active_response(const std::string& json) {
+    // aria2 encodes lengths/speeds as JSON strings. Empty result[] means not ready.
+    if (json.find("\"result\":[]") != std::string::npos) {
+        return std::nullopt;
+    }
+    const std::optional<std::string> completed = json_find_string(json, "completedLength");
+    if (!completed.has_value() || completed->empty()) {
+        return std::nullopt;
+    }
+    Aria2RpcProgress out;
+    try {
+        out.completed = static_cast<std::uintmax_t>(std::stoull(*completed));
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+    if (const std::optional<std::string> total = json_find_string(json, "totalLength")) {
+        try {
+            const std::uintmax_t value = static_cast<std::uintmax_t>(std::stoull(*total));
+            if (value > 0) {
+                out.total = value;
+            }
+        } catch (const std::exception&) {
+        }
+    }
+    if (const std::optional<std::string> speed = json_find_string(json, "downloadSpeed")) {
+        try {
+            out.speed_bps = static_cast<double>(std::stoull(*speed));
+        } catch (const std::exception&) {
+        }
+    }
+    return out;
+}
+
 std::uintmax_t download_progress_downloaded_bytes(const fs::path& part) {
     const std::optional<std::uintmax_t> aria2_downloaded =
         aria2_control_downloaded_bytes(part.string() + ".aria2");
