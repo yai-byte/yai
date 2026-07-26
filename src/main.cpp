@@ -17,11 +17,6 @@ struct BatchCommand {
     bool cancelled = false;
 };
 
-struct BatchResult {
-    std::string target;
-    ProcessOutput output;
-};
-
 struct CommandEntry {
     const char* name;
     CommandHandler handler;
@@ -172,107 +167,96 @@ std::vector<std::string> batch_child_args(const BatchCommand& batch, const std::
 }
 
 void run_batch_command(const BatchCommand& batch) {
-    std::cerr << tr("yai: running ")
-              << batch.targets.size() << " " << batch.command
-              << tr(" task(s) with ")
-              << batch.jobs << tr(" job(s)\n");
+    BatchTerminalUi ui(batch.targets.size());
+    ui.log_parent(
+        tr("yai: running ") + std::to_string(batch.targets.size()) + " " + batch.command +
+        tr(" task(s) with ") + std::to_string(batch.jobs) + tr(" job(s)\n"));
 
     if (batch.expanded_multi) {
         for (std::size_t i = 0; i < batch.targets.size(); ++i) {
             const std::string& target = batch.targets[i];
-            ProcessOutput output;
+            StreamingBatchResult result;
             try {
-                output = run_process_capture_separate(
+                result = run_batch_task_streaming(
                     batch_child_args(batch, target),
                     std::nullopt,
-                    {{"YAI_BATCH_CHILD", "1"}});
+                    {{"YAI_BATCH_CHILD", "1"}},
+                    i,
+                    batch.targets.size(),
+                    target,
+                    ui);
             } catch (const std::exception& ex) {
-                output = ProcessOutput{1, "", ex.what()};
+                ui.log_line(i, target, ex.what());
+                result.exit_code = 1;
             }
-            std::cerr << "[" << (i + 1) << "/" << batch.targets.size() << "] "
-                      << batch.command << " " << target << "\n";
-            if (!output.stderr_text.empty()) {
-                std::cerr << output.stderr_text;
-                if (output.stderr_text.back() != '\n') {
-                    std::cerr << "\n";
-                }
-            }
-            if (!output.stdout_text.empty()) {
-                std::cout << output.stdout_text;
-                if (output.stdout_text.back() != '\n') {
-                    std::cout << "\n";
-                }
-            }
-            if (output.exit_code != 0) {
-                std::cerr << tr_format(
+            if (result.exit_code != 0) {
+                ui.log_parent(tr_format(
                     "yai: task failed: {command} {target} (exit {code})\n",
                     {{"{command}", batch.command},
                      {"{target}", target},
-                     {"{code}", std::to_string(output.exit_code)}});
+                     {"{code}", std::to_string(result.exit_code)}}));
+                ui.shutdown();
                 throw std::runtime_error(tr("batch stopped after task failure"));
             }
         }
+        ui.shutdown();
         return;
     }
 
-    std::vector<BatchResult> results(batch.targets.size());
+    struct ParallelSlot {
+        std::string target;
+        int exit_code = 1;
+    };
+    std::vector<ParallelSlot> results(batch.targets.size());
+    for (std::size_t i = 0; i < batch.targets.size(); ++i) {
+        results[i].target = batch.targets[i];
+    }
+
     std::atomic<std::size_t> next{0};
     std::vector<std::thread> workers;
     workers.reserve(batch.jobs);
-
-    for (std::size_t worker = 0; worker < batch.jobs; ++worker) {
+    for (std::size_t w = 0; w < batch.jobs; ++w) {
         workers.emplace_back([&]() {
             while (true) {
                 const std::size_t index = next.fetch_add(1);
                 if (index >= batch.targets.size()) {
                     return;
                 }
-                const std::string target = batch.targets[index];
-                const std::vector<std::string> args = batch_child_args(batch, target);
                 try {
-                    const ProcessOutput output = run_process_capture_separate(
-                        args,
+                    const StreamingBatchResult result = run_batch_task_streaming(
+                        batch_child_args(batch, results[index].target),
                         std::nullopt,
-                        {{"YAI_BATCH_CHILD", "1"}});
-                    results[index] = BatchResult{target, output};
+                        {{"YAI_BATCH_CHILD", "1"}},
+                        index,
+                        batch.targets.size(),
+                        results[index].target,
+                        ui);
+                    results[index].exit_code = result.exit_code;
                 } catch (const std::exception& ex) {
-                    results[index] = BatchResult{target, ProcessOutput{1, "", ex.what()}};
+                    ui.log_line(index, results[index].target, ex.what());
+                    results[index].exit_code = 1;
+                }
+                if (results[index].exit_code != 0) {
+                    ui.log_parent(tr_format(
+                        "yai: task failed: {command} {target} (exit {code})\n",
+                        {{"{command}", batch.command},
+                         {"{target}", results[index].target},
+                         {"{code}", std::to_string(results[index].exit_code)}}));
                 }
             }
         });
     }
-
-    for (std::thread& worker : workers) {
+    for (auto& worker : workers) {
         worker.join();
     }
 
     std::size_t failed = 0;
-    for (std::size_t i = 0; i < results.size(); ++i) {
-        const BatchResult& result = results[i];
-        std::cerr << "[" << (i + 1) << "/" << results.size() << "] "
-                  << batch.command << " " << result.target << "\n";
-        if (!result.output.stderr_text.empty()) {
-            std::cerr << result.output.stderr_text;
-            if (result.output.stderr_text.back() != '\n') {
-                std::cerr << "\n";
-            }
-        }
-        if (!result.output.stdout_text.empty()) {
-            std::cout << result.output.stdout_text;
-            if (result.output.stdout_text.back() != '\n') {
-                std::cout << "\n";
-            }
-        }
-        if (result.output.exit_code != 0) {
+    for (const auto& result : results) {
+        if (result.exit_code != 0) {
             ++failed;
-            std::cerr << tr_format(
-                "yai: task failed: {command} {target} (exit {code})\n",
-                {{"{command}", batch.command},
-                 {"{target}", result.target},
-                 {"{code}", std::to_string(result.output.exit_code)}});
         }
     }
-
+    ui.shutdown();
     if (failed > 0) {
         throw std::runtime_error(tr_format(
             "{failed} of {total} batch task(s) failed",

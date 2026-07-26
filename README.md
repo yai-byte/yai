@@ -67,7 +67,10 @@ chmod, probe, write metadata, create wrappers, or overwrite an existing file.
 `install` and `download` accept multiple targets in one command. Explicit
 multiple argv targets run in parallel with up to four workers by default,
 capped by the number of targets; use `--jobs <n>` to choose 1 to 32 workers.
-Wildcard-expanded pattern batches run sequentially instead. The same `--arch`, `--download`, and
+Wildcard-expanded pattern batches run sequentially instead. During batch
+`install`/`download`, yai streams each task's logs with a
+`[i/n target]` prefix and shows per-task download progress in a sticky
+footer when stderr is a TTY. The same `--arch`, `--download`, and
 `--mirror-template`, and `--downloader` options apply to every target. `--id`
 and `--name` are available only for a single `install` target because batch
 installs derive each package id from its source.
