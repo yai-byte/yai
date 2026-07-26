@@ -526,6 +526,13 @@ bool is_appimage_catalog_url(const std::string& url);
 std::string url_directory(const std::string& url);
 std::string resolve_href_url(const std::string& base_url, std::string href);
 std::vector<std::string> html_href_urls(const std::string& html, const std::string& base_url);
+bool html_looks_like_directory_listing(const std::string& html);
+std::vector<WebsiteLinkMeta> html_directory_listing_links(
+    const std::string& html,
+    const std::string& base_url);
+std::vector<WebsiteLinkMeta> website_page_link_metas(
+    const std::string& html,
+    const std::string& base_url);
 bool is_kde_stable_download_url(const std::string& url);
 bool is_appimage_download_url(const std::string& url);
 bool vector_contains(const std::vector<std::string>& values, const std::string& value);

@@ -29,6 +29,38 @@ int main() {
     require(a.has_value() && b.has_value() && *a > *b, "listing mtime order");
     require(!parse_directory_listing_mtime("not-a-date").has_value(), "bad listing mtime");
 
+    const std::string listing =
+        "<html><body><table>"
+        "<tr><th><a href=\"?C=N;O=D\">Name</a></th>"
+        "<th><a href=\"?C=M;O=A\">Last modified</a></th></tr>"
+        "<tr><td><a href=\"/stable/\">Parent Directory</a></td><td></td></tr>"
+        "<tr><td><a href=\"5.3.2.1/\">5.3.2.1/</a></td>"
+        "<td align=\"right\">2026-06-02 09:22  </td></tr>"
+        "<tr><td><a href=\"6.0.2/\">6.0.2/</a></td>"
+        "<td align=\"right\">2026-05-26 14:33  </td></tr>"
+        "<tr><td><a href=\"older_versions_are_in_the_attic\">older</a></td>"
+        "<td align=\"right\">2018-05-24 14:14  </td></tr>"
+        "</table></body></html>";
+    require(html_looks_like_directory_listing(listing), "detect listing");
+    const auto links = html_directory_listing_links(
+        listing, "file:///tmp/krita/");
+    require(links.size() == 3, "three data rows");
+    // Find 5.3.2.1 and 6.0.2 metas
+    const WebsiteLinkMeta* v53 = nullptr;
+    const WebsiteLinkMeta* v60 = nullptr;
+    const WebsiteLinkMeta* old = nullptr;
+    for (const auto& link : links) {
+        if (link.url.find("5.3.2.1") != std::string::npos) v53 = &link;
+        if (link.url.find("6.0.2/") != std::string::npos &&
+            link.url.find("6.0.2.1") == std::string::npos) v60 = &link;
+        if (link.url.find("older_versions") != std::string::npos) old = &link;
+    }
+    require(v53 && v60 && old, "rows present");
+    require(v53->mtime.has_value() && v60->mtime.has_value() && *v53->mtime > *v60->mtime,
+            "mtime newer for 5.3.2.1");
+    require(old->stale_penalty == 1, "attic/older penalty");
+    require(v53->stale_penalty == 0, "version dir not stale");
+
     std::cout << "website mtime unit smoke passed\n";
     return 0;
 }

@@ -288,6 +288,105 @@ std::vector<std::string> html_href_urls(const std::string& html, const std::stri
     return urls;
 }
 
+bool html_looks_like_directory_listing(const std::string& html) {
+    return html.find("Parent Directory") != std::string::npos ||
+           html.find("Last modified") != std::string::npos ||
+           html.find("[DIR]") != std::string::npos;
+}
+
+namespace {
+
+bool listing_href_skipped(const std::string& href) {
+    return href.empty() || href.find("?C=") != std::string::npos;
+}
+
+std::string first_listing_row_href(const std::string& row) {
+    const std::regex href_regex(R"(href\s*=\s*["']([^"']+)["'])", std::regex::icase);
+    for (std::sregex_iterator it(row.begin(), row.end(), href_regex), end; it != end; ++it) {
+        const std::string href = (*it)[1].str();
+        if (!listing_href_skipped(href)) {
+            return href;
+        }
+    }
+    return "";
+}
+
+std::optional<std::int64_t> listing_row_mtime(const std::string& row) {
+    const std::regex mtime_regex(R"((\d{4}-\d{2}-\d{2} \d{2}:\d{2}))");
+    std::smatch match;
+    if (std::regex_search(row, match, mtime_regex)) {
+        return parse_directory_listing_mtime(match[1].str());
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+std::vector<WebsiteLinkMeta> html_directory_listing_links(
+    const std::string& html,
+    const std::string& base_url) {
+    std::vector<WebsiteLinkMeta> links;
+    if (!html_looks_like_directory_listing(html)) {
+        return links;
+    }
+
+    std::size_t pos = 0;
+    while (pos < html.size()) {
+        const std::size_t tr_start = html.find("<tr", pos);
+        if (tr_start == std::string::npos) {
+            break;
+        }
+        const std::size_t content_start = html.find('>', tr_start);
+        if (content_start == std::string::npos) {
+            break;
+        }
+        const std::size_t tr_end = html.find("</tr>", content_start);
+        if (tr_end == std::string::npos) {
+            break;
+        }
+        const std::string row = html.substr(content_start + 1, tr_end - content_start - 1);
+        pos = tr_end + 5;
+
+        if (row.find("Parent Directory") != std::string::npos) {
+            continue;
+        }
+
+        const std::string href = first_listing_row_href(row);
+        if (href.empty()) {
+            continue;
+        }
+
+        const std::string url = resolve_href_url(base_url, href);
+        if (url.empty()) {
+            continue;
+        }
+
+        links.push_back(WebsiteLinkMeta{
+            url,
+            listing_row_mtime(row),
+            website_link_stale_penalty(url),
+        });
+    }
+    return links;
+}
+
+std::vector<WebsiteLinkMeta> website_page_link_metas(
+    const std::string& html,
+    const std::string& base_url) {
+    if (html_looks_like_directory_listing(html)) {
+        const std::vector<WebsiteLinkMeta> listing_links = html_directory_listing_links(html, base_url);
+        if (!listing_links.empty()) {
+            return listing_links;
+        }
+    }
+
+    std::vector<WebsiteLinkMeta> links;
+    for (const std::string& url : html_href_urls(html, base_url)) {
+        links.push_back(WebsiteLinkMeta{url, std::nullopt, website_link_stale_penalty(url)});
+    }
+    return links;
+}
+
 bool is_kde_stable_download_url(const std::string& url) {
     const std::string lower = to_lower(strip_url_fragment_query(url));
     return lower.find("download.kde.org/stable/kdenlive/") != std::string::npos ||
