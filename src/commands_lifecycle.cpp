@@ -11,6 +11,86 @@ std::string download_output_name(const ResolvedSource& source) {
     return source.id + ".AppImage";
 }
 
+std::string install_arch_for_options(const InstallOptions& options) {
+    return options.target_arch.empty() ? current_arch() : normalize_arch(options.target_arch);
+}
+
+struct RepoIndexUrlResolveState {
+    bool is_repo_package = false;
+    bool had_index_url = false;
+    bool lacked_index_url = false;
+    std::string arch;
+};
+
+RepoIndexUrlResolveState inspect_repo_index_url_state(const InstallOptions& options) {
+    RepoIndexUrlResolveState state;
+    if (!looks_like_repo_package_target(options.target)) {
+        return state;
+    }
+    const std::optional<RepoPackage> package = find_repo_package(options.target);
+    if (!package.has_value()) {
+        return state;
+    }
+    state.is_repo_package = true;
+    state.arch = install_arch_for_options(options);
+    state.had_index_url = repo_package_has_download_url_for_arch(*package, state.arch);
+    state.lacked_index_url = !state.had_index_url;
+    return state;
+}
+
+void stage_resolved_source_with_index_fallback(
+    InstallOptions options,
+    const RepoIndexUrlResolveState& index_state,
+    ResolvedSource& source,
+    const fs::path& target) {
+    InstallOptions effective_options = apply_network_config_to_options(options, source);
+    try {
+        source.download_url = stage_appimage_source(source, effective_options, target);
+        return;
+    } catch (const std::exception&) {
+        if (options.recrawl || !index_state.is_repo_package || !index_state.had_index_url) {
+            throw;
+        }
+        InstallOptions retry = options;
+        retry.recrawl = true;
+        source = resolve_install_source(retry);
+        effective_options = apply_network_config_to_options(retry, source);
+        source.download_url = stage_appimage_source(source, effective_options, target);
+    }
+}
+
+void maybe_write_back_index_download_url(
+    const InstallOptions& options,
+    const RepoIndexUrlResolveState& index_state,
+    const ResolvedSource& source) {
+    if (!index_state.is_repo_package || !index_state.lacked_index_url) {
+        return;
+    }
+    if (!repo_index_is_locally_writable()) {
+        return;
+    }
+    if (source.download_url.empty()) {
+        return;
+    }
+    std::optional<RepoPackage> package = find_repo_package(options.target);
+    if (!package.has_value()) {
+        return;
+    }
+    const std::string arch = source.arch.empty() ? index_state.arch : source.arch;
+    repo_package_set_download_url(*package, arch, source.download_url, false, true);
+    upsert_repo_package_download_urls(*package);
+}
+
+void print_download_progress_banner(const InstallOptions& effective_options, const ResolvedSource& source) {
+    if (effective_options.download_strategy != "direct") {
+        std::cout << tr("Using GitHub Release proxy strategy: ")
+                  << effective_options.download_strategy << "\n";
+        std::cout << tr("Upstream: ") << source.source_url << "\n";
+    } else {
+        std::cout << tr("Downloading ") << source.source_url << "\n";
+    }
+}
+
 } // namespace
 
 void download_app(int argc, char** argv) {
@@ -22,6 +102,7 @@ void download_app(int argc, char** argv) {
         throw std::runtime_error(tr("download does not accept local AppImage paths"));
     }
 
+    const RepoIndexUrlResolveState index_state = inspect_repo_index_url_state(options);
     ResolvedSource source = resolve_install_source(options);
     if (source.source_kind == "local_path") {
         throw std::runtime_error(tr("download does not accept local AppImage paths"));
@@ -36,14 +117,9 @@ void download_app(int argc, char** argv) {
     // basename). Refusing collisions preserves download-only behavior without
     // silently replacing user files.
 
-    if (effective_options.download_strategy != "direct") {
-        std::cout << tr("Using GitHub Release proxy strategy: ")
-                  << effective_options.download_strategy << "\n";
-        std::cout << tr("Upstream: ") << source.source_url << "\n";
-    } else {
-        std::cout << tr("Downloading ") << source.source_url << "\n";
-    }
-    source.download_url = stage_appimage_source(source, effective_options, target);
+    print_download_progress_banner(effective_options, source);
+    stage_resolved_source_with_index_fallback(options, index_state, source, target);
+    maybe_write_back_index_download_url(options, index_state, source);
     std::cout << tr("Downloaded to: ") << target << "\n";
 }
 
@@ -52,6 +128,7 @@ void install_app(int argc, char** argv) {
     // -> probe runtime mode -> generate wrapper/desktop/metadata. The resolved
     // source remains the metadata contract for later repair or upgrade.
     const InstallOptions options = parse_install_options(argc, argv);
+    const RepoIndexUrlResolveState index_state = inspect_repo_index_url_state(options);
     ResolvedSource source = resolve_install_source(options);
     const InstallOptions effective_options = apply_network_config_to_options(options, source);
     const InstallPaths paths = paths_for(source.id);
@@ -63,14 +140,11 @@ void install_app(int argc, char** argv) {
     if (source.source_kind == "local_path") {
         std::cout << tr("Installing local AppImage ")
                   << source.source_url << "\n";
-    } else if (effective_options.download_strategy != "direct") {
-        std::cout << tr("Using GitHub Release proxy strategy: ")
-                  << effective_options.download_strategy << "\n";
-        std::cout << tr("Upstream: ") << source.source_url << "\n";
     } else {
-        std::cout << tr("Downloading ") << source.source_url << "\n";
+        print_download_progress_banner(effective_options, source);
     }
-    source.download_url = stage_appimage_source(source, effective_options, paths.appimage);
+    stage_resolved_source_with_index_fallback(options, index_state, source, paths.appimage);
+    maybe_write_back_index_download_url(options, index_state, source);
 
     const RepairResult repair = detect_run_mode(paths);
     if (repair.mode == "failed") {

@@ -219,3 +219,190 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   -pthread
 
 "$TMP_DIR/persist_merge_unit"
+
+# --- Task 3: prefer index URL, --recrawl, write-back, fallback ---
+
+make -C "$ROOT" -j"$(nproc)" >/dev/null
+
+TASK3_HOME="$TMP_DIR/task3-home"
+TASK3_ASSETS="$TMP_DIR/task3-assets"
+TASK3_SITE="$TMP_DIR/task3-site"
+TASK3_WORKDIR="$TMP_DIR/task3-workdir"
+mkdir -p "$TASK3_HOME/.local/share/yai/repos" "$TASK3_ASSETS" "$TASK3_SITE" "$TASK3_WORKDIR"
+
+make_appimage() {
+  local path="$1"
+  local msg="$2"
+  cat > "$path" <<APP
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--appimage-version" ]]; then
+  echo "$msg"
+  exit 0
+fi
+echo "$msg"
+APP
+  chmod +x "$path"
+}
+
+make_appimage "$TASK3_ASSETS/prefer-v1-x86_64.AppImage" "prefer v1"
+make_appimage "$TASK3_ASSETS/prefer-v2-x86_64.AppImage" "prefer v2"
+
+cat > "$TASK3_SITE/index.html" <<HTML
+<html><body><a href="file://$TASK3_ASSETS/prefer-v1-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+INDEX_JSON="$TASK3_HOME/.local/share/yai/repos/index.json"
+cat > "$INDEX_JSON" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "prefer-site-pkg",
+      "name": "Prefer Site Pkg",
+      "summary": "website_page prefer-index fixture",
+      "homepage": "file://$TASK3_SITE/index.html",
+      "license": "GPL",
+      "source": {
+        "type": "website_page",
+        "url": "file://$TASK3_SITE/index.html",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+# Unknown option still rejected
+if HOME="$TASK3_HOME" "$ROOT/yai" download prefer-site-pkg --not-a-real-flag 2>"$TMP_DIR/task3-unknown.err"; then
+  echo "expected unknown download option to fail" >&2
+  exit 1
+fi
+grep -qi 'unknown' "$TMP_DIR/task3-unknown.err" || {
+  echo "expected unknown-option error text:" >&2
+  cat "$TMP_DIR/task3-unknown.err" >&2
+  exit 1
+}
+
+# 1) First download (no index URL) crawls + write-back
+rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
+(
+  cd "$TASK3_WORKDIR"
+  HOME="$TASK3_HOME" "$ROOT/yai" download prefer-site-pkg >"$TMP_DIR/task3-dl1.out" 2>"$TMP_DIR/task3-dl1.err"
+) || {
+  echo "first download failed:" >&2
+  cat "$TMP_DIR/task3-dl1.out" "$TMP_DIR/task3-dl1.err" >&2
+  exit 1
+}
+test -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
+bash "$TASK3_WORKDIR/prefer-site-pkg.AppImage" | grep -q "prefer v1"
+grep -Fq "prefer-v1-x86_64.AppImage" "$INDEX_JSON" || {
+  echo "first download must write-back download_url into index:" >&2
+  cat "$INDEX_JSON" >&2
+  exit 1
+}
+INDEX_URL_V1="$(python3 - "$INDEX_JSON" <<'PY'
+import json, sys
+pkg = json.load(open(sys.argv[1]))["packages"][0]
+print(pkg.get("download_url") or next(iter(pkg.get("download_urls", {}).values()), ""))
+PY
+)"
+[[ "$INDEX_URL_V1" == *"prefer-v1-x86_64.AppImage"* ]] || {
+  echo "unexpected write-back URL: $INDEX_URL_V1" >&2
+  exit 1
+}
+
+# 2) Change HTML to v2; clear website cache; without --recrawl keep index URL
+make_appimage "$TASK3_ASSETS/prefer-v2-x86_64.AppImage" "prefer v2"
+cat > "$TASK3_SITE/index.html" <<HTML
+<html><body><a href="file://$TASK3_ASSETS/prefer-v2-x86_64.AppImage">AppImage</a></body></html>
+HTML
+rm -f "$TASK3_HOME/.local/share/yai/website-resolve-cache.json"
+rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
+(
+  cd "$TASK3_WORKDIR"
+  HOME="$TASK3_HOME" "$ROOT/yai" download prefer-site-pkg >"$TMP_DIR/task3-dl2.out" 2>"$TMP_DIR/task3-dl2.err"
+) || {
+  echo "second download failed:" >&2
+  cat "$TMP_DIR/task3-dl2.out" "$TMP_DIR/task3-dl2.err" >&2
+  exit 1
+}
+bash "$TASK3_WORKDIR/prefer-site-pkg.AppImage" | grep -q "prefer v1" || {
+  echo "second download without --recrawl must prefer index v1 URL" >&2
+  cat "$TMP_DIR/task3-dl2.out" "$TMP_DIR/task3-dl2.err" >&2
+  exit 1
+}
+INDEX_AFTER_2="$(python3 - "$INDEX_JSON" <<'PY'
+import json, sys
+pkg = json.load(open(sys.argv[1]))["packages"][0]
+print(pkg.get("download_url") or next(iter(pkg.get("download_urls", {}).values()), ""))
+PY
+)"
+[[ "$INDEX_AFTER_2" == "$INDEX_URL_V1" ]] || {
+  echo "index URL must stay unchanged without --recrawl: $INDEX_AFTER_2" >&2
+  exit 1
+}
+
+# 3) --recrawl uses crawl (v2); index URL still unchanged
+rm -f "$TASK3_HOME/.local/share/yai/website-resolve-cache.json"
+rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
+(
+  cd "$TASK3_WORKDIR"
+  HOME="$TASK3_HOME" "$ROOT/yai" download prefer-site-pkg --recrawl \
+    >"$TMP_DIR/task3-dl3.out" 2>"$TMP_DIR/task3-dl3.err"
+) || {
+  echo "--recrawl download failed:" >&2
+  cat "$TMP_DIR/task3-dl3.out" "$TMP_DIR/task3-dl3.err" >&2
+  exit 1
+}
+bash "$TASK3_WORKDIR/prefer-site-pkg.AppImage" | grep -q "prefer v2" || {
+  echo "--recrawl must crawl to v2 AppImage" >&2
+  cat "$TMP_DIR/task3-dl3.out" "$TMP_DIR/task3-dl3.err" >&2
+  exit 1
+}
+INDEX_AFTER_3="$(python3 - "$INDEX_JSON" <<'PY'
+import json, sys
+pkg = json.load(open(sys.argv[1]))["packages"][0]
+print(pkg.get("download_url") or next(iter(pkg.get("download_urls", {}).values()), ""))
+PY
+)"
+[[ "$INDEX_AFTER_3" == "$INDEX_URL_V1" ]] || {
+  echo "--recrawl must not overwrite existing index URL: $INDEX_AFTER_3" >&2
+  exit 1
+}
+
+# 4) Broken index URL falls back to website_page; index URL unchanged
+python3 - "$INDEX_JSON" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+pkg = data["packages"][0]
+broken = "file:///missing-prefer-site.AppImage"
+pkg["download_url"] = broken
+pkg["download_urls"] = {"x86_64": broken}
+json.dump(data, open(path, "w"), indent=2)
+open(path, "a").write("\n")
+PY
+rm -f "$TASK3_HOME/.local/share/yai/website-resolve-cache.json"
+rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
+(
+  cd "$TASK3_WORKDIR"
+  HOME="$TASK3_HOME" "$ROOT/yai" download prefer-site-pkg \
+    >"$TMP_DIR/task3-dl4.out" 2>"$TMP_DIR/task3-dl4.err"
+) || {
+  echo "fallback download failed:" >&2
+  cat "$TMP_DIR/task3-dl4.out" "$TMP_DIR/task3-dl4.err" >&2
+  exit 1
+}
+bash "$TASK3_WORKDIR/prefer-site-pkg.AppImage" | grep -q "prefer v2" || {
+  echo "broken index URL must fall back to crawl (v2)" >&2
+  cat "$TMP_DIR/task3-dl4.out" "$TMP_DIR/task3-dl4.err" >&2
+  exit 1
+}
+grep -Fq "file:///missing-prefer-site.AppImage" "$INDEX_JSON" || {
+  echo "fallback must leave broken index URL unchanged:" >&2
+  cat "$INDEX_JSON" >&2
+  exit 1
+}
+
+echo "repo index prefer/recrawl/fallback smoke passed"

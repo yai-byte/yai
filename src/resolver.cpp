@@ -290,7 +290,36 @@ ResolvedSource repo_github_release_source(const InstallOptions& options, const R
         repo_source_name(options, package));
 }
 
+std::string repo_source_kind_for_type(const std::string& source_type) {
+    if (source_type == "direct_url") {
+        return "repo_direct_url";
+    }
+    if (source_type == "website_page") {
+        return "repo_website_page";
+    }
+    if (source_type == "github_release") {
+        return "repo_github_release";
+    }
+    return "repo_" + source_type;
+}
+
 ResolvedSource resolve_repo_package_install_source(const InstallOptions& options, const RepoPackage& package) {
+    const std::string arch = install_arch_for_options(options);
+    if (!options.recrawl) {
+        if (const auto url = repo_package_download_url_for_arch(package, arch)) {
+            ResolvedSource source;
+            source.source_kind = repo_source_kind_for_type(package.source_type);
+            source.id = repo_source_id(options, package);
+            source.name = repo_source_name(options, package);
+            source.version = basename_from_url(*url);
+            source.source_url = *url;
+            source.download_url = *url;
+            // Preferring an index URL uses the direct download path. Leave
+            // github_* empty so mirrors are not required; fallback re-resolve
+            // restores full github_release metadata when needed.
+            return with_install_arch(source, options);
+        }
+    }
     if (package.source_type == "direct_url") {
         return repo_direct_url_source(options, package);
     }

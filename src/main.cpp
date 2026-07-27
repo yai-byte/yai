@@ -81,6 +81,10 @@ BatchCommand parse_batch_command(int argc, char** argv) {
             batch.option_args.push_back(arg);
             continue;
         }
+        if (arg == "--recrawl") {
+            batch.option_args.push_back(arg);
+            continue;
+        }
         if (batch_option_takes_value(batch.command, arg)) {
             if (++i >= argc) {
                 throw std::runtime_error(arg + tr(" requires a value"));
