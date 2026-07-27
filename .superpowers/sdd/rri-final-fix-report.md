@@ -22,7 +22,7 @@ When preferring an index URL for `github_release`, set `github_owner` / `github_
 
 ## Commits
 
-- (pending) see git log after commit
+- `48721bc` Fix prefer-index for update resolve and github metadata.
 
 ## Files changed
 
