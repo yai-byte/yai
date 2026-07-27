@@ -46,7 +46,7 @@ Task 4 coverage:
 
 ## Commits
 
-See git log on `feature/repo-resolve-index` after this task (feature commit SHA filled at commit time).
+`6c4edcb2648b1f65ea5315188b656d677ae9bed6`
 
 ## Out of scope (as required)
 
