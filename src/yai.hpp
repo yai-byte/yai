@@ -100,6 +100,9 @@ struct RepoPackage {
     std::string source_url;
     std::string source_reason;
     std::string asset_pattern;
+    std::string download_url;                 // optional single-arch convenience
+    std::map<std::string, std::string> download_urls; // arch -> url
+    std::string resolved_at;                  // ISO-8601 UTC, may be empty
 };
 
 struct RepoEntry {
@@ -494,6 +497,7 @@ std::optional<std::string> json_extract_balanced(
 std::optional<std::string> json_find_object(const std::string& text, const std::string& key);
 std::optional<std::string> json_find_array(const std::string& text, const std::string& key);
 std::optional<int> json_find_int(const std::string& text, const std::string& key);
+std::map<std::string, std::string> json_find_string_map(const std::string& object_text, const std::string& key);
 std::vector<std::string> json_top_level_objects(const std::string& array_text);
 fs::path repo_index_path();
 fs::path repos_dir_path();
@@ -505,6 +509,17 @@ std::string html_to_plain_text(const std::string& value);
 std::string current_utc_timestamp();
 std::string load_repo_index_text();
 RepoPackage parse_repo_package(const std::string& object_text);
+std::string serialize_repo_package(const RepoPackage& package);
+std::optional<std::string> repo_package_download_url_for_arch(
+    const RepoPackage& package,
+    const std::string& arch);
+bool repo_package_has_download_url_for_arch(const RepoPackage& package, const std::string& arch);
+void repo_package_set_download_url(
+    RepoPackage& package,
+    const std::string& arch,
+    const std::string& url,
+    bool overwrite,
+    bool mirror_to_download_url);
 std::vector<RepoPackage> load_repo_packages();
 std::vector<std::string> repo_package_objects_from_index(const std::string& index_text);
 std::optional<std::string> github_repo_from_link(std::string value);

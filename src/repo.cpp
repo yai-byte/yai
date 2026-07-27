@@ -83,6 +83,9 @@ RepoPackage parse_repo_package(const std::string& object_text) {
     package.source_url = json_find_string(source, "url").value_or("");
     package.source_reason = json_find_string(source, "reason").value_or("");
     package.asset_pattern = json_find_string(source, "asset_pattern").value_or("");
+    package.download_url = json_find_string(object_text, "download_url").value_or("");
+    package.resolved_at = json_find_string(object_text, "resolved_at").value_or("");
+    package.download_urls = json_find_string_map(object_text, "download_urls");
 
     if (package.id.empty()) {
         throw std::runtime_error(tr("repo index package is missing id"));
@@ -104,6 +107,75 @@ RepoPackage parse_repo_package(const std::string& object_text) {
         throw std::runtime_error(tr("website_page package is missing url: ") + package.id);
     }
     return package;
+}
+
+std::string serialize_repo_package(const RepoPackage& package) {
+    // Match schema-v1 package object layout used by feed normalization. Optional
+    // download URL fields are omitted when empty so existing indexes stay lean.
+    std::string source =
+        "      \"source\": {\n"
+        "        \"type\": \"" + json_escape_string(package.source_type) + "\"";
+    if (package.source_type == "github_release") {
+        source +=
+            ",\n"
+            "        \"owner\": \"" + json_escape_string(package.source_owner) + "\",\n"
+            "        \"repo\": \"" + json_escape_string(package.source_repo) + "\"";
+        if (!package.asset_pattern.empty()) {
+            source +=
+                ",\n"
+                "        \"asset_pattern\": \"" + json_escape_string(package.asset_pattern) + "\"";
+        }
+    } else if (package.source_type == "direct_url" || package.source_type == "website_page") {
+        source +=
+            ",\n"
+            "        \"url\": \"" + json_escape_string(package.source_url) + "\"";
+        if (!package.source_reason.empty()) {
+            source +=
+                ",\n"
+                "        \"reason\": \"" + json_escape_string(package.source_reason) + "\"";
+        }
+    }
+    source += "\n      }";
+
+    std::string out =
+        "    {\n"
+        "      \"id\": \"" + json_escape_string(package.id) + "\",\n"
+        "      \"name\": \"" + json_escape_string(package.name) + "\",\n"
+        "      \"summary\": \"" + json_escape_string(package.summary) + "\",\n"
+        "      \"homepage\": \"" + json_escape_string(package.homepage) + "\",\n"
+        "      \"license\": \"" + json_escape_string(package.license) + "\",\n" +
+        source;
+
+    if (!package.download_url.empty()) {
+        out +=
+            ",\n"
+            "      \"download_url\": \"" + json_escape_string(package.download_url) + "\"";
+    }
+    if (!package.download_urls.empty()) {
+        out +=
+            ",\n"
+            "      \"download_urls\": {\n";
+        bool first = true;
+        for (const auto& [arch, url] : package.download_urls) {
+            if (!first) {
+                out += ",\n";
+            }
+            first = false;
+            out +=
+                "        \"" + json_escape_string(arch) + "\": \"" +
+                json_escape_string(url) + "\"";
+        }
+        out +=
+            "\n      }";
+    }
+    if (!package.resolved_at.empty()) {
+        out +=
+            ",\n"
+            "      \"resolved_at\": \"" + json_escape_string(package.resolved_at) + "\"";
+    }
+    out +=
+        "\n    }";
+    return out;
 }
 
 std::vector<RepoPackage> load_repo_packages() {

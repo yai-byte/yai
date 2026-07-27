@@ -26,6 +26,7 @@ SRC := \
 	src/process.cpp \
 	src/repo.cpp \
 	src/repo_feed.cpp \
+	src/repo_index_urls.cpp \
 	src/terminal_color.cpp \
 	src/url_freshness.cpp \
 	src/website_resolve_cache.cpp \

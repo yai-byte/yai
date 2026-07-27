@@ -193,6 +193,91 @@ std::optional<std::string> json_find_array(const std::string& text, const std::s
     return json_find_balanced_value(text, key, '[', ']');
 }
 
+std::map<std::string, std::string> json_find_string_map(const std::string& object_text, const std::string& key) {
+    // Extract "key": { "a": "b", ... } and collect only top-level string values.
+    // Nested objects/arrays are skipped; non-string values are ignored.
+    std::map<std::string, std::string> values;
+    const std::optional<std::string> object = json_find_object(object_text, key);
+    if (!object.has_value() || object->size() < 2 || object->front() != '{') {
+        return values;
+    }
+
+    const std::string& text = *object;
+    JsonStringScanState string_state;
+    int depth = 0;
+    for (std::size_t pos = 0; pos < text.size(); ++pos) {
+        const char ch = text[pos];
+
+        // Candidate map key: opening quote at object depth 1, outside any string.
+        if (!string_state.in_string && depth == 1 && ch == '"') {
+            std::string map_key;
+            bool escaped = false;
+            std::size_t key_end = pos + 1;
+            for (; key_end < text.size(); ++key_end) {
+                const char kc = text[key_end];
+                if (escaped) {
+                    map_key.push_back('\\');
+                    map_key.push_back(kc);
+                    escaped = false;
+                } else if (kc == '\\') {
+                    escaped = true;
+                } else if (kc == '"') {
+                    break;
+                } else {
+                    map_key.push_back(kc);
+                }
+            }
+            if (key_end >= text.size()) {
+                break;
+            }
+
+            std::size_t colon = key_end + 1;
+            while (colon < text.size() && std::isspace(static_cast<unsigned char>(text[colon]))) {
+                ++colon;
+            }
+            if (colon < text.size() && text[colon] == ':') {
+                map_key = json_unescape_string(map_key);
+                const std::optional<std::string> map_value = json_string_after(text, pos);
+                if (map_value.has_value()) {
+                    values[map_key] = *map_value;
+
+                    std::size_t value_start = colon + 1;
+                    while (value_start < text.size() &&
+                           std::isspace(static_cast<unsigned char>(text[value_start]))) {
+                        ++value_start;
+                    }
+                    if (value_start < text.size() && text[value_start] == '"') {
+                        bool value_escaped = false;
+                        for (std::size_t value_end = value_start + 1; value_end < text.size(); ++value_end) {
+                            const char vc = text[value_end];
+                            if (value_escaped) {
+                                value_escaped = false;
+                            } else if (vc == '\\') {
+                                value_escaped = true;
+                            } else if (vc == '"') {
+                                pos = value_end;
+                                break;
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+        }
+
+        if (advance_json_string_state(string_state, ch)) {
+            continue;
+        }
+
+        if (ch == '{' || ch == '[') {
+            ++depth;
+        } else if (ch == '}' || ch == ']') {
+            --depth;
+        }
+    }
+    return values;
+}
+
 std::optional<int> json_find_int(const std::string& text, const std::string& key) {
     const std::optional<std::size_t> start = json_value_start_after_key(text, key);
     if (!start.has_value()) {
