@@ -39,11 +39,13 @@ RepoIndexUrlResolveState inspect_repo_index_url_state(const InstallOptions& opti
 }
 
 void stage_resolved_source_with_index_fallback(
-    InstallOptions options,
+    const InstallOptions& options,
+    const InstallOptions& effective_options,
     const RepoIndexUrlResolveState& index_state,
     ResolvedSource& source,
     const fs::path& target) {
-    InstallOptions effective_options = apply_network_config_to_options(options, source);
+    // Callers apply network config once for the banner + first staging attempt.
+    // Re-apply only on recrawl retry, when the resolved source identity may change.
     try {
         source.download_url = stage_appimage_source(source, effective_options, target);
         return;
@@ -54,8 +56,8 @@ void stage_resolved_source_with_index_fallback(
         InstallOptions retry = options;
         retry.recrawl = true;
         source = resolve_install_source(retry);
-        effective_options = apply_network_config_to_options(retry, source);
-        source.download_url = stage_appimage_source(source, effective_options, target);
+        const InstallOptions retry_effective = apply_network_config_to_options(retry, source);
+        source.download_url = stage_appimage_source(source, retry_effective, target);
     }
 }
 
@@ -118,7 +120,7 @@ void download_app(int argc, char** argv) {
     // silently replacing user files.
 
     print_download_progress_banner(effective_options, source);
-    stage_resolved_source_with_index_fallback(options, index_state, source, target);
+    stage_resolved_source_with_index_fallback(options, effective_options, index_state, source, target);
     maybe_write_back_index_download_url(options, index_state, source);
     std::cout << tr("Downloaded to: ") << target << "\n";
 }
@@ -143,7 +145,7 @@ void install_app(int argc, char** argv) {
     } else {
         print_download_progress_banner(effective_options, source);
     }
-    stage_resolved_source_with_index_fallback(options, index_state, source, paths.appimage);
+    stage_resolved_source_with_index_fallback(options, effective_options, index_state, source, paths.appimage);
     maybe_write_back_index_download_url(options, index_state, source);
 
     const RepairResult repair = detect_run_mode(paths);
