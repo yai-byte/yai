@@ -98,7 +98,6 @@ cat > "$TMP_DIR/persist_merge_unit.cpp" <<'CPP'
 #include "yai.hpp"
 #include <filesystem>
 #include <iostream>
-#include <map>
 #include <stdexcept>
 
 namespace fs = std::filesystem;
@@ -167,34 +166,30 @@ int main() {
             "https://example/demo-x86_64.AppImage",
         "rebuild keeps url");
 
-    // Simulate store_repo_index_updates merge: upstream text has no URL fields
+    // Simulate store_repo_index_updates / repo_add merge via shared helper
     write_text_file(named_repo_index_path("local"), minimal_index_json(previous));
     const std::string upstream = minimal_index_json(base);
     const fs::path named = named_repo_index_path("local");
     require(fs::exists(named), "named exists before update");
-    {
-        std::map<std::string, RepoPackage> previous_by_id;
-        for (const std::string& object : repo_package_objects_from_index(read_text_file(named))) {
-            const RepoPackage pkg = parse_repo_package(object);
-            previous_by_id[pkg.id] = pkg;
-        }
-        std::vector<RepoPackage> incoming_pkgs;
-        for (const std::string& object : repo_package_objects_from_index(upstream)) {
-            RepoPackage pkg = parse_repo_package(object);
-            const auto it = previous_by_id.find(pkg.id);
-            if (it != previous_by_id.end()) {
-                pkg = merge_repo_package_download_url_fields(pkg, it->second);
-            }
-            incoming_pkgs.push_back(pkg);
-        }
-        save_repo_packages_index(incoming_pkgs, named);
-    }
-    rebuild_repo_index_from_cached_files({RepoEntry{"local", "/tmp/local-feed.json"}});
+    const RepoEntry local_entry{"local", "/tmp/local-feed.json"};
+    write_text_file(named, merge_named_repo_index_text(local_entry, upstream));
+    rebuild_repo_index_from_cached_files({local_entry});
     const std::vector<RepoPackage> after_update = load_repo_packages();
     require(
         repo_package_download_url_for_arch(after_update[0], "x86_64").value_or("") ==
             "https://example/demo-x86_64.AppImage",
         "update merge keeps url");
+
+    // Re-add: named cache still enriched; fresh upstream has no URL fields
+    write_text_file(named, minimal_index_json(previous));
+    write_text_file(named, merge_named_repo_index_text(local_entry, upstream));
+    rebuild_repo_index_from_cached_files({local_entry});
+    const std::vector<RepoPackage> after_readd = load_repo_packages();
+    require(
+        repo_package_download_url_for_arch(after_readd[0], "x86_64").value_or("") ==
+            "https://example/demo-x86_64.AppImage",
+        "re-add merge keeps url");
+    require(read_text_file(named).find("download_urls") != std::string::npos, "re-add named keeps urls");
 
     std::cout << "repo index persist merge smoke passed\n";
     return 0;

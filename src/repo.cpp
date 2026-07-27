@@ -246,6 +246,32 @@ RepoPackage merge_repo_package_download_url_fields(
     return out;
 }
 
+std::string merge_named_repo_index_text(
+    const RepoEntry& entry,
+    const std::string& incoming_index_text) {
+    const fs::path named = named_repo_index_path(entry.name);
+    if (!fs::exists(named)) {
+        return incoming_index_text;
+    }
+
+    std::map<std::string, RepoPackage> previous_by_id;
+    for (const std::string& object : repo_package_objects_from_index(read_text_file(named))) {
+        const RepoPackage package = parse_repo_package(object);
+        previous_by_id[package.id] = package;
+    }
+
+    std::vector<std::string> objects;
+    for (const std::string& object : repo_package_objects_from_index(incoming_index_text)) {
+        RepoPackage package = parse_repo_package(object);
+        const auto it = previous_by_id.find(package.id);
+        if (it != previous_by_id.end()) {
+            package = merge_repo_package_download_url_fields(package, it->second);
+        }
+        objects.push_back(serialize_repo_package(package));
+    }
+    return repo_index_json_from_package_objects(objects);
+}
+
 void upsert_repo_package_download_urls(const RepoPackage& updated) {
     std::vector<RepoPackage> packages = load_repo_packages();
     bool found = false;
