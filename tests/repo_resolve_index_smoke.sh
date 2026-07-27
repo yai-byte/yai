@@ -567,4 +567,98 @@ grep -F "dead-site" "$TMP_DIR/task4-fail.out" "$TMP_DIR/task4-fail.err" >/dev/nu
   exit 1
 }
 
+# 6) named cache + resolve + repo update/rebuild must retain URLs
+TASK4B_HOME="$TMP_DIR/task4b-home"
+TASK4B_FEED="$TMP_DIR/task4b-feed.json"
+mkdir -p "$TASK4B_HOME"
+
+cat > "$TASK4B_FEED" <<'JSON'
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "cache-pkg",
+      "name": "Cache Pkg",
+      "summary": "direct_url for named cache resolve",
+      "homepage": "https://example.test/cache-pkg",
+      "license": "MIT",
+      "source": {
+        "type": "direct_url",
+        "url": "https://example.test/cache-pkg-source.AppImage",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TASK4B_HOME" "$ROOT/yai" repo add local "$TASK4B_FEED" \
+  >"$TMP_DIR/task4b-add.out" 2>"$TMP_DIR/task4b-add.err" || {
+  echo "repo add for named-cache resolve failed:" >&2
+  cat "$TMP_DIR/task4b-add.out" "$TMP_DIR/task4b-add.err" >&2
+  exit 1
+}
+
+HOME="$TASK4B_HOME" "$ROOT/yai" repo resolve --package cache-pkg \
+  >"$TMP_DIR/task4b-resolve.out" 2>"$TMP_DIR/task4b-resolve.err" || {
+  echo "named-cache resolve failed:" >&2
+  cat "$TMP_DIR/task4b-resolve.out" "$TMP_DIR/task4b-resolve.err" >&2
+  exit 1
+}
+
+TASK4B_NAMED="$TASK4B_HOME/.local/share/yai/repos/local.json"
+TASK4B_INDEX="$TASK4B_HOME/.local/share/yai/repos/index.json"
+python3 - "$TASK4B_NAMED" "$TASK4B_INDEX" <<'PY'
+import json, sys
+named = json.load(open(sys.argv[1]))
+combined = json.load(open(sys.argv[2]))
+named_pkg = next(p for p in named["packages"] if p["id"] == "cache-pkg")
+combined_pkg = next(p for p in combined["packages"] if p["id"] == "cache-pkg")
+assert "cache-pkg-source.AppImage" in (named_pkg.get("download_url") or ""), named_pkg
+assert "cache-pkg-source.AppImage" in (combined_pkg.get("download_url") or ""), combined_pkg
+assert named_pkg.get("download_urls"), named_pkg
+PY
+
+# Fresh upstream still has no URL fields; update must merge and retain resolve URLs
+cat > "$TASK4B_FEED" <<'JSON'
+{
+  "schema_version": 1,
+  "updated_at": "test-updated",
+  "packages": [
+    {
+      "id": "cache-pkg",
+      "name": "Cache Pkg",
+      "summary": "direct_url for named cache resolve",
+      "homepage": "https://example.test/cache-pkg",
+      "license": "MIT",
+      "source": {
+        "type": "direct_url",
+        "url": "https://example.test/cache-pkg-source.AppImage",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+HOME="$TASK4B_HOME" "$ROOT/yai" repo update local \
+  >"$TMP_DIR/task4b-update.out" 2>"$TMP_DIR/task4b-update.err" || {
+  echo "repo update after resolve failed:" >&2
+  cat "$TMP_DIR/task4b-update.out" "$TMP_DIR/task4b-update.err" >&2
+  exit 1
+}
+
+python3 - "$TASK4B_NAMED" "$TASK4B_INDEX" <<'PY'
+import json, sys
+named = json.load(open(sys.argv[1]))
+combined = json.load(open(sys.argv[2]))
+named_pkg = next(p for p in named["packages"] if p["id"] == "cache-pkg")
+combined_pkg = next(p for p in combined["packages"] if p["id"] == "cache-pkg")
+assert "cache-pkg-source.AppImage" in (named_pkg.get("download_url") or ""), named_pkg
+assert "cache-pkg-source.AppImage" in (combined_pkg.get("download_url") or ""), combined_pkg
+assert named_pkg.get("download_urls"), named_pkg
+assert combined_pkg.get("download_urls"), combined_pkg
+PY
+
 echo "repo resolve command smoke passed"

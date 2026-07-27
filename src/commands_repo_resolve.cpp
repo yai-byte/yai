@@ -91,7 +91,8 @@ struct ResolveCounters {
     std::size_t failed = 0;
 };
 
-void resolve_one_package(
+// Returns true when at least one arch wrote a download URL into `package`.
+bool resolve_one_package(
     RepoPackage& package,
     const std::vector<std::string>& arches,
     bool overwrite,
@@ -99,6 +100,7 @@ void resolve_one_package(
     std::vector<ResolveLine>& lines,
     std::mutex* mutex) {
     const std::string host_arch = current_arch();
+    bool wrote_url = false;
     for (std::size_t arch_index = 0; arch_index < arches.size(); ++arch_index) {
         const std::string& arch = arches[arch_index];
         if (!overwrite && repo_package_has_download_url_for_arch(package, arch)) {
@@ -131,6 +133,7 @@ void resolve_one_package(
                 source.download_url,
                 overwrite,
                 mirror);
+            wrote_url = true;
 
             ResolveLine line;
             line.kind = ResolveLine::Kind::Success;
@@ -157,6 +160,7 @@ void resolve_one_package(
             }
         }
     }
+    return wrote_url;
 }
 
 void print_resolve_results(const RepoResolveOptions& options, const std::vector<ResolveLine>& lines) {
@@ -229,16 +233,19 @@ void repo_resolve_app(int argc, char** argv) {
 
     ResolveCounters counters;
     std::vector<ResolveLine> lines;
+    std::vector<std::size_t> updated_indices;
 
     if (options.concurrency <= 1 || selected.size() <= 1) {
         for (const std::size_t index : selected) {
-            resolve_one_package(
-                packages[index],
-                arches,
-                options.overwrite,
-                counters,
-                lines,
-                nullptr);
+            if (resolve_one_package(
+                    packages[index],
+                    arches,
+                    options.overwrite,
+                    counters,
+                    lines,
+                    nullptr)) {
+                updated_indices.push_back(index);
+            }
         }
     } else {
         std::mutex mutex;
@@ -253,13 +260,17 @@ void repo_resolve_app(int argc, char** argv) {
                     if (pos >= selected.size()) {
                         return;
                     }
-                    resolve_one_package(
-                        packages[selected[pos]],
-                        arches,
-                        options.overwrite,
-                        counters,
-                        lines,
-                        &mutex);
+                    const std::size_t index = selected[pos];
+                    if (resolve_one_package(
+                            packages[index],
+                            arches,
+                            options.overwrite,
+                            counters,
+                            lines,
+                            &mutex)) {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        updated_indices.push_back(index);
+                    }
                 }
             }));
         }
@@ -268,8 +279,13 @@ void repo_resolve_app(int argc, char** argv) {
         }
     }
 
+    // Save the full combined index first so upsert can match ids, then patch
+    // each named repo cache that contains a successfully updated package.
     if (repo_index_is_locally_writable()) {
         save_repo_packages_index(packages, repo_index_path());
+        for (const std::size_t index : updated_indices) {
+            upsert_repo_package_download_urls(packages[index]);
+        }
     }
     if (options.output.has_value()) {
         save_repo_packages_index(packages, *options.output);
