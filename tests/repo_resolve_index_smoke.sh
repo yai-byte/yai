@@ -407,6 +407,184 @@ grep -Fq "file:///missing-prefer-site.AppImage" "$INDEX_JSON" || {
 
 echo "repo index prefer/recrawl/fallback smoke passed"
 
+# --- Final-review regressions: update-style skip prefer-index; github_* on prefer ---
+
+make -C "$ROOT" -j"$(nproc)" >/dev/null
+
+FINAL_HOME="$TMP_DIR/final-home"
+FINAL_ASSETS="$TMP_DIR/final-assets"
+FINAL_SITE="$TMP_DIR/final-site"
+mkdir -p "$FINAL_HOME/.local/share/yai/repos" "$FINAL_ASSETS" "$FINAL_SITE"
+
+make_appimage "$FINAL_ASSETS/final-v1-x86_64.AppImage" "final v1"
+make_appimage "$FINAL_ASSETS/final-v2-x86_64.AppImage" "final v2"
+
+cat > "$FINAL_SITE/index.html" <<HTML
+<html><body><a href="file://$FINAL_ASSETS/final-v2-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+FINAL_INDEX="$FINAL_HOME/.local/share/yai/repos/index.json"
+cat > "$FINAL_INDEX" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "final-gh-pkg",
+      "name": "Final GH Pkg",
+      "summary": "prefer index URL but keep github identity",
+      "homepage": "https://example.test/final-gh",
+      "license": "MIT",
+      "source": {
+        "type": "github_release",
+        "owner": "acme",
+        "repo": "final-gh",
+        "asset_pattern": ".*\\.AppImage$",
+        "reason": "test"
+      },
+      "download_url": "file://$FINAL_ASSETS/final-v1-x86_64.AppImage",
+      "download_urls": {
+        "x86_64": "file://$FINAL_ASSETS/final-v1-x86_64.AppImage"
+      },
+      "resolved_at": "2020-01-01T00:00:00Z"
+    }
+  ]
+}
+JSON
+
+export FINAL_SITE_URL="file://$FINAL_SITE/index.html"
+export FINAL_V1_URL="file://$FINAL_ASSETS/final-v1-x86_64.AppImage"
+export FINAL_V2_URL="file://$FINAL_ASSETS/final-v2-x86_64.AppImage"
+
+cat > "$TMP_DIR/final_prefer_regress_unit.cpp" <<'CPP'
+#include "yai.hpp"
+#include <cstdlib>
+#include <iostream>
+#include <stdexcept>
+
+static void require(bool c, const char* m) {
+    if (!c) throw std::runtime_error(m);
+}
+
+static std::string require_env(const char* name) {
+    const char* value = std::getenv(name);
+    if (value == nullptr || *value == '\0') {
+        throw std::runtime_error(std::string("missing env ") + name);
+    }
+    return value;
+}
+
+int main() {
+    const std::string site_url = require_env("FINAL_SITE_URL");
+    const std::string v1_url = require_env("FINAL_V1_URL");
+    const std::string v2_url = require_env("FINAL_V2_URL");
+
+    // 1) website_page + index URL + update-style explicit id/name/arch → crawl
+    RepoPackage site;
+    site.id = "final-site-pkg";
+    site.name = "Final Site Pkg";
+    site.source_type = "website_page";
+    site.source_url = site_url;
+    site.download_url = v1_url;
+    site.download_urls["x86_64"] = v1_url;
+
+    InstallOptions plain;
+    plain.target = site.id;
+    plain.target_arch = "x86_64";
+    const ResolvedSource preferred_site = resolve_repo_package_install_source(plain, site);
+    require(preferred_site.download_url == v1_url, "plain prefer index v1");
+
+    InstallOptions update_style = plain;
+    update_style.id = site.id;
+    update_style.name = site.name;
+    update_style.id_explicit = true;
+    update_style.name_explicit = true;
+    update_style.arch_explicit = true;
+    const ResolvedSource crawled = resolve_repo_package_install_source(update_style, site);
+    require(crawled.download_url == v2_url, "update-style must crawl to v2");
+    require(crawled.source_kind == "repo_website_page", "website kind");
+
+    // 2) github_release preferred via index URL still fills github_*
+    RepoPackage gh;
+    gh.id = "final-gh-pkg";
+    gh.name = "Final GH Pkg";
+    gh.source_type = "github_release";
+    gh.source_owner = "acme";
+    gh.source_repo = "final-gh";
+    gh.download_url = v1_url;
+    gh.download_urls["x86_64"] = v1_url;
+
+    InstallOptions gh_opts;
+    gh_opts.target = gh.id;
+    gh_opts.target_arch = "x86_64";
+    const ResolvedSource preferred_gh = resolve_repo_package_install_source(gh_opts, gh);
+    require(preferred_gh.source_kind == "repo_github_release", "gh kind");
+    require(preferred_gh.download_url == v1_url, "gh index url");
+    require(preferred_gh.github_owner == "acme", "owner");
+    require(preferred_gh.github_repo == "final-gh", "repo");
+    require(preferred_gh.github_asset.find("final-v1-x86_64.AppImage") != std::string::npos, "asset");
+    require(!source_uses_github_release_download(preferred_gh),
+            "prefer-index non-GitHub URL must not force mirror transport");
+
+    std::cout << "repo index prefer final-review unit smoke passed\n";
+    return 0;
+}
+CPP
+
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+  -o "$TMP_DIR/final_prefer_regress_unit" \
+  "$TMP_DIR/final_prefer_regress_unit.cpp" \
+  "$ROOT/src/resolver.cpp" \
+  "$ROOT/src/resolver_github.cpp" \
+  "$ROOT/src/resolver_url.cpp" \
+  "$ROOT/src/resolver_website.cpp" \
+  "$ROOT/src/repo_index_urls.cpp" \
+  "$ROOT/src/repo.cpp" \
+  "$ROOT/src/repo_feed.cpp" \
+  "$ROOT/src/json.cpp" \
+  "$ROOT/src/core.cpp" \
+  "$ROOT/src/arch.cpp" \
+  "$ROOT/src/process.cpp" \
+  "$ROOT/src/i18n.cpp" \
+  "$ROOT/src/cli_download.cpp" \
+  "$ROOT/src/url_freshness.cpp" \
+  "$ROOT/src/appimage.cpp" \
+  "$ROOT/src/appimage_desktop.cpp" \
+  "$ROOT/src/appimage_runtime.cpp" \
+  "$ROOT/src/batch_progress_event.cpp" \
+  "$ROOT/src/batch_ui.cpp" \
+  "$ROOT/src/download_progress.cpp" \
+  "$ROOT/src/terminal_color.cpp" \
+  "$ROOT/src/website_resolve_cache.cpp" \
+  -pthread
+
+HOME="$FINAL_HOME" "$TMP_DIR/final_prefer_regress_unit"
+
+HOME="$FINAL_HOME" "$ROOT/yai" install final-gh-pkg \
+  >"$TMP_DIR/final-gh-install.out" 2>"$TMP_DIR/final-gh-install.err" || {
+  echo "prefer-index github install failed:" >&2
+  cat "$TMP_DIR/final-gh-install.out" "$TMP_DIR/final-gh-install.err" >&2
+  exit 1
+}
+FINAL_GH_META="$FINAL_HOME/.local/share/yai/apps/final-gh-pkg/metadata.json"
+grep -q '"github_owner": "acme"' "$FINAL_GH_META" || {
+  echo "prefer-index github install must write github_owner:" >&2
+  cat "$FINAL_GH_META" >&2
+  exit 1
+}
+grep -q '"github_repo": "final-gh"' "$FINAL_GH_META" || {
+  echo "prefer-index github install must write github_repo:" >&2
+  cat "$FINAL_GH_META" >&2
+  exit 1
+}
+grep -Fq "final-v1-x86_64.AppImage" "$FINAL_GH_META" || {
+  echo "prefer-index github install must use index download URL:" >&2
+  cat "$FINAL_GH_META" >&2
+  exit 1
+}
+
+echo "repo index final-review prefer regressions passed"
+
 # --- Task 4: yai repo resolve ---
 
 make -C "$ROOT" -j"$(nproc)" >/dev/null

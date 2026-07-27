@@ -321,7 +321,12 @@ ResolvedSource resolve_repo_package_install_source_impl(
     const InstallOptions& options,
     const RepoPackage& package) {
     const std::string arch = install_arch_for_options(options);
-    if (!options.recrawl) {
+    // Update/upgrade sets id/name/arch explicit (same signal that skips website
+    // disk cache) and must re-resolve via original source, not a stale index URL.
+    const bool prefer_index_url =
+        !options.recrawl &&
+        !(options.id_explicit && options.name_explicit && options.arch_explicit);
+    if (prefer_index_url) {
         if (const auto url = repo_package_download_url_for_arch(package, arch)) {
             ResolvedSource source;
             source.source_kind = repo_source_kind_for_type(package.source_type);
@@ -330,9 +335,17 @@ ResolvedSource resolve_repo_package_install_source_impl(
             source.version = basename_from_url(*url);
             source.source_url = *url;
             source.download_url = *url;
-            // Preferring an index URL uses the direct download path. Leave
-            // github_* empty so mirrors are not required; fallback re-resolve
-            // restores full github_release metadata when needed.
+            // Keep github_* identity for upgradeable metadata while still
+            // downloading the preferred index URL directly. Mirror transport is
+            // gated by source_uses_github_release_download (URL / live resolve).
+            if (package.source_type == "github_release") {
+                source.github_owner = package.source_owner;
+                source.github_repo = package.source_repo;
+                const std::string asset = basename_from_url(*url);
+                if (!asset.empty()) {
+                    source.github_asset = asset;
+                }
+            }
             return with_install_arch(source, options);
         }
     }
@@ -379,8 +392,16 @@ ResolvedSource resolve_install_source(const InstallOptions& options) {
 }
 
 bool source_uses_github_release_download(const ResolvedSource& source) {
-    return !source.github_owner.empty() ||
-           to_lower(source.source_url).find("github.com/") != std::string::npos;
+    // Prefer-index may attach github_* for upgrade metadata while downloading a
+    // direct non-GitHub index URL. Only treat as GitHub Release transport when
+    // the URL itself targets GitHub, or when this is a live owner/repo resolve
+    // (source_kind github_release) that may use non-GitHub asset URLs in tests.
+    const std::string lower = to_lower(source.source_url);
+    if (lower.find("github.com/") != std::string::npos ||
+        lower.find("githubusercontent.com/") != std::string::npos) {
+        return true;
+    }
+    return source.source_kind == "github_release" && !source.github_owner.empty();
 }
 
 NetworkConfig prompt_china_network_config() {
