@@ -227,4 +227,109 @@ grep -q 'cache-site/index.html' "$CACHE_CURL_LOG" || grep -q 'website search sel
 }
 HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
 
-echo "website resolve cache install integration smoke passed"
+# --- Update: re-resolve discovers newer AppImage; upsert refreshes disk cache ---
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>"$TMP_DIR/update-base.err"
+META="$TMP_HOME/.local/share/yai/apps/cache-site-pkg/metadata.json"
+
+make_appimage "$ASSETS/cache-app-v2-x86_64.AppImage" "cache app v2"
+cat > "$CACHE_SITE/index.html" <<HTML
+<html><body><a href="file://$ASSETS/cache-app-v2-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" update cache-site-pkg >"$TMP_DIR/update-out.txt" 2>"$TMP_DIR/update.err"
+grep -q $'cache-site-pkg\t.*\tupgradable' "$TMP_DIR/update-out.txt" || {
+  echo "update: expected upgradable to v2" >&2
+  cat "$TMP_DIR/update-out.txt" >&2
+  cat "$TMP_DIR/update.err" >&2
+  exit 1
+}
+
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" upgrade cache-site-pkg --yes >"$TMP_DIR/upgrade-v2-out.txt" 2>"$TMP_DIR/upgrade-v2.err"
+grep -Fq 'cache-app-v2-x86_64.AppImage' "$META" || {
+  echo "upgrade: expected v2 AppImage in metadata" >&2
+  cat "$META" >&2
+  cat "$TMP_DIR/upgrade-v2.err" >&2
+  exit 1
+}
+grep -q 'cache-site/index.html' "$CACHE_CURL_LOG" || grep -q 'website search selected' "$TMP_DIR/upgrade-v2.err" || {
+  echo "upgrade: expected listing crawl" >&2
+  cat "$CACHE_CURL_LOG" >&2
+  cat "$TMP_DIR/upgrade-v2.err" >&2
+  exit 1
+}
+HOME="$TMP_HOME" "$TMP_HOME/.local/bin/cache-site-pkg" | grep -q "cache app v2"
+
+# Cache should now point at v2 for a subsequent install after remove.
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>"$TMP_DIR/reinstall-v2.err"
+grep -Fq 'cache-app-v2-x86_64.AppImage' "$META" || {
+  echo "reinstall after upgrade: expected cached v2" >&2
+  cat "$META" >&2
+  exit 1
+}
+if grep -q 'cache-site/index.html' "$CACHE_CURL_LOG"; then
+  echo "reinstall after upgrade: listing crawl should be skipped via disk cache" >&2
+  cat "$CACHE_CURL_LOG" >&2
+  exit 1
+fi
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+
+# --- TTL miss: expired entry must crawl even if AppImage still exists ---
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>/dev/null
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+python3 - "$TMP_HOME/.local/share/yai/website-resolve-cache.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    entries = json.load(handle)
+for entry in entries:
+    if entry.get("package_id") == "cache-site-pkg":
+        entry["resolved_at"] = 1
+        break
+else:
+    raise SystemExit("cache-site-pkg entry missing for TTL test")
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(entries, handle, indent=2)
+    handle.write("\n")
+PY
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>"$TMP_DIR/ttl.err"
+grep -q 'cache-site/index.html' "$CACHE_CURL_LOG" || grep -q 'website search selected' "$TMP_DIR/ttl.err" || {
+  echo "TTL expired: expected listing crawl" >&2
+  cat "$CACHE_CURL_LOG" >&2
+  cat "$TMP_DIR/ttl.err" >&2
+  exit 1
+}
+python3 - "$TMP_HOME/.local/share/yai/website-resolve-cache.json" <<'PY'
+import json
+import sys
+import time
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    entries = json.load(handle)
+for entry in entries:
+    if entry.get("package_id") == "cache-site-pkg":
+        if int(entry.get("resolved_at", 0)) < int(time.time()) - 60:
+            raise SystemExit(f"resolved_at not refreshed: {entry.get('resolved_at')}")
+        break
+else:
+    raise SystemExit("cache-site-pkg entry missing after TTL reinstall")
+PY
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+
+echo "website resolve cache update integration smoke passed"
+echo "website resolve cache smoke passed"

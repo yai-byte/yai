@@ -294,6 +294,7 @@ struct WebsiteResolveCacheEntry {
     std::string download_url;
     std::int64_t resolved_at = 0;
     HttpValidators validators;
+    HttpValidators listing_validators;
 };
 
 fs::path website_resolve_cache_path();
@@ -315,6 +316,7 @@ void upsert_website_resolve_cache_entry(WebsiteResolveCacheEntry entry);
 bool website_cached_download_url_usable(
     const std::string& download_url,
     const HttpValidators& stored);
+HttpValidators capture_url_validators(const std::string& url);
 
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 

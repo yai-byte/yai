@@ -37,6 +37,12 @@ WebsiteResolveCacheEntry parse_website_resolve_cache_entry(const std::string& ob
         json_find_string(object_text, "http_last_modified").value_or("");
     entry.validators.content_length =
         json_find_string(object_text, "http_content_length").value_or("");
+    entry.listing_validators.etag =
+        json_find_string(object_text, "listing_http_etag").value_or("");
+    entry.listing_validators.last_modified =
+        json_find_string(object_text, "listing_http_last_modified").value_or("");
+    entry.listing_validators.content_length =
+        json_find_string(object_text, "listing_http_content_length").value_or("");
     return entry;
 }
 
@@ -53,7 +59,13 @@ std::string website_resolve_cache_entry_json(const WebsiteResolveCacheEntry& ent
            "    \"http_last_modified\": \"" +
            json_escape_string(entry.validators.last_modified) + "\",\n"
            "    \"http_content_length\": \"" +
-           json_escape_string(entry.validators.content_length) + "\"\n"
+           json_escape_string(entry.validators.content_length) + "\",\n"
+           "    \"listing_http_etag\": \"" +
+           json_escape_string(entry.listing_validators.etag) + "\",\n"
+           "    \"listing_http_last_modified\": \"" +
+           json_escape_string(entry.listing_validators.last_modified) + "\",\n"
+           "    \"listing_http_content_length\": \"" +
+           json_escape_string(entry.listing_validators.content_length) + "\"\n"
            "  }";
 }
 
@@ -166,4 +178,15 @@ bool website_cached_download_url_usable(
     const UrlFreshnessResult result = probe_url_freshness(download_url, stored);
     return result.status == UrlFreshness::Unchanged ||
            result.status == UrlFreshness::Unknown;
+}
+
+HttpValidators capture_url_validators(const std::string& url) {
+    if (url.empty()) {
+        return {};
+    }
+    const UrlFreshnessResult probe = probe_url_freshness(url, {});
+    if (probe.status == UrlFreshness::Error) {
+        return {};
+    }
+    return probe.remote;
 }

@@ -232,8 +232,9 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
     const std::int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
                                  std::chrono::system_clock::now().time_since_epoch())
                                  .count();
-    // Update/upgrade resolve sets id/name/arch explicitly; install cache is for
-    // fresh installs only until Task 3 adds freshness short-circuit there too.
+    // Update/upgrade sets id/name/arch explicit and short-circuits via
+    // probe_url_freshness before resolve; when resolve runs, skip disk cache so
+    // a newer listing AppImage is still discoverable.
     const bool use_website_resolve_cache =
         !(options.id_explicit && options.name_explicit && options.arch_explicit);
 
@@ -262,6 +263,7 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
         fresh.source_url = strip_url_fragment_query(package.source_url);
         fresh.download_url = download_url;
         fresh.resolved_at = now;
+        fresh.listing_validators = capture_url_validators(package.source_url);
         upsert_website_resolve_cache_entry(fresh);
     }
 
