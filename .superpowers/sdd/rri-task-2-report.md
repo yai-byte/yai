@@ -45,6 +45,7 @@ Persist/merge coverage:
 
 ## Commits
 
+- `bf176a3` Merge download URL fields when re-adding named repos. (Task 2 Important finding)
 - `8600f82` Preserve download URL fields across repo update merges. (Task 2)
 - Prior on branch: `fd77dd5`, `40d1983` (Task 1)
 
@@ -68,4 +69,4 @@ Persist/merge coverage:
 
 **Smoke:** Persist/merge section now exercises the helper for update and re-add; both keep enriched URLs after rebuild.
 
-**Verification:** `bash tests/repo_resolve_index_smoke.sh` + `make -j$(nproc)` — green.
+**Verification:** `bash tests/repo_resolve_index_smoke.sh` + `make -j$(nproc)` — green. Commit: `bf176a3`.
