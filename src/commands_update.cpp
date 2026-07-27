@@ -171,7 +171,7 @@ UpdatePreviewResult build_update_preview(const std::string& id) {
         return preview_from_url_freshness(id, current_version, current_version, candidate, metadata);
     }
 
-    if (source_kind == "repo_direct_url" || source_kind == "repo_website_page") {
+    if (source_kind == "repo_website_page") {
         try {
             UpdateContext context{
                 InstallOptions{},
@@ -193,22 +193,47 @@ UpdatePreviewResult build_update_preview(const std::string& id) {
                     "upgradable",
                     tr("source: ") + source.source_url};
             }
-            if (source_kind == "repo_direct_url") {
-                const std::string candidate =
-                    !source.source_url.empty() ? source.source_url : source_url;
-                return preview_from_url_freshness(
-                    id,
-                    current_version,
-                    source.version,
-                    candidate,
-                    metadata);
-            }
             return UpdatePreviewResult{
                 id,
                 current_version,
                 source.version,
                 "current",
                 tr("already up to date")};
+        } catch (const std::exception& ex) {
+            return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
+        }
+    }
+
+    if (source_kind == "repo_direct_url") {
+        try {
+            UpdateContext context{
+                InstallOptions{},
+                id,
+                paths,
+                source_kind,
+                current_version,
+                name,
+                source_url,
+                github_owner,
+                github_repo,
+                installed_arch};
+            ResolvedSource source = resolve_repo_update_source(context);
+            if (update_source_identity_changed(context, source)) {
+                return UpdatePreviewResult{
+                    id,
+                    current_version,
+                    source.version,
+                    "upgradable",
+                    tr("source: ") + source.source_url};
+            }
+            const std::string candidate =
+                !source.source_url.empty() ? source.source_url : source_url;
+            return preview_from_url_freshness(
+                id,
+                current_version,
+                source.version,
+                candidate,
+                metadata);
         } catch (const std::exception& ex) {
             return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
         }
