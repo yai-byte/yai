@@ -1,7 +1,7 @@
 # Task 5 Report: i18n + usage polish
 
 **Status:** PASS  
-**Commits:** `c340514` (i18n + help); this report follow-up  
+**Commits:** `c340514` (i18n + help); `dffc421` (report)  
 **Tests:**
 - `YAI_LANG=zh ./yai help` shows `repo resolve` and `--recrawl`
 - `YAI_LANG=zh ./yai repo` / `repo resolve --show abc` / `repo resolve --nope` → Chinese errors
