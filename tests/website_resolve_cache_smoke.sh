@@ -83,3 +83,148 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   -lpthread
 
 "$TMP_DIR/cache_unit"
+
+# --- Integration: install uses disk cache ---
+make -C "$ROOT" -j"$(nproc)"
+
+TMP_HOME="$TMP_DIR/home"
+rm -f "$TMP_HOME/.local/share/yai/website-resolve-cache.json"
+ASSETS="$TMP_DIR/assets"
+CACHE_SITE="$TMP_DIR/download/cache-site"
+mkdir -p "$ASSETS" "$CACHE_SITE" "$TMP_HOME/.local/share/yai/repos"
+
+make_appimage() {
+  local path="$1"
+  local msg="$2"
+  cat > "$path" <<APP
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "--appimage-version" ]]; then
+  echo "$msg"
+  exit 0
+fi
+echo "$msg"
+APP
+  chmod +x "$path"
+}
+
+make_appimage "$ASSETS/cache-app-x86_64.AppImage" "cache app v1"
+
+cat > "$CACHE_SITE/index.html" <<HTML
+<html><body><a href="file://$ASSETS/cache-app-x86_64.AppImage">AppImage</a></body></html>
+HTML
+
+cat > "$TMP_HOME/.local/share/yai/repos/index.json" <<JSON
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "cache-site-pkg",
+      "name": "Cache Site Pkg",
+      "summary": "website_page cache fixture",
+      "homepage": "file://$CACHE_SITE/index.html",
+      "license": "GPL",
+      "source": {
+        "type": "website_page",
+        "url": "file://$CACHE_SITE/index.html",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+REAL_CURL="$(command -v curl)"
+CACHE_CURL_LOG="$TMP_DIR/cache-curl.log"
+FAKE_BIN="$TMP_DIR/fake-bin"
+mkdir -p "$FAKE_BIN"
+cat > "$FAKE_BIN/curl" <<SH
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$CACHE_CURL_LOG"
+exec "$REAL_CURL" "\$@"
+SH
+chmod +x "$FAKE_BIN/curl"
+
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>"$TMP_DIR/first.err"
+META="$TMP_HOME/.local/share/yai/apps/cache-site-pkg/metadata.json"
+grep -Fq 'cache-app-x86_64.AppImage' "$META" || {
+  echo "first install: expected AppImage in metadata:" >&2
+  cat "$META" >&2
+  exit 1
+}
+grep -q 'cache-site/index.html' "$CACHE_CURL_LOG" || grep -q 'website search selected' "$TMP_DIR/first.err" || {
+  echo "first install: expected listing crawl" >&2
+  cat "$CACHE_CURL_LOG" >&2
+  cat "$TMP_DIR/first.err" >&2
+  exit 1
+}
+grep -Fq "file://$CACHE_SITE/index.html" \
+  "$TMP_HOME/.local/share/yai/website-resolve-cache.json" || {
+  echo "cache must key on listing source_url, not AppImage URL" >&2
+  cat "$TMP_HOME/.local/share/yai/website-resolve-cache.json" >&2
+  exit 1
+}
+FIRST_DL="$(grep -o '"download_url"[[:space:]]*:[[:space:]]*"[^"]*"' "$META" | head -1)"
+
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>"$TMP_DIR/second.err"
+if grep -q 'cache-site/index.html' "$CACHE_CURL_LOG"; then
+  echo "second install must not fetch listing index.html" >&2
+  cat "$CACHE_CURL_LOG" >&2
+  exit 1
+fi
+grep -Fq 'cache-app-x86_64.AppImage' "$META" || {
+  echo "second install: expected AppImage in metadata:" >&2
+  cat "$META" >&2
+  exit 1
+}
+SECOND_DL="$(grep -o '"download_url"[[:space:]]*:[[:space:]]*"[^"]*"' "$META" | head -1)"
+if [[ "$FIRST_DL" != "$SECOND_DL" ]]; then
+  echo "second install download_url must match first: $FIRST_DL vs $SECOND_DL" >&2
+  exit 1
+fi
+test -x "$TMP_HOME/.local/share/yai/apps/cache-site-pkg/current.AppImage"
+
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+
+python3 - "$TMP_HOME/.local/share/yai/website-resolve-cache.json" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as handle:
+    entries = json.load(handle)
+for entry in entries:
+    if entry.get("package_id") == "cache-site-pkg":
+        entry["download_url"] = "file:///tmp/yai-cache-poison-missing.AppImage"
+        break
+else:
+    raise SystemExit("cache-site-pkg entry missing for poison test")
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(entries, handle, indent=2)
+    handle.write("\n")
+PY
+
+: > "$CACHE_CURL_LOG"
+PATH="$FAKE_BIN:$PATH" \
+  HOME="$TMP_HOME" "$ROOT/yai" install cache-site-pkg 2>"$TMP_DIR/poison.err"
+grep -Fq 'cache-app-x86_64.AppImage' "$META" || {
+  echo "poisoned cache: install must recover via crawl" >&2
+  cat "$META" >&2
+  cat "$TMP_DIR/poison.err" >&2
+  exit 1
+}
+grep -q 'cache-site/index.html' "$CACHE_CURL_LOG" || grep -q 'website search selected' "$TMP_DIR/poison.err" || {
+  echo "poisoned cache: expected listing crawl recovery" >&2
+  cat "$CACHE_CURL_LOG" >&2
+  cat "$TMP_DIR/poison.err" >&2
+  exit 1
+}
+HOME="$TMP_HOME" "$ROOT/yai" remove cache-site-pkg
+
+echo "website resolve cache install integration smoke passed"

@@ -1,5 +1,7 @@
 #include "yai.hpp"
 
+#include <chrono>
+
 // Install-source dispatch: package match helpers, staging, resolve_install_source
 // routing, and interactive network/mirror prompts. GitHub, URL/HTML, and website
 // crawl implementations live in resolver_github.cpp, resolver_url.cpp, and
@@ -225,7 +227,44 @@ void throw_unavailable_repo_source(const RepoPackage& package) {
 }
 
 ResolvedSource repo_website_page_source(const InstallOptions& options, const RepoPackage& package) {
+    const std::string arch = install_arch_for_options(options);
+    const std::string source_page = package.source_url;
+    const std::int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
+                                 std::chrono::system_clock::now().time_since_epoch())
+                                 .count();
+    // Update/upgrade resolve sets id/name/arch explicitly; install cache is for
+    // fresh installs only until Task 3 adds freshness short-circuit there too.
+    const bool use_website_resolve_cache =
+        !(options.id_explicit && options.name_explicit && options.arch_explicit);
+
+    if (use_website_resolve_cache) {
+        const auto entries = load_website_resolve_cache();
+        const auto hit = find_website_resolve_cache_entry(entries, package.id, arch, source_page);
+        if (hit.has_value() &&
+            !website_resolve_cache_entry_expired(*hit, now) &&
+            website_cached_download_url_usable(hit->download_url, hit->validators)) {
+            ResolvedSource source;
+            source.source_kind = "repo_website_page";
+            source.id = repo_source_id(options, package);
+            source.name = repo_source_name(options, package);
+            source.version = basename_from_url(hit->download_url);
+            source.source_url = hit->download_url;
+            source.download_url = hit->download_url;
+            return with_install_arch(source, options);
+        }
+    }
+
     const std::string download_url = resolve_website_appimage_download(package, options.target_arch);
+    if (use_website_resolve_cache) {
+        WebsiteResolveCacheEntry fresh;
+        fresh.package_id = package.id;
+        fresh.arch = normalize_arch(arch);
+        fresh.source_url = strip_url_fragment_query(package.source_url);
+        fresh.download_url = download_url;
+        fresh.resolved_at = now;
+        upsert_website_resolve_cache_entry(fresh);
+    }
+
     ResolvedSource source;
     source.source_kind = "repo_website_page";
     source.id = repo_source_id(options, package);
