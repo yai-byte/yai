@@ -56,6 +56,13 @@ int main() {
     single.download_url = "https://example/only.AppImage";
     require(repo_package_download_url_for_arch(single, "x86_64").value_or("") == "https://example/only.AppImage", "compat");
 
+    // no-overwrite must respect single-field download_url (read-priority semantics)
+    repo_package_set_download_url(single, "x86_64", "https://example/new.AppImage", false, true);
+    require(single.download_url == "https://example/only.AppImage", "compat no-overwrite download_url");
+    require(single.download_urls.empty(), "compat no-overwrite map stays empty");
+    require(repo_package_download_url_for_arch(single, "x86_64").value_or("") == "https://example/only.AppImage",
+            "compat no-overwrite read");
+
     std::cout << "repo index url unit smoke passed\n";
     return 0;
 }

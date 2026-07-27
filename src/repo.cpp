@@ -85,7 +85,9 @@ RepoPackage parse_repo_package(const std::string& object_text) {
     package.asset_pattern = json_find_string(source, "asset_pattern").value_or("");
     package.download_url = json_find_string(object_text, "download_url").value_or("");
     package.resolved_at = json_find_string(object_text, "resolved_at").value_or("");
-    package.download_urls = json_find_string_map(object_text, "download_urls");
+    for (const auto& [arch, url] : json_find_string_map(object_text, "download_urls")) {
+        package.download_urls[normalize_arch(arch)] = url;
+    }
 
     if (package.id.empty()) {
         throw std::runtime_error(tr("repo index package is missing id"));

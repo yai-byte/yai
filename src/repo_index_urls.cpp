@@ -27,11 +27,8 @@ void repo_package_set_download_url(
     bool overwrite,
     bool mirror_to_download_url) {
     const std::string key = normalize_arch(arch);
-    if (!overwrite) {
-        const auto it = package.download_urls.find(key);
-        if (it != package.download_urls.end() && !it->second.empty()) {
-            return;
-        }
+    if (!overwrite && repo_package_has_download_url_for_arch(package, key)) {
+        return;
     }
 
     package.download_urls[key] = url;
