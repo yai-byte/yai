@@ -98,6 +98,21 @@ msgstr ""
 "  yai repo remove <名称-或-模式> [--yes]\n"
 
 msgid ""
+"  yai repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]\n"
+msgstr ""
+"  yai repo resolve [--output <路径>] [--arch <架构|all>] [--type <类型>]\n"
+
+msgid ""
+"                   [--package <id>] [--overwrite] [--concurrency <n>]\n"
+msgstr ""
+"                   [--package <id>] [--overwrite] [--concurrency <n>]\n"
+
+msgid ""
+"                   [--show <xyz>] [--summary|--no-summary]\n"
+msgstr ""
+"                   [--show <xyz>] [--summary|--no-summary]\n"
+
+msgid ""
 "  yai mirror list\n"
 msgstr ""
 "  yai mirror list\n"
@@ -143,9 +158,9 @@ msgstr ""
 "              [--downloader auto|curl|wget|wget2|aria2c]\n"
 
 msgid ""
-"              [--jobs <n>] [--yes|-y]\n"
+"              [--recrawl] [--jobs <n>] [--yes|-y]\n"
 msgstr ""
-"              [--jobs <n>] [--yes|-y]\n"
+"              [--recrawl] [--jobs <n>] [--yes|-y]\n"
 
 msgid ""
 "  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
@@ -628,8 +643,40 @@ msgid ""
 msgstr ""
 "尚未配置包源\n"
 
-msgid "repo requires a subcommand: list, add, update, or remove"
-msgstr "repo 需要子命令：list、add、update 或 remove"
+msgid "repo requires a subcommand: list, add, update, remove, or resolve"
+msgstr "repo 需要子命令：list、add、update、remove 或 resolve"
+
+msgid "unknown repo resolve option: "
+msgstr "未知的 repo resolve 选项："
+
+msgid "--show must be three digits of 0 or 1"
+msgstr "--show 必须是三个由 0 或 1 组成的数字"
+
+msgid "--concurrency must be a positive integer"
+msgstr "--concurrency 必须是正整数"
+
+msgid "--concurrency must be between 1 and 32"
+msgstr "--concurrency 必须在 1 到 32 之间"
+
+msgid ", or all"
+msgstr "，或 all"
+
+msgid "skip "
+msgstr "跳过 "
+
+msgid "ok "
+msgstr "成功 "
+
+msgid "fail "
+msgstr "失败 "
+
+msgid ""
+"resolved: {resolved} skipped: {skipped} failed: {failed}\n"
+msgstr ""
+"已解析：{resolved} 已跳过：{skipped} 失败：{failed}\n"
+
+msgid "repo resolve completed with failures"
+msgstr "repo resolve 完成，但存在失败项"
 
 msgid "repo remove requires a name or pattern"
 msgstr "repo remove 需要名称或模式"

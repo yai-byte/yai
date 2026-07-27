@@ -98,6 +98,21 @@ msgstr ""
 "  yai repo remove <name-or-pattern> [--yes]\n"
 
 msgid ""
+"  yai repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]\n"
+msgstr ""
+"  yai repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]\n"
+
+msgid ""
+"                   [--package <id>] [--overwrite] [--concurrency <n>]\n"
+msgstr ""
+"                   [--package <id>] [--overwrite] [--concurrency <n>]\n"
+
+msgid ""
+"                   [--show <xyz>] [--summary|--no-summary]\n"
+msgstr ""
+"                   [--show <xyz>] [--summary|--no-summary]\n"
+
+msgid ""
 "  yai mirror list\n"
 msgstr ""
 "  yai mirror list\n"
@@ -143,9 +158,9 @@ msgstr ""
 "              [--downloader auto|curl|wget|wget2|aria2c]\n"
 
 msgid ""
-"              [--jobs <n>] [--yes|-y]\n"
+"              [--recrawl] [--jobs <n>] [--yes|-y]\n"
 msgstr ""
-"              [--jobs <n>] [--yes|-y]\n"
+"              [--recrawl] [--jobs <n>] [--yes|-y]\n"
 
 msgid ""
 "  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\n"
@@ -628,8 +643,40 @@ msgid ""
 msgstr ""
 "No repos configured\n"
 
-msgid "repo requires a subcommand: list, add, update, or remove"
-msgstr "repo requires a subcommand: list, add, update, or remove"
+msgid "repo requires a subcommand: list, add, update, remove, or resolve"
+msgstr "repo requires a subcommand: list, add, update, remove, or resolve"
+
+msgid "unknown repo resolve option: "
+msgstr "unknown repo resolve option: "
+
+msgid "--show must be three digits of 0 or 1"
+msgstr "--show must be three digits of 0 or 1"
+
+msgid "--concurrency must be a positive integer"
+msgstr "--concurrency must be a positive integer"
+
+msgid "--concurrency must be between 1 and 32"
+msgstr "--concurrency must be between 1 and 32"
+
+msgid ", or all"
+msgstr ", or all"
+
+msgid "skip "
+msgstr "skip "
+
+msgid "ok "
+msgstr "ok "
+
+msgid "fail "
+msgstr "fail "
+
+msgid ""
+"resolved: {resolved} skipped: {skipped} failed: {failed}\n"
+msgstr ""
+"resolved: {resolved} skipped: {skipped} failed: {failed}\n"
+
+msgid "repo resolve completed with failures"
+msgstr "repo resolve completed with failures"
 
 msgid "repo remove requires a name or pattern"
 msgstr "repo remove requires a name or pattern"
