@@ -522,6 +522,12 @@ void repo_package_set_download_url(
     bool mirror_to_download_url);
 std::vector<RepoPackage> load_repo_packages();
 std::vector<std::string> repo_package_objects_from_index(const std::string& index_text);
+bool repo_index_is_locally_writable();
+void save_repo_packages_index(const std::vector<RepoPackage>& packages, const fs::path& path);
+void upsert_repo_package_download_urls(const RepoPackage& updated);
+RepoPackage merge_repo_package_download_url_fields(
+    const RepoPackage& incoming,
+    const RepoPackage& previous);
 std::optional<std::string> github_repo_from_link(std::string value);
 std::optional<std::string> appimage_feed_github_repo(const std::string& item_text);
 std::optional<std::string> appimage_feed_homepage(const std::string& item_text);

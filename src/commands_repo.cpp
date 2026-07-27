@@ -91,7 +91,28 @@ std::vector<std::pair<RepoEntry, std::string>> refresh_selected_repo_indexes(
 void store_repo_index_updates(const std::vector<std::pair<RepoEntry, std::string>>& fetched) {
     ensure_directory(repos_dir_path());
     for (const auto& item : fetched) {
-        write_text_file(named_repo_index_path(item.first.name), item.second);
+        const fs::path named = named_repo_index_path(item.first.name);
+        std::string index_text = item.second;
+        if (fs::exists(named)) {
+            std::map<std::string, RepoPackage> previous_by_id;
+            for (const std::string& object : repo_package_objects_from_index(read_text_file(named))) {
+                const RepoPackage package = parse_repo_package(object);
+                previous_by_id[package.id] = package;
+            }
+
+            std::vector<RepoPackage> merged_packages;
+            for (const std::string& object : repo_package_objects_from_index(index_text)) {
+                RepoPackage package = parse_repo_package(object);
+                const auto it = previous_by_id.find(package.id);
+                if (it != previous_by_id.end()) {
+                    package = merge_repo_package_download_url_fields(package, it->second);
+                }
+                merged_packages.push_back(package);
+            }
+            save_repo_packages_index(merged_packages, named);
+            continue;
+        }
+        write_text_file(named, index_text);
     }
 }
 

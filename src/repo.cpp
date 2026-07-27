@@ -199,6 +199,89 @@ std::vector<RepoPackage> load_repo_packages() {
     return packages;
 }
 
+bool repo_index_is_locally_writable() {
+    const char* env = std::getenv("YAI_REPO_INDEX");
+    if (env == nullptr || std::string(env).empty()) {
+        return true;
+    }
+    return !has_url_scheme(env);
+}
+
+void save_repo_packages_index(const std::vector<RepoPackage>& packages, const fs::path& path) {
+    std::vector<std::string> objects;
+    objects.reserve(packages.size());
+    for (const RepoPackage& package : packages) {
+        objects.push_back(serialize_repo_package(package));
+    }
+    if (path.has_parent_path()) {
+        ensure_directory(path.parent_path());
+    }
+    write_text_file(path, repo_index_json_from_package_objects(objects));
+}
+
+RepoPackage merge_repo_package_download_url_fields(
+    const RepoPackage& incoming,
+    const RepoPackage& previous) {
+    RepoPackage out = incoming;
+    bool any_merged = false;
+
+    for (const auto& [arch, url] : previous.download_urls) {
+        const std::string key = normalize_arch(arch);
+        const auto it = out.download_urls.find(key);
+        if (it == out.download_urls.end() || it->second.empty()) {
+            out.download_urls[key] = url;
+            any_merged = true;
+        }
+    }
+
+    if (!previous.download_url.empty() &&
+        incoming.download_url.empty() &&
+        incoming.download_urls.empty()) {
+        out.download_url = previous.download_url;
+        out.resolved_at = previous.resolved_at;
+    } else if (any_merged && out.resolved_at.empty()) {
+        out.resolved_at = previous.resolved_at;
+    }
+
+    return out;
+}
+
+void upsert_repo_package_download_urls(const RepoPackage& updated) {
+    std::vector<RepoPackage> packages = load_repo_packages();
+    bool found = false;
+    for (RepoPackage& package : packages) {
+        if (package.id == updated.id) {
+            package = updated;
+            found = true;
+            break;
+        }
+    }
+    if (found) {
+        save_repo_packages_index(packages, repo_index_path());
+    }
+
+    for (const RepoEntry& entry : load_repo_entries()) {
+        const fs::path cached = named_repo_index_path(entry.name);
+        if (!fs::exists(cached)) {
+            continue;
+        }
+        const std::string index_text = read_text_file(cached);
+        std::vector<RepoPackage> named_packages;
+        bool named_found = false;
+        for (const std::string& object : repo_package_objects_from_index(index_text)) {
+            RepoPackage package = parse_repo_package(object);
+            if (package.id == updated.id) {
+                package = updated;
+                named_found = true;
+            }
+            named_packages.push_back(package);
+        }
+        if (named_found) {
+            save_repo_packages_index(named_packages, cached);
+        }
+    }
+}
+
 std::vector<std::string> repo_package_objects_from_index(const std::string& index_text) {
     const int schema_version = json_find_int(index_text, "schema_version").value_or(0);
     if (schema_version != 1) {
