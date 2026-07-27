@@ -16,6 +16,7 @@ SRC := \
 	src/commands_lifecycle.cpp \
 	src/commands_query.cpp \
 	src/commands_repo.cpp \
+	src/commands_repo_resolve.cpp \
 	src/commands_update.cpp \
 	src/commands_upgrade.cpp \
 	src/core.cpp \

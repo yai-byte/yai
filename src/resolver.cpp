@@ -303,7 +303,23 @@ std::string repo_source_kind_for_type(const std::string& source_type) {
     return "repo_" + source_type;
 }
 
-ResolvedSource resolve_repo_package_install_source(const InstallOptions& options, const RepoPackage& package) {
+ResolvedSource resolve_url_install_source(const InstallOptions& options) {
+    const std::string base = basename_from_url(options.target);
+    const std::string stripped = base_name_from_appimage_filename(base);
+    ResolvedSource source;
+    source.source_kind = "url";
+    source.id = options.id.empty() ? sanitize_id(stripped) : options.id;
+    source.name = options.name.empty()
+        ? (stripped.empty() ? strip_appimage_suffix(base) : stripped)
+        : options.name;
+    source.source_url = options.target;
+    source.download_url = options.target;
+    return with_install_arch(source, options);
+}
+
+ResolvedSource resolve_repo_package_install_source_impl(
+    const InstallOptions& options,
+    const RepoPackage& package) {
     const std::string arch = install_arch_for_options(options);
     if (!options.recrawl) {
         if (const auto url = repo_package_download_url_for_arch(package, arch)) {
@@ -332,6 +348,12 @@ ResolvedSource resolve_repo_package_install_source(const InstallOptions& options
     return repo_github_release_source(options, package);
 }
 
+}  // namespace
+
+ResolvedSource resolve_repo_package_install_source(const InstallOptions& options, const RepoPackage& package) {
+    return resolve_repo_package_install_source_impl(options, package);
+}
+
 ResolvedSource resolve_repo_package_install_source(const InstallOptions& options) {
     const std::optional<RepoPackage> package = find_repo_package(options.target);
     if (!package.has_value()) {
@@ -339,22 +361,6 @@ ResolvedSource resolve_repo_package_install_source(const InstallOptions& options
     }
     return resolve_repo_package_install_source(options, *package);
 }
-
-ResolvedSource resolve_url_install_source(const InstallOptions& options) {
-    const std::string base = basename_from_url(options.target);
-    const std::string stripped = base_name_from_appimage_filename(base);
-    ResolvedSource source;
-    source.source_kind = "url";
-    source.id = options.id.empty() ? sanitize_id(stripped) : options.id;
-    source.name = options.name.empty()
-        ? (stripped.empty() ? strip_appimage_suffix(base) : stripped)
-        : options.name;
-    source.source_url = options.target;
-    source.download_url = options.target;
-    return with_install_arch(source, options);
-}
-
-}  // namespace
 
 ResolvedSource resolve_install_source(const InstallOptions& options) {
     // Resolution order matters: a local AppImage named owner/repo-like or

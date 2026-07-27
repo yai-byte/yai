@@ -8,3 +8,8 @@ Base: 61d0b0b45964d18e7ea78e69ee227718855b21ce
 
 ## Tasks
 Base: 61d0b0b45964d18e7ea78e69ee227718855b21ce
+
+Task 1: complete (commits e408f00..fd77dd5, review clean)
+Task 2: complete (commits fd77dd5..9ab5e21, review clean)
+Task 3: complete (commits 9ab5e21..50614a0, review clean)
+Task 4: complete (see rri-task-4-report.md)

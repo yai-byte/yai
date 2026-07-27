@@ -406,3 +406,165 @@ grep -Fq "file:///missing-prefer-site.AppImage" "$INDEX_JSON" || {
 }
 
 echo "repo index prefer/recrawl/fallback smoke passed"
+
+# --- Task 4: yai repo resolve ---
+
+make -C "$ROOT" -j"$(nproc)" >/dev/null
+
+TASK4_HOME="$TMP_DIR/task4-home"
+mkdir -p "$TASK4_HOME/.local/share/yai/repos"
+TASK4_INDEX="$TASK4_HOME/.local/share/yai/repos/index.json"
+
+cat > "$TASK4_INDEX" <<'JSON'
+{
+  "schema_version": 1,
+  "updated_at": "test",
+  "packages": [
+    {
+      "id": "filled",
+      "name": "Filled",
+      "summary": "pre-filled direct_url",
+      "homepage": "https://example.test/filled",
+      "license": "MIT",
+      "source": {
+        "type": "direct_url",
+        "url": "https://example.test/filled-source.AppImage",
+        "reason": "test"
+      },
+      "download_url": "https://example.test/filled-old.AppImage",
+      "download_urls": {
+        "x86_64": "https://example.test/filled-old.AppImage"
+      },
+      "resolved_at": "2020-01-01T00:00:00Z"
+    },
+    {
+      "id": "empty",
+      "name": "Empty",
+      "summary": "empty direct_url",
+      "homepage": "https://example.test/empty",
+      "license": "MIT",
+      "source": {
+        "type": "direct_url",
+        "url": "https://example.test/empty-source.AppImage",
+        "reason": "test"
+      }
+    }
+  ]
+}
+JSON
+
+# 1) filled skipped, empty resolved; summary counts
+HOME="$TASK4_HOME" "$ROOT/yai" repo resolve --package filled --package empty \
+  >"$TMP_DIR/task4-r1.out" 2>"$TMP_DIR/task4-r1.err" || {
+  echo "repo resolve filled+empty failed:" >&2
+  cat "$TMP_DIR/task4-r1.out" "$TMP_DIR/task4-r1.err" >&2
+  exit 1
+}
+grep -Eqi 'resolved:[[:space:]]*1' "$TMP_DIR/task4-r1.out" || {
+  echo "expected resolved: 1 in summary:" >&2
+  cat "$TMP_DIR/task4-r1.out" "$TMP_DIR/task4-r1.err" >&2
+  exit 1
+}
+grep -Eqi 'skipped:[[:space:]]*1' "$TMP_DIR/task4-r1.out" || {
+  echo "expected skipped: 1 in summary:" >&2
+  cat "$TMP_DIR/task4-r1.out" "$TMP_DIR/task4-r1.err" >&2
+  exit 1
+}
+grep -Eqi 'failed:[[:space:]]*0' "$TMP_DIR/task4-r1.out" || {
+  echo "expected failed: 0 in summary:" >&2
+  cat "$TMP_DIR/task4-r1.out" "$TMP_DIR/task4-r1.err" >&2
+  exit 1
+}
+python3 - "$TASK4_INDEX" <<'PY'
+import json, sys
+pkgs = {p["id"]: p for p in json.load(open(sys.argv[1]))["packages"]}
+assert "empty-source.AppImage" in (pkgs["empty"].get("download_url") or ""), pkgs["empty"]
+assert "filled-old.AppImage" in (pkgs["filled"].get("download_url") or ""), pkgs["filled"]
+PY
+
+# 2) --show 000 --no-summary is quiet
+HOME="$TASK4_HOME" "$ROOT/yai" repo resolve --package filled --package empty \
+  --show 000 --no-summary >"$TMP_DIR/task4-quiet.out" 2>"$TMP_DIR/task4-quiet.err" || {
+  echo "quiet resolve failed:" >&2
+  cat "$TMP_DIR/task4-quiet.out" "$TMP_DIR/task4-quiet.err" >&2
+  exit 1
+}
+if [[ -s "$TMP_DIR/task4-quiet.out" || -s "$TMP_DIR/task4-quiet.err" ]]; then
+  echo "expected no output with --show 000 --no-summary:" >&2
+  cat "$TMP_DIR/task4-quiet.out" "$TMP_DIR/task4-quiet.err" >&2
+  exit 1
+fi
+
+# 3) --overwrite replaces filled URL from source
+HOME="$TASK4_HOME" "$ROOT/yai" repo resolve --overwrite --package filled \
+  >"$TMP_DIR/task4-ow.out" 2>"$TMP_DIR/task4-ow.err" || {
+  echo "overwrite resolve failed:" >&2
+  cat "$TMP_DIR/task4-ow.out" "$TMP_DIR/task4-ow.err" >&2
+  exit 1
+}
+python3 - "$TASK4_INDEX" <<'PY'
+import json, sys
+pkg = next(p for p in json.load(open(sys.argv[1]))["packages"] if p["id"] == "filled")
+url = pkg.get("download_url") or ""
+assert "filled-source.AppImage" in url, pkg
+assert "filled-old.AppImage" not in url, pkg
+PY
+
+# 4) --output writes copy; local index remains current
+OUT_JSON="$TMP_DIR/task4-out.json"
+HOME="$TASK4_HOME" "$ROOT/yai" repo resolve --package empty --output "$OUT_JSON" \
+  >"$TMP_DIR/task4-out.stdout" 2>"$TMP_DIR/task4-out.stderr" || {
+  echo "resolve --output failed:" >&2
+  cat "$TMP_DIR/task4-out.stdout" "$TMP_DIR/task4-out.stderr" >&2
+  exit 1
+}
+test -f "$OUT_JSON" || {
+  echo "expected --output file: $OUT_JSON" >&2
+  exit 1
+}
+python3 - "$OUT_JSON" "$TASK4_INDEX" <<'PY'
+import json, sys
+out = json.load(open(sys.argv[1]))
+local = json.load(open(sys.argv[2]))
+assert any(p["id"] == "empty" for p in out["packages"])
+assert any(p["id"] == "empty" for p in local["packages"])
+PY
+
+# 5) dead website_page → non-zero exit; default --show 001 prints id
+python3 - "$TASK4_INDEX" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+data["packages"].append({
+    "id": "dead-site",
+    "name": "Dead Site",
+    "summary": "broken website_page",
+    "homepage": "file:///missing-dead-site/index.html",
+    "license": "MIT",
+    "source": {
+        "type": "website_page",
+        "url": "file:///missing-dead-site/index.html",
+        "reason": "test"
+    }
+})
+json.dump(data, open(path, "w"), indent=2)
+open(path, "a").write("\n")
+PY
+
+set +e
+HOME="$TASK4_HOME" "$ROOT/yai" repo resolve --package dead-site \
+  >"$TMP_DIR/task4-fail.out" 2>"$TMP_DIR/task4-fail.err"
+FAIL_RC=$?
+set -e
+[[ "$FAIL_RC" -ne 0 ]] || {
+  echo "expected non-zero exit for dead-site resolve" >&2
+  cat "$TMP_DIR/task4-fail.out" "$TMP_DIR/task4-fail.err" >&2
+  exit 1
+}
+grep -F "dead-site" "$TMP_DIR/task4-fail.out" "$TMP_DIR/task4-fail.err" >/dev/null || {
+  echo "default --show 001 must print failed package id:" >&2
+  cat "$TMP_DIR/task4-fail.out" "$TMP_DIR/task4-fail.err" >&2
+  exit 1
+}
+
+echo "repo resolve command smoke passed"

@@ -87,6 +87,15 @@ std::string current_arch() {
     return normalize_arch(result.output);
 }
 
+std::vector<std::string> canonical_arches() {
+    std::vector<std::string> arches;
+    arches.reserve(arch_alias_rules().size());
+    for (const ArchAliasRule& rule : arch_alias_rules()) {
+        arches.push_back(rule.canonical);
+    }
+    return arches;
+}
+
 int appimage_asset_score(const std::string& asset_name, const std::string& arch) {
     // Score is conservative: assets mentioning a different known architecture
     // are rejected, matching assets win, and generic AppImage names remain a

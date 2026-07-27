@@ -111,6 +111,19 @@ struct RepoEntry {
     std::string location;
 };
 
+struct RepoResolveOptions {
+    std::optional<fs::path> output;
+    std::vector<std::string> arches; // empty → { current_arch() }; "all" → all canonical arches
+    std::vector<std::string> types;  // empty → github_release, website_page, direct_url
+    std::vector<std::string> packages; // empty → all
+    bool overwrite = false;
+    int concurrency = 1;
+    bool show_success = false;
+    bool show_skip = false;
+    bool show_fail = true;   // default --show 001
+    bool summary = true;
+};
+
 struct NetworkConfig {
     // Stored network preference for GitHub Release assets. Mirror settings change
     // the transport URL only; they do not change the upstream source metadata or
@@ -446,6 +459,7 @@ std::string normalize_arch(const std::string& value);
 bool is_supported_arch(const std::string& value);
 std::string supported_arch_list();
 std::string current_arch();
+std::vector<std::string> canonical_arches();
 void ensure_directory(const fs::path& path);
 void remove_required(const fs::path& path, const std::string& context);
 void remove_all_required(const fs::path& path, const std::string& context);
@@ -651,6 +665,8 @@ std::string stage_appimage_source(
     const InstallOptions& options,
     const fs::path& target);
 ResolvedSource resolve_install_source(const InstallOptions& options);
+ResolvedSource resolve_repo_package_install_source(const InstallOptions& options);
+ResolvedSource resolve_repo_package_install_source(const InstallOptions& options, const RepoPackage& package);
 bool source_uses_github_release_download(const ResolvedSource& source);
 NetworkConfig prompt_china_network_config();
 NetworkConfig prompt_github_release_proxy_for_this_download(NetworkConfig config);
@@ -713,6 +729,8 @@ void repo_list_app(int argc);
 void repo_add_app(int argc, char** argv);
 void repo_update_app(int argc, char** argv);
 void repo_remove_app(int argc, char** argv);
+RepoResolveOptions parse_repo_resolve_options(int argc, char** argv);
+void repo_resolve_app(int argc, char** argv);
 void repo_app(int argc, char** argv);
 std::vector<std::string> resolve_configured_repo_names(const std::string& pattern);
 void mirror_list_app(int argc);

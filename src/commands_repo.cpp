@@ -186,7 +186,7 @@ void repo_remove_app(int argc, char** argv) {
 
 void repo_app(int argc, char** argv) {
     if (argc < 3) {
-        throw std::runtime_error(tr("repo requires a subcommand: list, add, update, or remove"));
+        throw std::runtime_error(tr("repo requires a subcommand: list, add, update, remove, or resolve"));
     }
 
     const std::string subcommand = argv[2];
@@ -198,6 +198,8 @@ void repo_app(int argc, char** argv) {
         repo_update_app(argc, argv);
     } else if (subcommand == "remove") {
         repo_remove_app(argc, argv);
+    } else if (subcommand == "resolve") {
+        repo_resolve_app(argc - 3, argv + 3);
     } else {
         throw std::runtime_error(tr("unknown repo subcommand: ") + subcommand);
     }
