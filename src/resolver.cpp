@@ -226,15 +226,14 @@ void throw_unavailable_repo_source(const RepoPackage& package) {
         (package.source_reason.empty() ? "" : tr(" (") + package.source_reason + tr(")")));
 }
 
+ResolvedSource repo_github_release_source(const InstallOptions& options, const RepoPackage& package);
+
 ResolvedSource repo_website_page_source(const InstallOptions& options, const RepoPackage& package) {
     const std::string arch = install_arch_for_options(options);
     const std::string source_page = package.source_url;
     const std::int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
                                  std::chrono::system_clock::now().time_since_epoch())
                                  .count();
-    // Update/upgrade sets id/name/arch explicit and short-circuits via
-    // probe_url_freshness before resolve; when resolve runs, skip disk cache so
-    // a newer listing AppImage is still discoverable.
     const bool use_website_resolve_cache =
         !(options.id_explicit && options.name_explicit && options.arch_explicit);
 
@@ -255,26 +254,86 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
         }
     }
 
-    const std::string download_url = resolve_website_appimage_download(package, options.target_arch);
-    if (use_website_resolve_cache) {
-        WebsiteResolveCacheEntry fresh;
-        fresh.package_id = package.id;
-        fresh.arch = normalize_arch(arch);
-        fresh.source_url = strip_url_fragment_query(package.source_url);
-        fresh.download_url = download_url;
-        fresh.resolved_at = now;
-        fresh.listing_validators = capture_url_validators(package.source_url);
-        upsert_website_resolve_cache_entry(fresh);
-    }
+    try {
+        const std::string download_url = resolve_website_appimage_download(package, options.target_arch);
+        if (use_website_resolve_cache) {
+            WebsiteResolveCacheEntry fresh;
+            fresh.package_id = package.id;
+            fresh.arch = normalize_arch(arch);
+            fresh.source_url = strip_url_fragment_query(package.source_url);
+            fresh.download_url = download_url;
+            fresh.resolved_at = now;
+            fresh.listing_validators = capture_url_validators(package.source_url);
+            upsert_website_resolve_cache_entry(fresh);
+        }
 
-    ResolvedSource source;
-    source.source_kind = "repo_website_page";
-    source.id = repo_source_id(options, package);
-    source.name = repo_source_name(options, package);
-    source.version = basename_from_url(download_url);
-    source.source_url = download_url;
-    source.download_url = download_url;
-    return with_install_arch(source, options);
+        ResolvedSource source;
+        source.source_kind = "repo_website_page";
+        source.id = repo_source_id(options, package);
+        source.name = repo_source_name(options, package);
+        source.version = basename_from_url(download_url);
+        source.source_url = download_url;
+        source.download_url = download_url;
+        return with_install_arch(source, options);
+    } catch (const std::exception&) {
+        const bool may_be_appimage_catalog =
+            is_appimage_catalog_url(package.source_url) ||
+            package.source_type == "website_page";
+        if (!may_be_appimage_catalog) {
+            throw;
+        }
+
+        std::cerr << tr("yai: website search failed; fetching AppImageHub catalog page for ")
+                  << package.name << "\n";
+        const AppImageCatalogSources catalog = fetch_appimage_catalog_sources(package.name);
+
+        if (catalog.github_repo.has_value()) {
+            std::cerr << tr("yai: found GitHub repo on AppImageHub: ") << *catalog.github_repo << "\n";
+            RepoPackage github_package = package;
+            const std::size_t slash = catalog.github_repo->find('/');
+            github_package.source_owner = catalog.github_repo->substr(0, slash);
+            github_package.source_repo = catalog.github_repo->substr(slash + 1);
+            github_package.source_type = "github_release";
+            github_package.asset_pattern = ".*\\.AppImage$";
+            return repo_github_release_source(options, github_package);
+        }
+
+        if (catalog.direct_url.has_value()) {
+            std::cerr << tr("yai: found direct download URL on AppImageHub\n");
+            ResolvedSource source;
+            source.source_kind = "repo_website_page";
+            source.id = repo_source_id(options, package);
+            source.name = repo_source_name(options, package);
+            source.version = basename_from_url(*catalog.direct_url);
+            source.source_url = *catalog.direct_url;
+            source.download_url = *catalog.direct_url;
+            return with_install_arch(source, options);
+        }
+
+        if (catalog.homepage.has_value()) {
+            std::cerr << tr("yai: found homepage on AppImageHub: ") << *catalog.homepage << "\n";
+            RepoPackage homepage_package = package;
+            homepage_package.source_url = *catalog.homepage;
+            try {
+                const std::string download_url =
+                    resolve_website_appimage_download(homepage_package, options.target_arch);
+                ResolvedSource source;
+                source.source_kind = "repo_website_page";
+                source.id = repo_source_id(options, package);
+                source.name = repo_source_name(options, package);
+                source.version = basename_from_url(download_url);
+                source.source_url = download_url;
+                source.download_url = download_url;
+                return with_install_arch(source, options);
+            } catch (const std::exception&) {
+            }
+        }
+
+        throw std::runtime_error(
+            tr("no installable AppImage source found for '") +
+            package.name +
+            tr("' — no download link found."));
+    }
 }
 
 ResolvedSource repo_github_release_source(const InstallOptions& options, const RepoPackage& package) {

@@ -553,6 +553,15 @@ std::optional<std::string> appimage_feed_homepage(const std::string& item_text);
 std::string appimage_catalog_page_url(const std::string& name);
 std::string strip_unexpanded_url_placeholder(std::string url);
 std::optional<std::string> appimage_feed_direct_download_url(const std::string& item_text);
+struct AppImageCatalogSources {
+    std::optional<std::string> github_repo;
+    std::optional<std::string> direct_url;
+    std::optional<std::string> homepage;
+    bool fetched = false;
+};
+AppImageCatalogSources fetch_appimage_catalog_sources(
+    const std::string& name,
+    int timeout_ms = 15000);
 std::string yai_package_object_from_appimage_feed_item(
     const std::string& item_text,
     const std::string& id);

@@ -46,7 +46,18 @@ void print_package_source_info(const RepoPackage& package) {
         std::cout << tr("Source: direct_url ") << package.source_url << "\n";
     } else if (package.source_type == "website_page") {
         std::cout << tr("Source: website_page ") << package.source_url << "\n";
+        if (is_appimage_catalog_url(package.source_url)) {
+            std::cout << tr("  (AppImageHub catalog page — yai will attempt to find the real download source from the catalog during install)\n");
+        }
         print_package_source_reason(package);
+    } else if (package.source_type == "unavailable") {
+        std::cout << tr("Source: unavailable — cannot be installed automatically\n");
+        print_package_source_reason(package);
+        if (!package.homepage.empty()) {
+            std::cout << tr("Homepage: ") << package.homepage << "\n";
+        }
+        std::cout << tr("Visit the homepage or AppImageHub page to manually download: ")
+                  << package.homepage << "\n";
     } else {
         std::cout << tr("Source: unavailable\n");
         print_package_source_reason(package);

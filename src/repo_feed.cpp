@@ -199,6 +199,67 @@ std::optional<std::string> appimage_feed_direct_download_url(const std::string& 
     return fallback;
 }
 
+std::optional<std::string> appimage_catalog_github_repo_from_html(const std::string& html) {
+    for (const std::string& url : html_href_urls(html, "")) {
+        const std::optional<std::string> repo = github_repo_from_link(url);
+        if (repo.has_value()) {
+            return repo;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> appimage_catalog_direct_download_url_from_html(
+    const std::string& html,
+    const std::string& base_url) {
+    for (const std::string& url : html_href_urls(html, base_url)) {
+        if (to_lower(url).find(".appimage") != std::string::npos) {
+            return url;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> appimage_catalog_homepage_from_html(const std::string& html) {
+    const std::string lower_html = to_lower(html);
+    const std::vector<std::string> keywords = {"homepage", "website", "official site", "project site"};
+    for (const std::string& keyword : keywords) {
+        const std::size_t pos = lower_html.find(keyword);
+        if (pos == std::string::npos) {
+            continue;
+        }
+        for (const std::string& url : html_href_urls(html, "")) {
+            const std::string host = url_host(url);
+            if (!host.empty() &&
+                host != "appimage.github.io" &&
+                host != "github.com" &&
+                host != "githubusercontent.com" &&
+                host != "appimagehub.com" &&
+                host != "appimagehub.org") {
+                return url;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+AppImageCatalogSources fetch_appimage_catalog_sources(
+    const std::string& name,
+    int timeout_ms) {
+    AppImageCatalogSources sources;
+    const std::string catalog_url = appimage_catalog_page_url(name);
+    try {
+        const std::string html = fetch_text(catalog_url, timeout_ms);
+        sources.fetched = true;
+        sources.github_repo = appimage_catalog_github_repo_from_html(html);
+        sources.direct_url = appimage_catalog_direct_download_url_from_html(html, catalog_url);
+        sources.homepage = appimage_catalog_homepage_from_html(html);
+    } catch (const std::exception&) {
+        sources.fetched = false;
+    }
+    return sources;
+}
+
 std::string yai_package_object_from_appimage_feed_item(
     const std::string& item_text,
     const std::string& id) {
