@@ -605,7 +605,13 @@ std::string fetch_text_limited(
             tr("failed to fetch ") + url + tr(": response exceeded maximum size"));
     }
     if (result.timed_out || result.exit_code != 0) {
-        throw std::runtime_error(tr("failed to fetch ") + url + tr(": ") + result.output);
+        std::string detail = result.output;
+        constexpr std::size_t kMaxErrorDetail = 500;
+        if (detail.size() > kMaxErrorDetail) {
+            detail.resize(kMaxErrorDetail);
+            detail += "... (truncated)";
+        }
+        throw std::runtime_error(tr("failed to fetch ") + url + tr(": ") + detail);
     }
     return result.output;
 }

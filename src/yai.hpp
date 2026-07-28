@@ -490,6 +490,7 @@ InstallOptions parse_download_options(int argc, char** argv);
 bool executable_available(const std::string& name);
 HttpValidators download_file(const std::string& url, const fs::path& target, const std::string& downloader);
 constexpr int kFetchTextDefaultTimeoutMs = 15000;
+constexpr int kFetchTextFeedTimeoutMs = 120000;
 constexpr int kFetchTextSpeculativeTimeoutMs = 5000;
 constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
 

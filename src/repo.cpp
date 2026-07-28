@@ -328,7 +328,7 @@ std::vector<std::string> repo_package_objects_from_index(const std::string& inde
 
 std::string load_repo_source_text(const std::string& location) {
     if (has_url_scheme(location)) {
-        return fetch_text(location);
+        return fetch_text(location, kFetchTextFeedTimeoutMs);
     }
     return read_text_file(location);
 }
