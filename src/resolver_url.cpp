@@ -79,6 +79,11 @@ int website_url_priority(const std::string& url) {
     if (lower.find("download") != std::string::npos) {
         return 2;
     }
+    if (lower.find("release") != std::string::npos ||
+        lower.find("platform") != std::string::npos ||
+        lower.find("gallery") != std::string::npos) {
+        return 2;
+    }
     if (lower.find("linux") != std::string::npos) {
         return 1;
     }
@@ -521,8 +526,22 @@ bool is_kde_stable_download_url(const std::string& url) {
 
 bool is_appimage_download_url(const std::string& url) {
     const std::string lower = to_lower(strip_url_fragment_query(url));
-    return lower.size() >= 9 &&
-           lower.compare(lower.size() - 9, 9, ".appimage") == 0;
+    if (lower.size() >= 9 &&
+        lower.compare(lower.size() - 9, 9, ".appimage") == 0) {
+        return true;
+    }
+    // Accept gallery/item style URLs when they point to AppImage files
+    // e.g. /gallery/item/12345/Inkscape-1.4.4.AppImage
+    if (lower.find("/gallery/item/") != std::string::npos &&
+        lower.find(".appimage") != std::string::npos) {
+        return true;
+    }
+    // media download URLs commonly used by project websites
+    if (lower.find("/dl/") != std::string::npos &&
+        lower.find(".appimage") != std::string::npos) {
+        return true;
+    }
+    return false;
 }
 
 namespace {
@@ -571,6 +590,8 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
     const std::string id = to_lower(package.id);
     const std::string name = to_lower(package.name);
     std::vector<std::string> urls;
+
+    // Specific curated hints for projects with known download URLs
     if (id.find("kdenlive") != std::string::npos || name.find("kdenlive") != std::string::npos) {
         urls.push_back("https://kdenlive.org/en/download/");
         urls.push_back("https://download.kde.org/stable/kdenlive/");
@@ -582,6 +603,49 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
     if (id.find("gimp") != std::string::npos || name.find("gimp") != std::string::npos) {
         urls.push_back("https://www.gimp.org/downloads/");
     }
+
+    // Generic URL generation from homepage for projects not covered above
+    std::vector<std::string> seeds;
+    if (!package.homepage.empty()) {
+        seeds.push_back(package.homepage);
+    }
+    if (!package.source_url.empty() && package.source_type == "website_page") {
+        seeds.push_back(package.source_url);
+    }
+
+    for (const std::string& seed : seeds) {
+        const std::string origin = url_origin(seed);
+        if (origin.empty()) {
+            continue;
+        }
+
+        // Add common download page patterns for the project
+        const std::string base = origin + "/";
+        const std::vector<std::string> patterns = {
+            "download",
+            "downloads",
+            "en/download",
+            "en/downloads",
+            "linux/download",
+            "release",
+            "releases",
+            "platform",
+            "platforms",
+            "download.html",
+            "downloads.html",
+        };
+        for (const std::string& pattern : patterns) {
+            urls.push_back(base + pattern);
+        }
+    }
+
+    // Add Inkscape-specific pattern since its releases page structure is common
+    // but not easily derivable from URL alone
+    if (id.find("inkscape") != std::string::npos || name.find("inkscape") != std::string::npos) {
+        urls.push_back("https://inkscape.org/release/");
+        urls.push_back("https://inkscape.org/download/");
+    }
+
     return urls;
 }
 
@@ -652,7 +716,6 @@ bool should_follow_download_page(
         lower.find("bugs.") != std::string::npos ||
         lower.find("bugtracker") != std::string::npos ||
         lower.find("donat") != std::string::npos ||
-        lower.find("docs") != std::string::npos ||
         lower.find("forum") != std::string::npos ||
         lower.find("reddit.com") != std::string::npos ||
         lower.find("old.reddit.com") != std::string::npos ||
@@ -686,7 +749,12 @@ bool should_follow_download_page(
     }
     return lower.find("download") != std::string::npos ||
            lower.find("linux") != std::string::npos ||
-           lower.find("appimage") != std::string::npos;
+           lower.find("appimage") != std::string::npos ||
+           lower.find("release") != std::string::npos ||
+           lower.find("releases") != std::string::npos ||
+           lower.find("platform") != std::string::npos ||
+           lower.find("gallery") != std::string::npos ||
+           lower.find("version") != std::string::npos;
 }
 
 bool is_allowed_appimage_candidate(

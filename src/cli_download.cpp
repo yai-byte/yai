@@ -566,6 +566,11 @@ std::vector<std::string> fetch_text_curl_args(
         "--header",
         "Accept: application/vnd.github+json",
     };
+    const char* token = std::getenv("YAI_GITHUB_TOKEN");
+    if (token != nullptr && *token != '\0' && url.find("github.com") != std::string::npos) {
+        args.push_back("--header");
+        args.push_back(std::string("Authorization: Bearer ") + token);
+    }
     if (max_bytes.has_value() && *max_bytes > 0) {
         args.push_back("--max-filesize");
         args.push_back(std::to_string(*max_bytes));

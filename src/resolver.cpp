@@ -417,7 +417,65 @@ ResolvedSource resolve_repo_package_install_source_impl(
     if (package.source_type == "website_page") {
         return repo_website_page_source(options, package);
     }
-    return repo_github_release_source(options, package);
+    try {
+        return repo_github_release_source(options, package);
+    } catch (const std::exception& github_ex) {
+        if (package.source_type != "github_release") {
+            throw;
+        }
+        std::cerr << tr("yai: GitHub release resolution failed for ")
+                  << package.name << tr(". Trying AppImageHub catalog fallback...\n");
+        try {
+            const AppImageCatalogSources catalog = fetch_appimage_catalog_sources(package.name);
+
+            if (catalog.github_repo.has_value()) {
+                std::cerr << tr("yai: found GitHub repo on AppImageHub: ") << *catalog.github_repo << "\n";
+                RepoPackage github_package = package;
+                const std::size_t slash = catalog.github_repo->find('/');
+                github_package.source_owner = catalog.github_repo->substr(0, slash);
+                github_package.source_repo = catalog.github_repo->substr(slash + 1);
+                github_package.source_type = "github_release";
+                github_package.asset_pattern = ".*\\.AppImage$";
+                return repo_github_release_source(options, github_package);
+            }
+
+            if (catalog.direct_url.has_value()) {
+                std::cerr << tr("yai: found direct download URL on AppImageHub\n");
+                ResolvedSource source;
+                source.source_kind = "repo_github_release";
+                source.id = repo_source_id(options, package);
+                source.name = repo_source_name(options, package);
+                source.version = basename_from_url(*catalog.direct_url);
+                source.source_url = *catalog.direct_url;
+                source.download_url = *catalog.direct_url;
+                return with_install_arch(source, options);
+            }
+
+            if (catalog.homepage.has_value()) {
+                std::cerr << tr("yai: found homepage on AppImageHub: ") << *catalog.homepage << "\n";
+                RepoPackage homepage_package = package;
+                homepage_package.source_url = *catalog.homepage;
+                try {
+                    const std::string download_url =
+                        resolve_website_appimage_download(homepage_package, options.target_arch);
+                    ResolvedSource source;
+                    source.source_kind = "repo_github_release";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(download_url);
+                    source.source_url = download_url;
+                    source.download_url = download_url;
+                    return with_install_arch(source, options);
+                } catch (const std::exception&) {
+                }
+            }
+        } catch (const std::exception&) {
+        }
+        throw std::runtime_error(
+            tr("GitHub release resolution failed for '") + package.name +
+            tr("' — GitHub API error: ") + github_ex.what() +
+            tr(". AppImageHub fallback also failed. Set YAI_GITHUB_TOKEN to avoid rate limits."));
+    }
 }
 
 }  // namespace

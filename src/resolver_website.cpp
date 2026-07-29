@@ -204,6 +204,14 @@ std::vector<std::string> common_project_download_urls(const std::string& project
         base + "en/downloads.html",
         base + "linux",
         base + "linux/download",
+        base + "release",
+        base + "releases",
+        base + "en/releases",
+        base + "en/release",
+        base + "platform",
+        base + "platforms",
+        base + "version",
+        base + "versions",
     };
 }
 
@@ -323,7 +331,7 @@ bool should_queue_website_link(
     const RepoPackage& package,
     const WebsiteQueueItem& page,
     const WebsiteSearchState& state) {
-    return page.depth < 2 &&
+    return page.depth < 3 &&
            should_follow_download_page(
                link,
                package,

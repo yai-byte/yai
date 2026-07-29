@@ -200,11 +200,39 @@ std::optional<std::string> appimage_feed_direct_download_url(const std::string& 
 }
 
 std::optional<std::string> appimage_catalog_github_repo_from_html(const std::string& html) {
+    // Filter out AppImageHub infrastructure repos that appear on every catalog page
+    static const std::vector<std::string> excluded_owners = {
+        "appimage",
+        "appimagehub",
+    };
+
+    std::vector<std::string> candidate_repos;
     for (const std::string& url : html_href_urls(html, "")) {
         const std::optional<std::string> repo = github_repo_from_link(url);
-        if (repo.has_value()) {
-            return repo;
+        if (!repo.has_value()) {
+            continue;
         }
+        // Extract owner from "owner/repo" format
+        const std::size_t slash = repo->find('/');
+        if (slash == std::string::npos) {
+            continue;
+        }
+        const std::string owner = to_lower(repo->substr(0, slash));
+        bool excluded = false;
+        for (const std::string& excluded_owner : excluded_owners) {
+            if (owner == excluded_owner) {
+                excluded = true;
+                break;
+            }
+        }
+        if (!excluded) {
+            candidate_repos.push_back(*repo);
+        }
+    }
+
+    // Return the first non-excluded repo found
+    if (!candidate_repos.empty()) {
+        return candidate_repos.front();
     }
     return std::nullopt;
 }
@@ -213,7 +241,13 @@ std::optional<std::string> appimage_catalog_direct_download_url_from_html(
     const std::string& html,
     const std::string& base_url) {
     for (const std::string& url : html_href_urls(html, base_url)) {
-        if (to_lower(url).find(".appimage") != std::string::npos) {
+        const std::string lower = to_lower(url);
+        // Must end with .appimage (not just contain it in path)
+        // or be a media download URL that serves AppImages
+        if ((lower.size() >= 9 &&
+             lower.compare(lower.size() - 9, 9, ".appimage") == 0) ||
+            (lower.find("/dl/") != std::string::npos &&
+             lower.find(".appimage") != std::string::npos)) {
             return url;
         }
     }
@@ -221,25 +255,148 @@ std::optional<std::string> appimage_catalog_direct_download_url_from_html(
 }
 
 std::optional<std::string> appimage_catalog_homepage_from_html(const std::string& html) {
-    const std::string lower_html = to_lower(html);
-    const std::vector<std::string> keywords = {"homepage", "website", "official site", "project site"};
-    for (const std::string& keyword : keywords) {
-        const std::size_t pos = lower_html.find(keyword);
-        if (pos == std::string::npos) {
+    // CDN and static resource domains to exclude
+    static const std::vector<std::string> excluded_hosts = {
+        "cdnjs.cloudflare.com",
+        "cdn.jsdelivr.net",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "maxcdn.bootstrapcdn.com",
+        "stackpath.bootstrapcdn.com",
+        "unpkg.com",
+        "jsdelivr.net",
+        "gravatar.com",
+        "avatars.githubusercontent.com",
+    };
+    
+    // Static file extensions to exclude
+    static const std::vector<std::string> excluded_extensions = {
+        ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg",
+        ".ico", ".woff", ".woff2", ".ttf", ".eot",
+    };
+    
+    // Collect valid non-excluded URLs with scores
+    struct CandidateUrl {
+        std::string url;
+        std::string host;
+        int score;
+    };
+    std::vector<CandidateUrl> candidates;
+    
+    for (const std::string& url : html_href_urls(html, "")) {
+        const std::string host = url_host(url);
+        const std::string lower_url = to_lower(url);
+        
+        if (host.empty()) {
             continue;
         }
-        for (const std::string& url : html_href_urls(html, "")) {
-            const std::string host = url_host(url);
-            if (!host.empty() &&
-                host != "appimage.github.io" &&
-                host != "github.com" &&
-                host != "githubusercontent.com" &&
-                host != "appimagehub.com" &&
-                host != "appimagehub.org") {
-                return url;
+        
+        // Exclude AppImageHub infrastructure
+        if (host == "appimage.github.io" ||
+            host == "github.com" ||
+            host == "githubusercontent.com" ||
+            host == "appimagehub.com" ||
+            host == "appimagehub.org") {
+            continue;
+        }
+        
+        // Exclude CDN and static resource domains
+        bool excluded_host = false;
+        for (const std::string& excluded : excluded_hosts) {
+            if (host == excluded ||
+                (host.size() > excluded.size() &&
+                 host.compare(host.size() - excluded.size(), excluded.size(), excluded) == 0 &&
+                 host[host.size() - excluded.size() - 1] == '.')) {
+                excluded_host = true;
+                break;
             }
         }
+        if (excluded_host) {
+            continue;
+        }
+        
+        // Exclude static file extensions
+        bool excluded_ext = false;
+        for (const std::string& ext : excluded_extensions) {
+            if (lower_url.find(ext) != std::string::npos) {
+                excluded_ext = true;
+                break;
+            }
+        }
+        if (excluded_ext) {
+            continue;
+        }
+        
+        // Exclude discourse and other AppImage support sites
+        if (lower_url.find("discourse.appimage") != std::string::npos) {
+            continue;
+        }
+        
+        // Skip URLs that are direct download files
+        if (lower_url.size() >= 9 &&
+            lower_url.compare(lower_url.size() - 9, 9, ".appimage") == 0) {
+            continue;
+        }
+        
+        // Score the URL
+        int score = 0;
+        
+        // Penalize URLs from appimage.org domain (not the project's own domain)
+        if (host == "appimage.org" ||
+            (host.size() > 11 && host.compare(host.size() - 11, 11, ".appimage.org") == 0)) {
+            score -= 10;
+        }
+        
+        // Penalize URLs from appimagehub domains
+        if (host.find("appimagehub") != std::string::npos) {
+            score -= 10;
+        }
+        
+        // Reward root-level URLs (homepages)
+        std::string path_part = lower_url;
+        const std::size_t scheme_end = path_part.find("://");
+        if (scheme_end != std::string::npos) {
+            const std::size_t path_start = path_part.find('/', scheme_end + 3);
+            if (path_start != std::string::npos) {
+                path_part = path_part.substr(path_start);
+            } else {
+                path_part = "/";
+            }
+        }
+        // Root URLs have path "/" or empty after the host
+        if (path_part == "/" || path_part.empty()) {
+            score += 3;
+        } else if (path_part.size() > 1 && path_part.back() == '/' &&
+                   path_part.find('/', 1) == path_part.size() - 1) {
+            // Like "/something/" - second-level page
+            score += 1;
+        }
+        
+        // Penalize download/release pages
+        if (lower_url.find("/download") != std::string::npos) {
+            score -= 2;
+        }
+        if (lower_url.find("/release") != std::string::npos) {
+            score -= 2;
+        }
+        
+        // Prefer HTTPS
+        if (lower_url.rfind("https://", 0) == 0) {
+            score += 1;
+        }
+        
+        candidates.push_back({url, host, score});
     }
+    
+    // Return the highest-scoring candidate
+    if (!candidates.empty()) {
+        std::sort(candidates.begin(), candidates.end(),
+            [](const CandidateUrl& a, const CandidateUrl& b) {
+                return a.score > b.score;
+            });
+        return candidates.front().url;
+    }
+    
     return std::nullopt;
 }
 

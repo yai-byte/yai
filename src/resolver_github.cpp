@@ -77,7 +77,42 @@ GitHubRelease resolve_github_latest(
     const std::string repo = repo_target.substr(slash + 1);
     enforce_github_release_policy(owner, repo);
     const std::string api_url = github_api_base() + "/repos/" + owner + "/" + repo + "/releases/latest";
-    const std::string json = fetch_text(api_url);
+    std::string json;
+    try {
+        json = fetch_text(api_url);
+    } catch (const std::exception& ex) {
+        const std::string& msg = ex.what();
+        const bool is_rate_limit =
+            msg.find("403") != std::string::npos &&
+            (msg.find("rate limit") != std::string::npos ||
+             msg.find("API rate limit") != std::string::npos ||
+             msg.find("secondary rate limit") != std::string::npos);
+        const bool is_forbidden =
+            msg.find("403") != std::string::npos &&
+            msg.find("rate limit") == std::string::npos &&
+            msg.find("API rate limit") == std::string::npos;
+        if (is_rate_limit) {
+            const char* token = std::getenv("YAI_GITHUB_TOKEN");
+            if (token != nullptr && *token != '\0') {
+                throw std::runtime_error(
+                    tr("GitHub API rate limit exceeded for ") + repo_target +
+                    tr(". Your YAI_GITHUB_TOKEN may be invalid or expired. ") +
+                    tr("Please check your token at https://github.com/settings/tokens"));
+            }
+            throw std::runtime_error(
+                tr("GitHub API rate limit exceeded for ") + repo_target +
+                tr(". Set YAI_GITHUB_TOKEN environment variable to a GitHub Personal Access Token ") +
+                tr("(https://github.com/settings/tokens) to increase the limit from 60 to 5000 requests/hour, ") +
+                tr("or wait for the rate limit window to reset."));
+        }
+        if (is_forbidden) {
+            throw std::runtime_error(
+                tr("GitHub API returned 403 Forbidden for ") + repo_target +
+                tr(". The repository may be private, restricted, or blocked. ") +
+                tr("Use YAI_GITHUB_TOKEN with appropriate permissions to access private repositories."));
+        }
+        throw;
+    }
     const std::string tag = json_find_string(json, "tag_name").value_or("latest");
     const std::vector<std::string> urls = json_find_all_strings(json, "browser_download_url");
     const std::string effective_arch = arch.empty() ? current_arch() : normalize_arch(arch);
