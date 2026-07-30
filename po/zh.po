@@ -114,14 +114,29 @@ msgstr ""
 "  yai repo resolve [--output <路径>] [--arch <架构|all>] [--type <类型>]\n"
 
 msgid ""
-"                   [--package <id>] [--overwrite] [--concurrency <n>]\n"
+"                   [--package <id>] [--overwrite] [--concurrency <n>] [--aggressive]\n"
 msgstr ""
-"                   [--package <id>] [--overwrite] [--concurrency <n>]\n"
+"                   [--package <id>] [--overwrite] [--concurrency <n>] [--aggressive]\n"
 
 msgid ""
 "                   [--show <xyz>] [--summary|--no-summary]\n"
 msgstr ""
 "                   [--show <xyz>] [--summary|--no-summary]\n"
+
+msgid ""
+"                   Concurrency: auto-detect (default), or 1-32 threads.\n"
+msgstr ""
+"                   并发数：自动检测（默认），或 1-32 线程。\n"
+
+msgid ""
+"                   --aggressive: 2x CPU cores (max 16) for fast networks.\n"
+msgstr ""
+"                   --aggressive：2 倍 CPU 核心数（最多 16），适用于快速网络。\n"
+
+msgid ""
+"                   Recommended: 2-4 for slow networks, 8-16 for fast networks.\n"
+msgstr ""
+"                   建议：慢网络用 2-4，快速网络用 8-16。\n"
 
 msgid ""
 "  yai mirror list\n"

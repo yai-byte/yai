@@ -103,7 +103,35 @@ yai doctor
 yai repo list
 yai repo add <name> [url-or-path]
 yai repo update [name]
+yai repo remove <name-or-pattern> [--yes]
+yai repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]
+                 [--package <id>] [--overwrite] [--concurrency <n>] [--aggressive]
+                 [--show <xyz>] [--summary|--no-summary]
 ```
+
+`repo remove` 支持包源名精确匹配或 shell 风格通配符模式（如 `'app*'`），删除对应缓存并重建 `index.json`。不会卸载已安装应用。
+
+`repo resolve` 用于批量解析仓库包的下载地址（GitHub Release、Website、Direct URL 等），并将结果写回本地索引或指定输出路径。主要选项：
+
+- `--output <path>`：将解析后的完整索引写到指定路径
+- `--arch <arch|all>`：指定目标架构，`all` 解析所有规范架构
+- `--type <type>`：只解析指定类型的包源（`github_release`、`website_page`、`direct_url`）
+- `--package <id>`：只解析指定包 ID，可多次指定
+- `--overwrite`：强制覆盖已有下载 URL
+- `--concurrency <n>`：手动指定并发线程数（1-32），默认自动检测
+- `--aggressive`：启用激进并发模式（见下方并发策略说明）
+- `--show <xyz>`：三位掩码控制输出详细度，`x`=成功、`y`=跳过、`z`=失败（默认 `001`）
+- `--summary|--no-summary`：显示/隐藏汇总统计
+
+#### 仓库解析并发策略
+
+`repo resolve` 使用独立的并发模型，与 `install`/`download` 的 `--jobs`（默认 4）不同：
+
+- **普通模式**：并发数 = `CPU 核心数`，上限 **8**
+- **激进模式**（`--aggressive`）：并发数 = `2 × CPU 核心数`，上限 **16**
+- **手动模式**（`--concurrency <n>`）：使用用户指定值，上限 32
+
+选择建议：2-4 适合慢网络，8-16 适合快速网络。当目标数量为 1 或显式指定 `--concurrency 1` 时，退化为串行模式。
 
 ### 6.3 下载源与代理命令
 
@@ -746,7 +774,76 @@ src/
 - `state`：安装状态读写。
 - `fsutil`：原子写入、路径规范化、权限处理。
 
-## 19. MVP 范围
+## 19. 工程约定与实现优化
+
+### 19.1 超时与错误截断
+
+- AppImage feed 下载使用 **120 秒超时**（`kFetchTextFeedTimeoutMs = 120000`），以处理约 825KB 的大 feed 文件
+- 普通 HTTP 请求默认 **15 秒超时**（`kFetchTextDefaultTimeoutMs`），推测性抓取 **5 秒超时**（`kFetchTextSpeculativeTimeoutMs`）
+- Feed 下载错误响应截断至 **500 字符**，防止终端输出被长错误信息淹没
+- 并发 fallback 等待间隔 **3 秒**（`kFetchTextResolveParallelWaitMs`），fallback 超时 **5 秒**（`kFetchTextFallbackTimeoutMs`）
+- 网站落地页下载最大 **512KB**（`kFetchTextLandingMaxBytes`），防止误下载 AppImage 文件体
+
+### 19.2 并发控制
+
+`install`/`download` 的 `--jobs` 与 `repo resolve` 的 `--concurrency` 是两套独立模型：
+
+- **install/download 批处理**：默认 `min(CPU 核心数, 4)`，上限 32，受 `--jobs` 控制
+- **repo resolve**：默认 `min(CPU 核心数, 8)`，`--aggressive` 模式 `min(2×CPU 核心数, 16)`，受 `--concurrency` 或 `--aggressive` 控制
+- **Website Crawl**：固定并发 **4**（`kMaxWebsiteCrawlConcurrency = 4`），基于流水线模型，消除批次间等待
+
+### 19.3 Website Crawl 流水线抓取
+
+网站发现 AppImage 使用流水线（Pipeline-based）抓取模型：
+
+- 维护 `kMaxWebsiteCrawlConcurrency = 4` 个并发 in-flight 请求
+- 每个请求完成后**立即**处理结果并派发下一个排队 URL
+- 消除了传统批处理模型中"慢请求阻塞同批次其他请求"的问题
+- 使用 `FetchTask` 结构体封装抓取任务，`process_fetch_results()` 处理完成回调
+- 单包最多检查 **96** 个页面（`kWebsiteMaxPages`），AppImage 候选软上限 **8** 个（`kWebsiteCandidateSoftCap`）
+
+### 19.4 缓存策略
+
+#### 网站解析缓存（WebsiteResolveCache）
+
+- 缓存 TTL：**7 天**（`kWebsiteResolveCacheTtlSeconds`）
+- 缓存键：`package_id + arch + source_url`
+- 使用 HTTP `Last-Modified` 头比较检查缓存新鲜度（`website_cached_listing_fresh()`）
+- 仅当列表页未变化时才信任缓存的下载 URL
+
+#### 中间结果缓存（Intermediate Cache）
+
+- TTL：**6 小时**（`kWebsiteIntermediateCacheTtlSeconds`）
+- 存储 `catalog_github_repo`、`catalog_direct_url`、`catalog_homepage`、`data_github_repo`、`data_direct_url`、`apps_github_repo`、`apps_direct_url` 等中间回退结果
+- 避免主网站解析失败后重复抓取 AppImageHub catalog / data/ / apps/ 页面
+
+### 19.5 回退解析链
+
+包源解析遵循分层回退策略：
+
+1. **主解析**：按 `source_type` 分派（`github_release` → GitHub API，`website_page` → Website Crawl，`direct_url` → 直接 URL）
+2. **GitHub Release 失败回退**：并行尝试 AppImageHub catalog → `data/` → `apps/`，三者竞争，最先成功的结果被采用
+3. **Website Crawl 失败回退**：同样并行尝试 AppImageHub catalog → `data/` → `apps/`
+4. **Unavailable 包回退**：直接并行尝试 `data/` → `apps/`
+5. **并行框架**：`resolve_parallel_fallback()` 统一封装多 fallback 并行竞争，先完成的成功结果胜出
+
+### 19.6 AppImage GitHub 数据源
+
+除 AppImageHub catalog 页面外，还直接查询 AppImage 项目 GitHub 仓库的两个 JSON 数据源：
+
+- **`data/` 目录**：`https://raw.githubusercontent.com/AppImage/appimage.github.io/master/data/<name>.json`，包含 GitHub repo 和 direct URL
+- **`apps/` 目录**：`https://raw.githubusercontent.com/AppImage/appimage.github.io/master/apps/<name>.json`，包含 GitHub repo 和 direct URL
+
+这两个数据源作为 catalog 页面的补充，提供更结构化的元数据。
+
+### 19.7 国际化（i18n）
+
+- 所有面向用户的字符串通过 `tr()` / `tr_format()` 函数包裹
+- 翻译文件存放在 `po/` 目录下（`en.po`、`zh.po`）
+- `YAI_LANG=en` / `YAI_LANG=zh` 强制指定语言
+- 未设置时按 `LC_ALL`、`LC_MESSAGES`、`LANG` 自动判断
+
+## 20. MVP 范围
 
 第一版只做必要闭环：
 
@@ -768,7 +865,7 @@ MVP 暂不做：
 - GUI 前端。
 - 系统级安装。
 
-## 20. 后续阶段规划
+## 21. 后续阶段规划
 
 ### 阶段一：URL 安装器
 
@@ -925,9 +1022,9 @@ MVP 暂不做：
 - 可以查看修复建议。
 - GUI/TUI 调用同一套核心库，不复制业务逻辑。
 
-## 21. 测试计划
+## 22. 测试计划
 
-### 21.1 单元测试
+### 22.1 单元测试
 
 - GitHub URL 解析。
 - 代理 URL 模板替换。
@@ -936,8 +1033,23 @@ MVP 暂不做：
 - wrapper 生成。
 - 安装状态读写。
 - 版本比较。
+- 架构归一化与 asset 评分。
+- `repo resolve` 并发计算（`calculate_default_concurrency` 普通模式/aggressive 模式/手动模式）。
+- Website Crawl 流水线调度（`FetchTask` + `process_fetch_results`）。
+- WebsiteResolveCache 序列化/反序列化。
+- 中间结果缓存（Intermediate Cache）过期判断（6 小时 TTL）。
+- HTTP `Last-Modified` 缓存新鲜度检查（`website_cached_listing_fresh`）。
+- 并行 fallback 框架（`resolve_parallel_fallback`）竞争逻辑。
+- AppImageHub catalog 页面解析（`fetch_appimage_catalog_sources`）。
+- AppImage GitHub `data/` 和 `apps/` 数据源解析。
+- 不可用包（unavailable）回退解析链。
+- 下载器链式回退（auto → curl/wget/wget2/aria2c 降级）。
+- aria2 RPC 进度解析与合并。
+- 进度条渲染（单包/批量 TTY 进度）。
+- 安全：GitHub blocklist 451 检查。
+- i18n：`tr()` / `tr_format()` PO 文件加载与回退。
 
-### 21.2 集成测试
+### 22.2 集成测试
 
 - 从本地 HTTP 测试服务器下载 AppImage 样例。
 - 模拟下载中断并断点续传。
@@ -947,8 +1059,25 @@ MVP 暂不做：
 - 模拟 `--appimage-extract` 生成目录。
 - 安装后检查 wrapper、desktop、icon、state 是否一致。
 - 卸载后检查 yai 管理文件是否清理。
+- `repo resolve`：多包多架构并发解析，验证结果写入索引。
+- `repo resolve`：`--aggressive` 模式并发数验证。
+- `repo resolve`：`--concurrency 1` 串行模式验证。
+- `repo resolve`：`--output` 输出到指定路径。
+- `repo resolve`：`--overwrite` 强制覆盖已有 URL。
+- `repo remove`：通配符模式匹配与批量删除。
+- WebsiteResolveCache：首次解析写入缓存，二次命中缓存（含 HTTP 头验证）。
+- WebsiteResolveCache：过期缓存触发重新解析。
+- 中间结果缓存：主解析失败后命中缓存的 catalog/data/apps 结果。
+- 回退解析链：GitHub Release 失败 → AppImageHub catalog 回退 → data/ 回退 → apps/ 回退。
+- 回退解析链：Website Crawl 失败 → 并行 fallback 竞争。
+- 不可用包（unavailable）安装：data/ 和 apps/ 并行回退。
+- Feed 下载 120 秒超时：模拟慢网络验证超时行为。
+- Feed 下载错误截断：验证错误响应截断至 500 字符。
+- aria2c 下载：RPC 进度上报、分片完成量读取。
+- 多语言：`YAI_LANG=en` / `YAI_LANG=zh` 切换验证。
+- 批量安装/下载：`--jobs` 并发与顺序退化（通配符展开）。
 
-### 21.3 手工测试
+### 22.3 手工测试
 
 覆盖发行版：
 
@@ -964,9 +1093,9 @@ MVP 暂不做：
 - KDE Plasma
 - XFCE
 
-## 22. 关键风险
+## 23. 关键风险
 
-### 22.1 加速代理不稳定
+### 23.1 加速代理不稳定
 
 风险：
 
@@ -981,7 +1110,7 @@ MVP 暂不做：
 - 强制记录原始 URL。
 - 优先使用上游哈希校验。
 
-### 22.2 AppImage 格式和运行时差异
+### 23.2 AppImage 格式和运行时差异
 
 风险：
 
@@ -995,7 +1124,7 @@ MVP 暂不做：
 - 对每个应用记录实际可用模式。
 - `repair` 可重新探测。
 
-### 22.3 桌面环境差异
+### 23.3 桌面环境差异
 
 风险：
 
@@ -1008,7 +1137,7 @@ MVP 暂不做：
 - 写入用户级标准目录。
 - 刷新失败只警告，不中断安装。
 
-### 22.4 安全和供应链
+### 23.4 安全和供应链
 
 风险：
 
@@ -1023,7 +1152,7 @@ MVP 暂不做：
 - `.desktop` 和 wrapper 由 yai 生成。
 - 对未知校验状态给出明显提示。
 
-## 23. 参考资料
+## 24. 参考资料
 
 - AppImage FUSE 与解压运行说明：<https://docs.appimage.org/user-guide/troubleshooting/fuse.html>
 - AppImage 用户指南：<https://docs.appimage.org/user-guide/>

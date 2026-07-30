@@ -126,7 +126,7 @@ struct WebsiteQueueItem {
 };
 
 constexpr int kWebsiteSeedPriority = 100;
-constexpr std::size_t kWebsiteFetchConcurrency = 4;
+constexpr std::size_t kMaxWebsiteCrawlConcurrency = 4;
 constexpr std::size_t kWebsiteMaxPages = 96;
 constexpr std::size_t kWebsiteCandidateSoftCap = 8;
 constexpr std::size_t kWebsiteHeadFillMax = 4;
@@ -578,7 +578,7 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
     WebsiteSearchProgress progress(package.id);
     WebsiteSearchState state = initial_website_search_state(package, progress);
 
-    // Pipeline-based website crawling: maintain up to kWebsiteFetchConcurrency
+    // Pipeline-based website crawling: maintain up to kMaxWebsiteCrawlConcurrency
     // in-flight requests. As each completes, process its result immediately
     // and dispatch the next queued URL. This eliminates batch-level waiting
     // where one slow URL blocks all others in the same batch.
@@ -587,7 +587,7 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
     std::vector<FetchTask> completed_tasks;
 
     auto dispatch_next = [&]() -> bool {
-        if (in_flight.size() >= kWebsiteFetchConcurrency) {
+        if (in_flight.size() >= kMaxWebsiteCrawlConcurrency) {
             return false;
         }
         if (pages_checked + in_flight.size() >= kWebsiteMaxPages) {
