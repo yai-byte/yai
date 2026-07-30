@@ -6,6 +6,7 @@
 #include <exception>
 #include <future>
 #include <mutex>
+#include <thread>
 
 namespace {
 
@@ -248,6 +249,19 @@ void print_resolve_summary(const ResolveCounters& counters) {
 
 } // namespace
 
+int calculate_default_concurrency(bool aggressive) {
+    const unsigned int hardware = std::thread::hardware_concurrency();
+    const int cores = hardware == 0 ? 4 : static_cast<int>(hardware);
+
+    if (aggressive) {
+        // Aggressive mode: 2x CPU cores, clamped to 16 max
+        return std::min(cores * 2, 16);
+    } else {
+        // Normal mode: CPU cores, clamped to 8 max
+        return std::min(cores, 8);
+    }
+}
+
 RepoResolveOptions parse_repo_resolve_options(int argc, char** argv) {
     RepoResolveOptions options;
     for (int i = 0; i < argc; ++i) {
@@ -264,6 +278,8 @@ RepoResolveOptions parse_repo_resolve_options(int argc, char** argv) {
             options.overwrite = true;
         } else if (arg == "--concurrency") {
             options.concurrency = parse_concurrency_value(read_option_value(argc, argv, i, arg));
+        } else if (arg == "--aggressive") {
+            options.aggressive = true;
         } else if (arg == "--show") {
             parse_show_mask(read_option_value(argc, argv, i, arg), options);
         } else if (arg == "--summary") {
@@ -274,6 +290,12 @@ RepoResolveOptions parse_repo_resolve_options(int argc, char** argv) {
             throw std::runtime_error(tr("unknown repo resolve option: ") + arg);
         }
     }
+
+    // Calculate effective concurrency: if 0 (auto), compute based on CPU cores and aggressive flag
+    if (options.concurrency <= 0) {
+        options.concurrency = calculate_default_concurrency(options.aggressive);
+    }
+
     return options;
 }
 

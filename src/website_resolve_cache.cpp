@@ -43,30 +43,59 @@ WebsiteResolveCacheEntry parse_website_resolve_cache_entry(const std::string& ob
         json_find_string(object_text, "listing_http_last_modified").value_or("");
     entry.listing_validators.content_length =
         json_find_string(object_text, "listing_http_content_length").value_or("");
+    entry.intermediate_resolved_at =
+        json_find_int64(object_text, "intermediate_resolved_at").value_or(0);
+    if (auto v = json_find_string(object_text, "catalog_github_repo"); v) entry.catalog_github_repo = v;
+    if (auto v = json_find_string(object_text, "catalog_direct_url"); v) entry.catalog_direct_url = v;
+    if (auto v = json_find_string(object_text, "catalog_homepage"); v) entry.catalog_homepage = v;
+    if (auto v = json_find_string(object_text, "data_github_repo"); v) entry.data_github_repo = v;
+    if (auto v = json_find_string(object_text, "data_direct_url"); v) entry.data_direct_url = v;
+    if (auto v = json_find_string(object_text, "apps_github_repo"); v) entry.apps_github_repo = v;
+    if (auto v = json_find_string(object_text, "apps_direct_url"); v) entry.apps_direct_url = v;
     return entry;
 }
 
 std::string website_resolve_cache_entry_json(const WebsiteResolveCacheEntry& entry) {
-    return std::string(
-               "  {\n"
-               "    \"package_id\": \"") +
-           json_escape_string(entry.package_id) + "\",\n"
-           "    \"arch\": \"" + json_escape_string(entry.arch) + "\",\n"
-           "    \"source_url\": \"" + json_escape_string(entry.source_url) + "\",\n"
-           "    \"download_url\": \"" + json_escape_string(entry.download_url) + "\",\n"
-           "    \"resolved_at\": " + std::to_string(entry.resolved_at) + ",\n"
-           "    \"http_etag\": \"" + json_escape_string(entry.validators.etag) + "\",\n"
-           "    \"http_last_modified\": \"" +
-           json_escape_string(entry.validators.last_modified) + "\",\n"
-           "    \"http_content_length\": \"" +
-           json_escape_string(entry.validators.content_length) + "\",\n"
-           "    \"listing_http_etag\": \"" +
-           json_escape_string(entry.listing_validators.etag) + "\",\n"
-           "    \"listing_http_last_modified\": \"" +
-           json_escape_string(entry.listing_validators.last_modified) + "\",\n"
-           "    \"listing_http_content_length\": \"" +
-           json_escape_string(entry.listing_validators.content_length) + "\"\n"
-           "  }";
+    std::string result = std::string(
+        "  {\n"
+        "    \"package_id\": \"") +
+        json_escape_string(entry.package_id) + "\",\n"
+        "    \"arch\": \"" + json_escape_string(entry.arch) + "\",\n"
+        "    \"source_url\": \"" + json_escape_string(entry.source_url) + "\",\n"
+        "    \"download_url\": \"" + json_escape_string(entry.download_url) + "\",\n"
+        "    \"resolved_at\": " + std::to_string(entry.resolved_at) + ",\n"
+        "    \"http_etag\": \"" + json_escape_string(entry.validators.etag) + "\",\n"
+        "    \"http_last_modified\": \"" +
+        json_escape_string(entry.validators.last_modified) + "\",\n"
+        "    \"http_content_length\": \"" +
+        json_escape_string(entry.validators.content_length) + "\",\n"
+        "    \"listing_http_etag\": \"" +
+        json_escape_string(entry.listing_validators.etag) + "\",\n"
+        "    \"listing_http_last_modified\": \"" +
+        json_escape_string(entry.listing_validators.last_modified) + "\",\n"
+        "    \"listing_http_content_length\": \"" +
+        json_escape_string(entry.listing_validators.content_length) + "\"";
+
+    if (entry.intermediate_resolved_at > 0) {
+        result += ",\n    \"intermediate_resolved_at\": " + std::to_string(entry.intermediate_resolved_at);
+        if (entry.catalog_github_repo.has_value())
+            result += ",\n    \"catalog_github_repo\": \"" + json_escape_string(*entry.catalog_github_repo) + "\"";
+        if (entry.catalog_direct_url.has_value())
+            result += ",\n    \"catalog_direct_url\": \"" + json_escape_string(*entry.catalog_direct_url) + "\"";
+        if (entry.catalog_homepage.has_value())
+            result += ",\n    \"catalog_homepage\": \"" + json_escape_string(*entry.catalog_homepage) + "\"";
+        if (entry.data_github_repo.has_value())
+            result += ",\n    \"data_github_repo\": \"" + json_escape_string(*entry.data_github_repo) + "\"";
+        if (entry.data_direct_url.has_value())
+            result += ",\n    \"data_direct_url\": \"" + json_escape_string(*entry.data_direct_url) + "\"";
+        if (entry.apps_github_repo.has_value())
+            result += ",\n    \"apps_github_repo\": \"" + json_escape_string(*entry.apps_github_repo) + "\"";
+        if (entry.apps_direct_url.has_value())
+            result += ",\n    \"apps_direct_url\": \"" + json_escape_string(*entry.apps_direct_url) + "\"";
+    }
+
+    result += "\n  }";
+    return result;
 }
 
 std::string website_resolve_cache_entry_key(const WebsiteResolveCacheEntry& entry) {
@@ -178,6 +207,70 @@ bool website_cached_download_url_usable(
     const UrlFreshnessResult result = probe_url_freshness(download_url, stored);
     return result.status == UrlFreshness::Unchanged ||
            result.status == UrlFreshness::Unknown;
+}
+
+bool website_cached_listing_fresh(
+    const std::string& source_url,
+    const HttpValidators& stored) {
+    if (source_url.empty() || http_validators_empty(stored)) {
+        return false;
+    }
+    const UrlFreshnessResult result = probe_url_freshness(source_url, stored);
+    return result.status == UrlFreshness::Unchanged ||
+           result.status == UrlFreshness::Unknown;
+}
+
+bool website_intermediate_cache_valid(
+    const WebsiteResolveCacheEntry& entry,
+    std::int64_t now_epoch_seconds) {
+    if (entry.intermediate_resolved_at <= 0) {
+        return false;
+    }
+    return now_epoch_seconds - entry.intermediate_resolved_at <= kWebsiteIntermediateCacheTtlSeconds;
+}
+
+void store_website_intermediate_results(
+    const std::string& package_id,
+    const std::string& arch,
+    const std::string& source_url,
+    const AppImageCatalogSources* catalog,
+    const AppImageDataEntry* data_entry,
+    const AppImageAppsEntry* apps_entry) {
+    auto entries = load_website_resolve_cache();
+    const std::string key = website_resolve_cache_key(package_id, arch, source_url);
+    std::int64_t now = utc_epoch_seconds();
+
+    WebsiteResolveCacheEntry* target = nullptr;
+    for (WebsiteResolveCacheEntry& entry : entries) {
+        if (website_resolve_cache_entry_key(entry) == key) {
+            target = &entry;
+            break;
+        }
+    }
+    if (target == nullptr) {
+        WebsiteResolveCacheEntry new_entry;
+        new_entry.package_id = package_id;
+        new_entry.arch = arch;
+        new_entry.source_url = source_url;
+        target = &entries.emplace_back(std::move(new_entry));
+    }
+
+    target->intermediate_resolved_at = now;
+    if (catalog) {
+        target->catalog_github_repo = catalog->github_repo;
+        target->catalog_direct_url = catalog->direct_url;
+        target->catalog_homepage = catalog->homepage;
+    }
+    if (data_entry) {
+        target->data_github_repo = data_entry->github_repo;
+        target->data_direct_url = data_entry->direct_url;
+    }
+    if (apps_entry) {
+        target->apps_github_repo = apps_entry->github_repo;
+        target->apps_direct_url = apps_entry->direct_url;
+    }
+
+    save_website_resolve_cache(entries);
 }
 
 HttpValidators capture_url_validators(const std::string& url) {

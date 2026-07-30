@@ -1,5 +1,11 @@
 #include "yai.hpp"
 
+#include <algorithm>
+#include <chrono>
+#include <future>
+#include <queue>
+#include <thread>
+
 // Host-bounded website crawling to discover AppImage download URLs.
 
 std::string truncate_status_text(const std::string& value, std::size_t max_size) {
@@ -524,54 +530,26 @@ std::string selected_website_candidate(
 
 }  // namespace
 
-std::string resolve_website_appimage_download(const RepoPackage& package, const std::string& arch) {
-    WebsiteSearchProgress progress(package.id);
-    WebsiteSearchState state = initial_website_search_state(package, progress);
+// Pipeline stage: a single page fetch with its metadata and result slot
+struct FetchTask {
+    WebsiteQueueItem page;
+    std::optional<std::vector<WebsiteLinkMeta>> outcome;
+    std::future<std::optional<std::vector<WebsiteLinkMeta>>> future;
+    bool completed = false;
+};
 
-    // AppImageHub and appimage.github.io pages are catalogs, not download trust
-    // boundaries. They may bridge to a package-matching project host once, after
-    // which normal allowed-host checks and AppImage asset scoring apply.
-    std::size_t pages_checked = 0;
-    while (pages_checked < kWebsiteMaxPages) {
-        if (website_search_should_stop(state, arch, pages_checked)) {
-            break;
-        }
+void process_fetch_results(
+    std::vector<FetchTask>& completed_tasks,
+    WebsiteSearchState& state,
+    WebsiteSearchProgress& progress,
+    const RepoPackage& package,
+    const std::string& arch,
+    std::size_t& pages_checked) {
+    for (auto& task : completed_tasks) {
+        ++pages_checked;
+        const WebsiteQueueItem& page = task.page;
 
-        std::vector<WebsiteQueueItem> batch;
-        while (batch.size() < kWebsiteFetchConcurrency &&
-               pages_checked + batch.size() < kWebsiteMaxPages) {
-            const std::optional<std::size_t> index = next_website_queue_index(state);
-            if (!index.has_value()) {
-                break;
-            }
-            const WebsiteQueueItem page = state.queue[*index];
-            state.seen.push_back(page.url);
-            progress.checked(page.url);
-            batch.push_back(page);
-        }
-        if (batch.empty()) {
-            break;
-        }
-
-        std::vector<std::optional<std::vector<WebsiteLinkMeta>>> outcomes(batch.size());
-        std::vector<std::thread> workers;
-        workers.reserve(batch.size());
-        for (std::size_t i = 0; i < batch.size(); ++i) {
-            workers.emplace_back([&batch, &outcomes, i]() {
-                outcomes[i] =
-                    fetch_website_links(batch[i].url, batch[i].speculative);
-            });
-        }
-        for (std::thread& worker : workers) {
-            worker.join();
-        }
-
-        for (std::size_t i = 0; i < batch.size(); ++i) {
-            ++pages_checked;
-            const WebsiteQueueItem& page = batch[i];
-            if (outcomes[i].has_value()) {
-                continue;
-            }
+        if (!task.outcome.has_value()) {
             progress.skipped();
             if (page.speculative) {
                 const auto seen = std::find(state.seen.begin(), state.seen.end(), page.url);
@@ -587,17 +565,84 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
                         }),
                     state.queue.end());
             }
+            continue;
         }
 
-        for (std::size_t i = 0; i < batch.size(); ++i) {
-            if (!outcomes[i].has_value()) {
-                continue;
+        collect_appimage_candidates(
+            *task.outcome, package, page, state, progress, arch);
+    }
+    completed_tasks.clear();
+}
+
+std::string resolve_website_appimage_download(const RepoPackage& package, const std::string& arch) {
+    WebsiteSearchProgress progress(package.id);
+    WebsiteSearchState state = initial_website_search_state(package, progress);
+
+    // Pipeline-based website crawling: maintain up to kWebsiteFetchConcurrency
+    // in-flight requests. As each completes, process its result immediately
+    // and dispatch the next queued URL. This eliminates batch-level waiting
+    // where one slow URL blocks all others in the same batch.
+    std::size_t pages_checked = 0;
+    std::vector<FetchTask> in_flight;
+    std::vector<FetchTask> completed_tasks;
+
+    auto dispatch_next = [&]() -> bool {
+        if (in_flight.size() >= kWebsiteFetchConcurrency) {
+            return false;
+        }
+        if (pages_checked + in_flight.size() >= kWebsiteMaxPages) {
+            return false;
+        }
+        if (website_search_should_stop(state, arch, pages_checked + in_flight.size())) {
+            return false;
+        }
+
+        const std::optional<std::size_t> index = next_website_queue_index(state);
+        if (!index.has_value()) {
+            return false;
+        }
+        WebsiteQueueItem page = state.queue[*index];
+        state.seen.push_back(page.url);
+        progress.checked(page.url);
+
+        FetchTask task;
+        task.page = page;
+        task.future = std::async(std::launch::async,
+            [page]() -> std::optional<std::vector<WebsiteLinkMeta>> {
+                return fetch_website_links(page.url, page.speculative);
+            });
+        in_flight.push_back(std::move(task));
+        return true;
+    };
+
+    // Initial dispatch: fill the pipeline
+    while (dispatch_next()) {
+    }
+
+    // Process results and refill the pipeline
+    while (!in_flight.empty()) {
+        // Check for completed tasks
+        auto it = in_flight.begin();
+        while (it != in_flight.end()) {
+            if (it->future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+                it->outcome = it->future.get();
+                completed_tasks.push_back(std::move(*it));
+                it = in_flight.erase(it);
+            } else {
+                ++it;
             }
-            const WebsiteQueueItem& page = batch[i];
-            collect_appimage_candidates(
-                *outcomes[i], package, page, state, progress, arch);
         }
 
+        // Process completed results
+        if (!completed_tasks.empty()) {
+            process_fetch_results(completed_tasks, state, progress, package, arch, pages_checked);
+        }
+
+        // Refill the pipeline
+        while (dispatch_next()) {
+        }
+
+        // Check stop conditions
         if (website_search_should_stop(state, arch, pages_checked)) {
             break;
         }
@@ -605,6 +650,20 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
             !state.appimage_candidates.empty()) {
             break;
         }
+
+        // If still in-flight but nothing completed, yield briefly
+        if (!in_flight.empty() && completed_tasks.empty()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    // Drain any remaining completed tasks
+    for (auto& task : in_flight) {
+        task.outcome = task.future.get();
+        completed_tasks.push_back(std::move(task));
+    }
+    if (!completed_tasks.empty()) {
+        process_fetch_results(completed_tasks, state, progress, package, arch, pages_checked);
     }
 
     const std::string best =
