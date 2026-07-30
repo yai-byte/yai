@@ -512,6 +512,8 @@ HttpValidators download_file(const std::string& url, const fs::path& target, con
 constexpr int kFetchTextDefaultTimeoutMs = 15000;
 constexpr int kFetchTextFeedTimeoutMs = 120000;
 constexpr int kFetchTextSpeculativeTimeoutMs = 5000;
+constexpr int kFetchTextFallbackTimeoutMs = 5000;
+constexpr int kFetchTextResolveParallelWaitMs = 3000;
 constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
 
 constexpr const char* kAppImageGithubRepoApiBase =

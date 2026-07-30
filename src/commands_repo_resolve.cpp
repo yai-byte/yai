@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <exception>
 #include <future>
 #include <mutex>
 
@@ -101,9 +102,52 @@ bool resolve_one_package(
     std::mutex* mutex) {
     const std::string host_arch = current_arch();
     bool wrote_url = false;
+
+    struct ArchResult {
+        std::string arch;
+        bool skip = false;
+        ResolvedSource source;
+        std::exception_ptr exception;
+        bool success = false;
+    };
+
+    std::vector<ArchResult> results(arches.size());
+    std::vector<std::future<void>> tasks;
+
     for (std::size_t arch_index = 0; arch_index < arches.size(); ++arch_index) {
+        results[arch_index].arch = arches[arch_index];
         const std::string& arch = arches[arch_index];
+
         if (!overwrite && repo_package_has_download_url_for_arch(package, arch)) {
+            results[arch_index].skip = true;
+            continue;
+        }
+
+        tasks.push_back(std::async(std::launch::async,
+            [&package, arch, arch_index, &results]() {
+                try {
+                    InstallOptions opt;
+                    opt.target = package.id;
+                    opt.target_arch = arch;
+                    opt.arch_explicit = true;
+                    opt.recrawl = true;
+                    results[arch_index].source = resolve_repo_package_install_source(opt, package);
+                    results[arch_index].success = true;
+                } catch (...) {
+                    results[arch_index].exception = std::current_exception();
+                }
+            }));
+    }
+
+    for (auto& task : tasks) {
+        task.get();
+    }
+
+    for (std::size_t arch_index = 0; arch_index < arches.size(); ++arch_index) {
+        const auto& result = results[arch_index];
+        const std::string& arch = result.arch;
+
+        if (result.skip) {
             ResolveLine line;
             line.kind = ResolveLine::Kind::Skip;
             line.text = tr_format("skip {id} {arch}", {{"{id}", package.id}, {"{arch}", arch}});
@@ -118,28 +162,32 @@ bool resolve_one_package(
             continue;
         }
 
-        try {
-            InstallOptions opt;
-            opt.target = package.id;
-            opt.target_arch = arch;
-            opt.arch_explicit = true;
-            opt.recrawl = true;
-            const ResolvedSource source = resolve_repo_package_install_source(opt, package);
+        if (result.success) {
             const bool mirror =
                 arch_index == 0 || normalize_arch(arch) == normalize_arch(host_arch);
-            repo_package_set_download_url(
-                package,
-                arch,
-                source.download_url,
-                overwrite,
-                mirror);
+            if (mutex != nullptr) {
+                std::lock_guard<std::mutex> lock(*mutex);
+                repo_package_set_download_url(
+                    package,
+                    arch,
+                    result.source.download_url,
+                    overwrite,
+                    mirror);
+            } else {
+                repo_package_set_download_url(
+                    package,
+                    arch,
+                    result.source.download_url,
+                    overwrite,
+                    mirror);
+            }
             wrote_url = true;
 
             ResolveLine line;
             line.kind = ResolveLine::Kind::Success;
             line.text = tr_format(
                 "ok {id} {arch} {url}",
-                {{"{id}", package.id}, {"{arch}", arch}, {"{url}", source.download_url}});
+                {{"{id}", package.id}, {"{arch}", arch}, {"{url}", result.source.download_url}});
             if (mutex != nullptr) {
                 std::lock_guard<std::mutex> lock(*mutex);
                 ++counters.resolved;
@@ -148,12 +196,22 @@ bool resolve_one_package(
                 ++counters.resolved;
                 lines.push_back(std::move(line));
             }
-        } catch (const std::exception& ex) {
+        } else {
+            std::string error_msg;
+            try {
+                if (result.exception) {
+                    std::rethrow_exception(result.exception);
+                }
+                error_msg = tr("unknown error");
+            } catch (const std::exception& ex) {
+                error_msg = ex.what();
+            }
+
             ResolveLine line;
             line.kind = ResolveLine::Kind::Fail;
             line.text = tr_format(
                 "fail {id} {arch}: {error}",
-                {{"{id}", package.id}, {"{arch}", arch}, {"{error}", ex.what()}});
+                {{"{id}", package.id}, {"{arch}", arch}, {"{error}", error_msg}});
             if (mutex != nullptr) {
                 std::lock_guard<std::mutex> lock(*mutex);
                 ++counters.failed;
@@ -164,6 +222,7 @@ bool resolve_one_package(
             }
         }
     }
+
     return wrote_url;
 }
 
