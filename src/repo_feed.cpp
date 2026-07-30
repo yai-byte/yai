@@ -479,12 +479,134 @@ std::string normalize_appimage_feed_index(const std::string& feed_text) {
 
     std::vector<std::string> packages;
     std::vector<std::string> ids;
+    // Track feed package IDs for matching against apps/ entries
+    std::map<std::string, std::string> feed_id_to_json;  // feed_id -> package JSON
+    std::map<std::string, std::string> feed_id_to_name;  // feed_id -> package name
+
     for (const std::string& item : json_top_level_objects(*items_array)) {
         const std::string name = json_find_string(item, "name").value_or("");
         const std::string base_id = sanitize_id(name.empty() ? "appimage-app" : name);
         const std::string id = unique_package_id(base_id, ids);
         ids.push_back(id);
-        packages.push_back(yai_package_object_from_appimage_feed_item(item, id));
+        std::string pkg_json = yai_package_object_from_appimage_feed_item(item, id);
+        feed_id_to_json[id] = pkg_json;
+        feed_id_to_name[id] = name;
+        packages.push_back(pkg_json);
+    }
+
+    // Integrate AppImage GitHub apps/ entries as supplements
+    // This adds packages not in feed.json and enriches existing ones with metadata
+    std::vector<std::string> apps_names;
+    try {
+        apps_names = fetch_appimage_apps_list();
+        if (!apps_names.empty()) {
+            std::cerr << "yai: integrating " << apps_names.size()
+                      << " AppImage GitHub app entries into index...\n";
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "yai: warning: failed to fetch AppImage GitHub apps/ list: "
+                  << e.what() << "\n";
+        std::cerr << "yai: continuing with feed.json packages only\n";
+        return repo_index_json_from_package_objects(packages);
+    }
+
+    // Build a lookup by sanitized ID for feed packages
+    std::map<std::string, std::string> feed_id_by_sanitized;
+    for (const auto& [id, name] : feed_id_to_name) {
+        feed_id_by_sanitized[sanitize_id(name)] = id;
+    }
+
+    int apps_added = 0;
+    int apps_enriched = 0;
+    int apps_failed = 0;
+
+    for (const std::string& apps_name : apps_names) {
+        try {
+            auto apps_entry = parse_appimage_apps_entry(apps_name);
+            if (!apps_entry.has_value()) {
+                apps_failed++;
+                continue;
+            }
+
+            // Check if this app exists in feed
+            std::string apps_id = sanitize_id(apps_name);
+            auto feed_it = feed_id_by_sanitized.find(apps_id);
+
+            if (feed_it != feed_id_by_sanitized.end()) {
+                // Enrich existing feed package with apps/ metadata
+                const std::string& existing_id = feed_it->second;
+                auto pkg_it = std::find_if(packages.begin(), packages.end(),
+                    [&existing_id](const std::string& json) {
+                        return json.find("\"id\": \"" + existing_id + "\"") != std::string::npos;
+                    });
+
+                if (pkg_it != packages.end()) {
+                    // Parse existing package
+                    RepoPackage existing = parse_repo_package(*pkg_it);
+                    // Merge apps/ entry into it
+                    RepoPackage merged = merge_apps_entry_into_package(*apps_entry, existing);
+                    // Re-serialize
+                    *pkg_it = serialize_repo_package(merged);
+                    apps_enriched++;
+                }
+            } else {
+                // Create new package from apps/ entry
+                RepoPackage new_pkg;
+                new_pkg.id = unique_package_id(apps_id, ids);
+                ids.push_back(new_pkg.id);
+                new_pkg.name = apps_entry->name;
+                new_pkg.source_origin = "appimage_apps";
+                new_pkg.summary = apps_entry->description;
+                new_pkg.license = apps_entry->license;
+                new_pkg.homepage = apps_entry->homepage;
+                new_pkg.arch = apps_entry->arch;
+                new_pkg.version = apps_entry->version;
+
+                // Determine source type
+                if (!apps_entry->github_repo.empty()) {
+                    std::size_t slash = apps_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        new_pkg.source_type = "github_release";
+                        new_pkg.source_owner = apps_entry->github_repo.substr(0, slash);
+                        new_pkg.source_repo = apps_entry->github_repo.substr(slash + 1);
+                        new_pkg.asset_pattern = ".*\\.AppImage$";
+                    }
+                } else if (!apps_entry->direct_url.empty()) {
+                    new_pkg.source_type = "direct_url";
+                    new_pkg.source_url = apps_entry->direct_url;
+                } else if (!apps_entry->homepage.empty()) {
+                    new_pkg.source_type = "website_page";
+                    new_pkg.source_url = apps_entry->homepage;
+                    new_pkg.source_reason =
+                        "AppImage GitHub (apps/) entry: no release or direct download link";
+                } else {
+                    new_pkg.source_type = "website_page";
+                    new_pkg.source_url = appimage_catalog_page_url(apps_name);
+                    new_pkg.source_reason =
+                        "AppImage GitHub entry with no usable source";
+                }
+
+                packages.push_back(serialize_repo_package(new_pkg));
+                apps_added++;
+            }
+        } catch (const std::exception&) {
+            apps_failed++;
+        }
+    }
+
+    if (apps_added > 0 || apps_enriched > 0) {
+        std::cerr << "yai: AppImage GitHub integration summary:\n";
+        if (apps_added > 0) {
+            std::cerr << "  added " << apps_added << " new packages from apps/\n";
+        }
+        if (apps_enriched > 0) {
+            std::cerr << "  enriched " << apps_enriched
+                      << " packages with metadata (arch, version, description)\n";
+        }
+        if (apps_failed > 0) {
+            std::cerr << "  " << apps_failed << " apps failed to parse\n";
+        }
+        std::cerr << "  repo index ready (" << packages.size() << " packages total)\n";
     }
 
     return repo_index_json_from_package_objects(packages);

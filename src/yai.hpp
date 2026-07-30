@@ -86,6 +86,23 @@ struct ResolvedSource {
     std::string github_asset;
 };
 
+struct AppImageAppsEntry {
+    std::string name;
+    std::string github_repo;
+    std::string direct_url;
+    std::string homepage;
+    std::string description;
+    std::string license;
+    std::string arch;
+    std::string version;
+};
+
+struct AppImageDataEntry {
+    std::string name;
+    std::string github_repo;
+    std::string direct_url;
+};
+
 struct RepoPackage {
     // Canonical package record loaded from a schema-v1 repo index. AppImage feed
     // entries are normalized into this form before search, info, or install code
@@ -104,6 +121,9 @@ struct RepoPackage {
     std::string download_url;                 // optional single-arch convenience
     std::map<std::string, std::string> download_urls; // arch -> url
     std::string resolved_at;                  // ISO-8601 UTC, may be empty
+    std::string arch;                        // arch tag from X-AppImage-Arch
+    std::string version;                     // version from X-AppImage-Version
+    std::string source_origin;               // "feed" or "appimage_apps"
 };
 
 struct RepoEntry {
@@ -494,6 +514,14 @@ constexpr int kFetchTextFeedTimeoutMs = 120000;
 constexpr int kFetchTextSpeculativeTimeoutMs = 5000;
 constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
 
+constexpr const char* kAppImageGithubRepoApiBase =
+    "https://api.github.com/repos/AppImage/appimage.github.io";
+constexpr const char* kAppImageGithubRawBase =
+    "https://raw.githubusercontent.com/AppImage/appimage.github.io/master";
+constexpr int kFetchAppImageGithubListTimeoutMs = 15000;
+constexpr int kFetchAppImageGithubEntryTimeoutMs = 10000;
+constexpr int kFetchAppImageGithubResolveTimeoutMs = 15000;
+
 std::string fetch_text(const std::string& url);
 std::string fetch_text(const std::string& url, int timeout_ms);
 std::string fetch_text_limited(
@@ -562,6 +590,24 @@ struct AppImageCatalogSources {
 AppImageCatalogSources fetch_appimage_catalog_sources(
     const std::string& name,
     int timeout_ms = 15000);
+
+std::vector<std::string> fetch_appimage_apps_list(
+    int timeout_ms = kFetchAppImageGithubListTimeoutMs);
+std::optional<AppImageAppsEntry> parse_appimage_apps_entry(
+    const std::string& name,
+    int timeout_ms = kFetchAppImageGithubEntryTimeoutMs);
+std::optional<AppImageDataEntry> parse_appimage_data_entry(
+    const std::string& name,
+    int timeout_ms = kFetchAppImageGithubEntryTimeoutMs);
+std::optional<AppImageDataEntry> lookup_appimage_data_entry(
+    const std::string& package_name,
+    int timeout_ms = kFetchAppImageGithubResolveTimeoutMs);
+std::optional<AppImageAppsEntry> lookup_appimage_apps_entry(
+    const std::string& package_name,
+    int timeout_ms = kFetchAppImageGithubResolveTimeoutMs);
+RepoPackage merge_apps_entry_into_package(
+    const AppImageAppsEntry& entry,
+    const RepoPackage& existing);
 std::string yai_package_object_from_appimage_feed_item(
     const std::string& item_text,
     const std::string& id);

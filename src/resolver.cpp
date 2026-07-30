@@ -329,10 +329,78 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
             }
         }
 
+        // Step 3: Try AppImage GitHub data/ lookup (direct download URL fallback)
+        std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
+        try {
+            auto data_entry = lookup_appimage_data_entry(package.name);
+            if (data_entry.has_value()) {
+                if (!data_entry->direct_url.empty()) {
+                    std::cerr << tr("yai: found direct download URL in data/")
+                              << " for " << package.name << "\n";
+                    ResolvedSource source;
+                    source.source_kind = "repo_website_page";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(data_entry->direct_url);
+                    source.source_url = data_entry->direct_url;
+                    source.download_url = data_entry->direct_url;
+                    return with_install_arch(source, options);
+                }
+                if (!data_entry->github_repo.empty()) {
+                    std::cerr << tr("yai: found GitHub repo in data/: ")
+                              << data_entry->github_repo << "\n";
+                    RepoPackage github_package = package;
+                    const std::size_t slash = data_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        github_package.source_owner = data_entry->github_repo.substr(0, slash);
+                        github_package.source_repo = data_entry->github_repo.substr(slash + 1);
+                        github_package.source_type = "github_release";
+                        github_package.asset_pattern = ".*\\.AppImage$";
+                        return repo_github_release_source(options, github_package);
+                    }
+                }
+            }
+        } catch (const std::exception&) {
+        }
+
+        // Step 4: Try AppImage GitHub apps/ lookup (GitHub repo fallback)
+        std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
+        try {
+            auto apps_entry = lookup_appimage_apps_entry(package.name);
+            if (apps_entry.has_value()) {
+                if (!apps_entry->github_repo.empty()) {
+                    std::cerr << tr("yai: found GitHub repo in apps/: ")
+                              << apps_entry->github_repo << "\n";
+                    RepoPackage github_package = package;
+                    const std::size_t slash = apps_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        github_package.source_owner = apps_entry->github_repo.substr(0, slash);
+                        github_package.source_repo = apps_entry->github_repo.substr(slash + 1);
+                        github_package.source_type = "github_release";
+                        github_package.asset_pattern = ".*\\.AppImage$";
+                        return repo_github_release_source(options, github_package);
+                    }
+                }
+                if (!apps_entry->direct_url.empty()) {
+                    std::cerr << tr("yai: found direct download URL in apps/")
+                              << " for " << package.name << "\n";
+                    ResolvedSource source;
+                    source.source_kind = "repo_website_page";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(apps_entry->direct_url);
+                    source.source_url = apps_entry->direct_url;
+                    source.download_url = apps_entry->direct_url;
+                    return with_install_arch(source, options);
+                }
+            }
+        } catch (const std::exception&) {
+        }
+
         throw std::runtime_error(
             tr("no installable AppImage source found for '") +
             package.name +
-            tr("' — no download link found."));
+            tr("' — no download link found. data/ and apps/ fallbacks also failed."));
     }
 }
 
@@ -412,6 +480,75 @@ ResolvedSource resolve_repo_package_install_source_impl(
         return repo_direct_url_source(options, package);
     }
     if (package.source_type == "unavailable") {
+        // Before giving up, try AppImage GitHub data/ and apps/ lookups.
+        // These are the last-resort fallback sources for packages that have
+        // no primary download URL recorded in the local index.
+        std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
+        try {
+            auto data_entry = lookup_appimage_data_entry(package.name);
+            if (data_entry.has_value()) {
+                if (!data_entry->direct_url.empty()) {
+                    std::cerr << tr("yai: found direct download URL in data/")
+                              << " for " << package.name << "\n";
+                    ResolvedSource source;
+                    source.source_kind = "repo_github_release";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(data_entry->direct_url);
+                    source.source_url = data_entry->direct_url;
+                    source.download_url = data_entry->direct_url;
+                    return with_install_arch(source, options);
+                }
+                if (!data_entry->github_repo.empty()) {
+                    std::cerr << tr("yai: found GitHub repo in data/: ")
+                              << data_entry->github_repo << "\n";
+                    RepoPackage github_package = package;
+                    const std::size_t slash = data_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        github_package.source_owner = data_entry->github_repo.substr(0, slash);
+                        github_package.source_repo = data_entry->github_repo.substr(slash + 1);
+                        github_package.source_type = "github_release";
+                        github_package.asset_pattern = ".*\\.AppImage$";
+                        return repo_github_release_source(options, github_package);
+                    }
+                }
+            }
+        } catch (const std::exception&) {
+        }
+
+        std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
+        try {
+            auto apps_entry = lookup_appimage_apps_entry(package.name);
+            if (apps_entry.has_value()) {
+                if (!apps_entry->github_repo.empty()) {
+                    std::cerr << tr("yai: found GitHub repo in apps/: ")
+                              << apps_entry->github_repo << "\n";
+                    RepoPackage github_package = package;
+                    const std::size_t slash = apps_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        github_package.source_owner = apps_entry->github_repo.substr(0, slash);
+                        github_package.source_repo = apps_entry->github_repo.substr(slash + 1);
+                        github_package.source_type = "github_release";
+                        github_package.asset_pattern = ".*\\.AppImage$";
+                        return repo_github_release_source(options, github_package);
+                    }
+                }
+                if (!apps_entry->direct_url.empty()) {
+                    std::cerr << tr("yai: found direct download URL in apps/")
+                              << " for " << package.name << "\n";
+                    ResolvedSource source;
+                    source.source_kind = "repo_github_release";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(apps_entry->direct_url);
+                    source.source_url = apps_entry->direct_url;
+                    source.download_url = apps_entry->direct_url;
+                    return with_install_arch(source, options);
+                }
+            }
+        } catch (const std::exception&) {
+        }
+
         throw_unavailable_repo_source(package);
     }
     if (package.source_type == "website_page") {
@@ -471,10 +608,79 @@ ResolvedSource resolve_repo_package_install_source_impl(
             }
         } catch (const std::exception&) {
         }
+
+        // Step 3: Try AppImage GitHub data/ lookup (direct download URL fallback)
+        std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
+        try {
+            auto data_entry = lookup_appimage_data_entry(package.name);
+            if (data_entry.has_value()) {
+                if (!data_entry->direct_url.empty()) {
+                    std::cerr << tr("yai: found direct download URL in data/")
+                              << " for " << package.name << "\n";
+                    ResolvedSource source;
+                    source.source_kind = "repo_github_release";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(data_entry->direct_url);
+                    source.source_url = data_entry->direct_url;
+                    source.download_url = data_entry->direct_url;
+                    return with_install_arch(source, options);
+                }
+                if (!data_entry->github_repo.empty()) {
+                    std::cerr << tr("yai: found GitHub repo in data/: ")
+                              << data_entry->github_repo << "\n";
+                    RepoPackage github_package = package;
+                    const std::size_t slash = data_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        github_package.source_owner = data_entry->github_repo.substr(0, slash);
+                        github_package.source_repo = data_entry->github_repo.substr(slash + 1);
+                        github_package.source_type = "github_release";
+                        github_package.asset_pattern = ".*\\.AppImage$";
+                        return repo_github_release_source(options, github_package);
+                    }
+                }
+            }
+        } catch (const std::exception&) {
+        }
+
+        // Step 4: Try AppImage GitHub apps/ lookup (GitHub repo fallback)
+        std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
+        try {
+            auto apps_entry = lookup_appimage_apps_entry(package.name);
+            if (apps_entry.has_value()) {
+                if (!apps_entry->github_repo.empty()) {
+                    std::cerr << tr("yai: found GitHub repo in apps/: ")
+                              << apps_entry->github_repo << "\n";
+                    RepoPackage github_package = package;
+                    const std::size_t slash = apps_entry->github_repo.find('/');
+                    if (slash != std::string::npos) {
+                        github_package.source_owner = apps_entry->github_repo.substr(0, slash);
+                        github_package.source_repo = apps_entry->github_repo.substr(slash + 1);
+                        github_package.source_type = "github_release";
+                        github_package.asset_pattern = ".*\\.AppImage$";
+                        return repo_github_release_source(options, github_package);
+                    }
+                }
+                if (!apps_entry->direct_url.empty()) {
+                    std::cerr << tr("yai: found direct download URL in apps/")
+                              << " for " << package.name << "\n";
+                    ResolvedSource source;
+                    source.source_kind = "repo_github_release";
+                    source.id = repo_source_id(options, package);
+                    source.name = repo_source_name(options, package);
+                    source.version = basename_from_url(apps_entry->direct_url);
+                    source.source_url = apps_entry->direct_url;
+                    source.download_url = apps_entry->direct_url;
+                    return with_install_arch(source, options);
+                }
+            }
+        } catch (const std::exception&) {
+        }
+
         throw std::runtime_error(
             tr("GitHub release resolution failed for '") + package.name +
             tr("' — GitHub API error: ") + github_ex.what() +
-            tr(". AppImageHub fallback also failed. Set YAI_GITHUB_TOKEN to avoid rate limits."));
+            tr(". AppImageHub, data/, and apps/ fallbacks all failed. Set YAI_GITHUB_TOKEN to avoid rate limits."));
     }
 }
 

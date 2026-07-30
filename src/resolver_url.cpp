@@ -606,10 +606,11 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
 
     // Generic URL generation from homepage for projects not covered above
     std::vector<std::string> seeds;
-    if (!package.homepage.empty()) {
+    if (!package.homepage.empty() && !is_file_url(package.homepage)) {
         seeds.push_back(package.homepage);
     }
-    if (!package.source_url.empty() && package.source_type == "website_page") {
+    if (!package.source_url.empty() && package.source_type == "website_page" &&
+        !is_file_url(package.source_url)) {
         seeds.push_back(package.source_url);
     }
 
@@ -619,7 +620,6 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
             continue;
         }
 
-        // Add common download page patterns for the project
         const std::string base = origin + "/";
         const std::vector<std::string> patterns = {
             "download",

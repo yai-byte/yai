@@ -108,6 +108,7 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$ROOT/src/resolver_url.cpp" \
   "$ROOT/src/repo_feed.cpp" \
   "$ROOT/src/repo.cpp" \
+  "$ROOT/src/repo_appimage_github.cpp" \
   "$ROOT/src/json.cpp" \
   "$ROOT/src/cli_download.cpp" \
   "$ROOT/src/core.cpp" \

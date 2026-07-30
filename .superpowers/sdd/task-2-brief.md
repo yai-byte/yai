@@ -1,73 +1,62 @@
-### Task 2: Extract `src/process.cpp`
+### Task 2: Persist enriched index + merge across repo update
 
 **Files:**
-- Create: `src/process.cpp`
-- Modify: `src/core.cpp` (remove process block + `run_process_capture_download_progress`)
+- Modify: `src/repo.cpp` (`rebuild_repo_index_from_cached_files`, add save/merge helpers)
+- Modify: `src/commands_repo.cpp` (`store_repo_index_updates` / update path)
+- Modify: `src/yai.hpp` (declare APIs)
+- Extend: `tests/repo_resolve_index_smoke.sh`
 
 **Interfaces:**
-- Consumes: `tr`, progress APIs (`render_download_progress`, `clear_download_progress`, …) via `yai.hpp`
-- Produces: `run_process`, `run_process_capture`, `run_process_capture_separate`, `run_process_capture_timeout`, `run_process_capture_download_progress`
-- Internal (anonymous namespace): `process_argv`, fd/wait/kill helpers, `exec_child_process`, `start_captured_process`, `set_nonblocking`, `kill_and_reap`, `ReadOutputResult`, read/append output helpers, `terminate_for_timeout`
+- Produces:
+  - `bool repo_index_is_locally_writable();` — true when `YAI_REPO_INDEX` unset or is a non-URL filesystem path
+  - `void save_repo_packages_index(const std::vector<RepoPackage>& packages, const fs::path& path);` — uses `repo_index_json_from_package_objects` over `serialize_repo_package` outputs
+  - `void upsert_repo_package_download_urls(const RepoPackage& updated);`
+    — load combined index packages; replace matching `id`; write combined index; also patch any `named_repo_index_path(entry)` whose packages contain that id (load objects → parse → update → rewrite named cache + rebuild combined **or** rewrite named + combined consistently)
+  - `RepoPackage merge_repo_package_download_url_fields(const RepoPackage& incoming, const RepoPackage& previous);`
+    — copy `download_url` / `download_urls` / `resolved_at` from `previous` onto `incoming` when incoming lacks them (per-arch: keep previous arch URL if incoming has none for that arch; never delete previous URLs unless incoming explicitly has newer — for `repo update`, incoming from upstream has none, so keep all previous)
+  - Wire `rebuild_repo_index_from_cached_files` / `repo update` so after fetching normalized upstream text, merge URL fields from the **previous** named cache (if present) before writing the new named cache
 
-- [ ] **Step 1: Re-locate markers in the post–Task-1 `core.cpp`**
+Merge algorithm for one package id:
 
-```bash
-rg -n '^(std::vector<char\*> process_argv|ProcessResult run_process_capture_timeout|std::string format_byte_count|ProcessResult run_process_capture_download_progress|void ensure_directory)' src/core.cpp
+```
+for each arch in previous.download_urls:
+  if incoming lacks that arch URL → copy
+if previous.download_url set and incoming.download_url empty and incoming.download_urls empty:
+  copy download_url + resolved_at
+else if any URLs merged:
+  keep previous.resolved_at if incoming.resolved_at empty
 ```
 
-Record:
-- `P0` = line of `process_argv`
-- `P1` = last line of `run_process_capture_timeout` (closing `}` of that function)
-- `D0` = line of `format_byte_count` (start of progress section; must remain in core until Task 3)
-- `R0` = line of `run_process_capture_download_progress`
-- `R1` = last line of that function
-- `E0` = line of `ensure_directory`
+- [ ] **Step 1: Extend smoke for persist + merge**
 
-- [ ] **Step 2: Create `src/process.cpp`**
+Append a second compiled unit (or shell section) that:
 
-Extract `[P0, P1]` and `[R0, R1]` into one file. Wrap every extracted symbol that is **not** declared in `yai.hpp` inside `namespace { ... }`. Public functions stay at file scope:
+1. Writes a minimal named cache + combined index under `$HOME/.local/share/yai/repos/` with one `direct_url` package **without** download fields.
+2. Calls `repo_package_set_download_url` + `upsert_repo_package_download_urls`.
+3. Reloads via `load_repo_packages()` and asserts URL present.
+4. Simulates update: build “incoming” package without URLs, `merge_repo_package_download_url_fields(incoming, previous)` keeps URLs.
+5. Writes merged package into a fake post-update named cache and `rebuild_repo_index_from_cached_files` — combined index still has URLs.
 
-Public (outside anon):
-- `run_process`
-- `run_process_capture`
-- `run_process_capture_separate`
-- `run_process_capture_timeout`
-- `run_process_capture_download_progress`
+- [ ] **Step 2: Run — expect FAIL** on missing APIs
 
-Everything else from the process slice goes in the anonymous namespace (including `enum class ReadOutputResult` and helpers used only by the public runners).
+- [ ] **Step 3: Implement persist + merge wiring**
 
-File skeleton:
+In `store_repo_index_updates` (commands_repo.cpp), before `write_text_file(named_repo_index_path(...))`:
 
 ```cpp
-#include "yai.hpp"
-
-// Child-process execution and captured downloads (including progress-aware capture).
-
-namespace {
-// ... former file-scope process helpers ...
-} // namespace
-
-int run_process(...) { ... }
-ProcessResult run_process_capture(...) { ... }
-ProcessOutput run_process_capture_separate(...) { ... }
-ProcessResult run_process_capture_timeout(...) { ... }
-ProcessResult run_process_capture_download_progress(...) { ... }
+if (fs::exists(named_repo_index_path(entry.name))) {
+  // load previous packages from old named cache
+  // parse new index_text packages
+  // for matching ids, merge_repo_package_download_url_fields
+  // re-serialize packages into index_text
+}
 ```
 
-Implementation tip: after copying the contiguous `P0–P1` block, open `namespace {` before `process_argv` and close it immediately before `int run_process(`. Keep `run_process_capture_download_progress` after the timeout function (still file scope).
+Keep behavior unchanged when no previous cache exists.
 
-- [ ] **Step 3: Remove `[P0, P1]` and `[R0, R1]` from `src/core.cpp`**
+- [ ] **Step 4: Run smoke — expect PASS**
 
-Leave the progress block (`format_byte_count` … `clear_download_progress`) in place for Task 3. After removal, `output_has_fuse_error` should be followed by `format_byte_count` (temporarily), then later `ensure_directory`.
-
-- [ ] **Step 4: Add `src/process.cpp` to `Makefile` and build**
-
-```bash
-# edit Makefile SRC to include src/process.cpp
-make clean && make
-```
-
-Expected: success. Failures about missing helpers mean a helper was left outside anon in the wrong file or still referenced from `core.cpp`.
+- [ ] **Step 5: Commit** (only if user asked)
 
 ---
 

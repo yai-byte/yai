@@ -39,6 +39,11 @@ void print_package_source_reason(const RepoPackage& package) {
 }
 
 void print_package_source_info(const RepoPackage& package) {
+    // Show source origin for packages from AppImage GitHub apps/
+    if (package.source_origin == "appimage_apps") {
+        std::cout << tr("Source origin: AppImage GitHub (apps/)\n");
+    }
+
     if (package.source_type == "github_release") {
         std::cout << tr("Source: ") << package.source_type << " "
                   << package.source_owner << "/" << package.source_repo << "\n";
@@ -70,6 +75,12 @@ void print_package_info(const RepoPackage& package) {
     std::cout << tr("Summary: ") << package.summary << "\n";
     std::cout << tr("Homepage: ") << package.homepage << "\n";
     std::cout << tr("License: ") << package.license << "\n";
+    if (!package.arch.empty()) {
+        std::cout << tr("Architecture: ") << package.arch << "\n";
+    }
+    if (!package.version.empty()) {
+        std::cout << tr("AppVersion: ") << package.version << "\n";
+    }
     print_package_source_info(package);
     if (!package.asset_pattern.empty()) {
         std::cout << tr("Asset pattern: ") << package.asset_pattern << "\n";

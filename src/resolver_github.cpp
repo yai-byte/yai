@@ -69,9 +69,6 @@ GitHubRelease resolve_github_latest(
     const std::string& repo_target,
     const std::string& asset_pattern,
     const std::string& arch) {
-    // GitHub resolution stops at choosing one release asset and recording where
-    // it came from. It does not download bytes, apply mirrors, or decide install
-    // side effects.
     const std::size_t slash = repo_target.find('/');
     const std::string owner = repo_target.substr(0, slash);
     const std::string repo = repo_target.substr(slash + 1);

@@ -85,6 +85,9 @@ RepoPackage parse_repo_package(const std::string& object_text) {
     package.asset_pattern = json_find_string(source, "asset_pattern").value_or("");
     package.download_url = json_find_string(object_text, "download_url").value_or("");
     package.resolved_at = json_find_string(object_text, "resolved_at").value_or("");
+    package.arch = json_find_string(object_text, "arch").value_or("");
+    package.version = json_find_string(object_text, "version").value_or("");
+    package.source_origin = json_find_string(object_text, "source_origin").value_or("");
     for (const auto& [arch, url] : json_find_string_map(object_text, "download_urls")) {
         package.download_urls[normalize_arch(arch)] = url;
     }
@@ -174,6 +177,21 @@ std::string serialize_repo_package(const RepoPackage& package) {
         out +=
             ",\n"
             "      \"resolved_at\": \"" + json_escape_string(package.resolved_at) + "\"";
+    }
+    if (!package.arch.empty()) {
+        out +=
+            ",\n"
+            "      \"arch\": \"" + json_escape_string(package.arch) + "\"";
+    }
+    if (!package.version.empty()) {
+        out +=
+            ",\n"
+            "      \"version\": \"" + json_escape_string(package.version) + "\"";
+    }
+    if (!package.source_origin.empty()) {
+        out +=
+            ",\n"
+            "      \"source_origin\": \"" + json_escape_string(package.source_origin) + "\"";
     }
     out +=
         "\n    }";

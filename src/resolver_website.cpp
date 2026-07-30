@@ -189,10 +189,11 @@ bool queue_website_url(
 }
 
 std::vector<std::string> common_project_download_urls(const std::string& project_url) {
-    const std::string base = is_file_url(project_url) ? url_directory(project_url) : url_origin(project_url) + "/";
-    if (base.empty()) {
+    const std::string origin = url_origin(project_url);
+    if (origin.empty()) {
         return {};
     }
+    const std::string base = origin + "/";
     return {
         base + "download",
         base + "downloads",
