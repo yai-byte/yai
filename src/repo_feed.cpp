@@ -500,13 +500,14 @@ std::string normalize_appimage_feed_index(const std::string& feed_text) {
     try {
         apps_names = fetch_appimage_apps_list();
         if (!apps_names.empty()) {
-            std::cerr << "yai: integrating " << apps_names.size()
-                      << " AppImage GitHub app entries into index...\n";
+            std::cerr << tr_format(
+                "yai: integrating {count} AppImage GitHub app entries into index...\n",
+                {{"{count}", std::to_string(apps_names.size())}});
         }
     } catch (const std::exception& e) {
-        std::cerr << "yai: warning: failed to fetch AppImage GitHub apps/ list: "
+        std::cerr << tr("yai: warning: failed to fetch AppImage GitHub apps/ list: ")
                   << e.what() << "\n";
-        std::cerr << "yai: continuing with feed.json packages only\n";
+        std::cerr << tr("yai: continuing with feed.json packages only\n");
         return repo_index_json_from_package_objects(packages);
     }
 
@@ -595,18 +596,25 @@ std::string normalize_appimage_feed_index(const std::string& feed_text) {
     }
 
     if (apps_added > 0 || apps_enriched > 0) {
-        std::cerr << "yai: AppImage GitHub integration summary:\n";
+        std::cerr << tr("yai: AppImage GitHub integration summary:\n");
         if (apps_added > 0) {
-            std::cerr << "  added " << apps_added << " new packages from apps/\n";
+            std::cerr << tr_format(
+                "  added {count} new packages from apps/\n",
+                {{"{count}", std::to_string(apps_added)}});
         }
         if (apps_enriched > 0) {
-            std::cerr << "  enriched " << apps_enriched
-                      << " packages with metadata (arch, version, description)\n";
+            std::cerr << tr_format(
+                "  enriched {count} packages with metadata (arch, version, description)\n",
+                {{"{count}", std::to_string(apps_enriched)}});
         }
         if (apps_failed > 0) {
-            std::cerr << "  " << apps_failed << " apps failed to parse\n";
+            std::cerr << tr_format(
+                "  {count} apps failed to parse\n",
+                {{"{count}", std::to_string(apps_failed)}});
         }
-        std::cerr << "  repo index ready (" << packages.size() << " packages total)\n";
+        std::cerr << tr_format(
+            "  repo index ready ({count} packages total)\n",
+            {{"{count}", std::to_string(packages.size())}});
     }
 
     return repo_index_json_from_package_objects(packages);

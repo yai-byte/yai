@@ -106,7 +106,7 @@ bool resolve_one_package(
         if (!overwrite && repo_package_has_download_url_for_arch(package, arch)) {
             ResolveLine line;
             line.kind = ResolveLine::Kind::Skip;
-            line.text = tr("skip ") + package.id + " " + arch;
+            line.text = tr_format("skip {id} {arch}", {{"{id}", package.id}, {"{arch}", arch}});
             if (mutex != nullptr) {
                 std::lock_guard<std::mutex> lock(*mutex);
                 ++counters.skipped;
@@ -137,7 +137,9 @@ bool resolve_one_package(
 
             ResolveLine line;
             line.kind = ResolveLine::Kind::Success;
-            line.text = tr("ok ") + package.id + " " + arch + " " + source.download_url;
+            line.text = tr_format(
+                "ok {id} {arch} {url}",
+                {{"{id}", package.id}, {"{arch}", arch}, {"{url}", source.download_url}});
             if (mutex != nullptr) {
                 std::lock_guard<std::mutex> lock(*mutex);
                 ++counters.resolved;
@@ -149,7 +151,9 @@ bool resolve_one_package(
         } catch (const std::exception& ex) {
             ResolveLine line;
             line.kind = ResolveLine::Kind::Fail;
-            line.text = tr("fail ") + package.id + " " + arch + ": " + ex.what();
+            line.text = tr_format(
+                "fail {id} {arch}: {error}",
+                {{"{id}", package.id}, {"{arch}", arch}, {"{error}", ex.what()}});
             if (mutex != nullptr) {
                 std::lock_guard<std::mutex> lock(*mutex);
                 ++counters.failed;

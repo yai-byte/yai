@@ -752,11 +752,18 @@ NetworkConfig prompt_china_network_config() {
     std::cout << tr("Choose a proxy provider:\n");
     const std::vector<MirrorProvider> providers = built_in_mirror_providers();
     for (std::size_t i = 0; i < providers.size(); ++i) {
-        std::cout << "  " << (i + 1) << ". " << providers[i].name << " - " << tr(providers[i].description) << "\n";
+        std::cout << tr_format(
+            "  {number}. {name} - {description}\n",
+            {{"{number}", std::to_string(i + 1)},
+             {"{name}", providers[i].name},
+             {"{description}", tr(providers[i].description)}});
     }
-    std::cout << "  " << (providers.size() + 1)
-              << tr(". custom - enter an Xget domain or template\n");
-    std::cout << tr("Choice [1-") << (providers.size() + 1) << "]: ";
+    std::cout << tr_format(
+        "  {number}. custom - enter an Xget domain or template\n",
+        {{"{number}", std::to_string(providers.size() + 1)}});
+    std::cout << tr_format(
+        "Choice [1-{max}]: ",
+        {{"{max}", std::to_string(providers.size() + 1)}});
 
     std::string choice_text;
     std::getline(std::cin, choice_text);

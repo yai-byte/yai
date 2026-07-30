@@ -45,8 +45,11 @@ void print_package_source_info(const RepoPackage& package) {
     }
 
     if (package.source_type == "github_release") {
-        std::cout << tr("Source: ") << package.source_type << " "
-                  << package.source_owner << "/" << package.source_repo << "\n";
+        std::cout << tr_format(
+            "Source: {type} {owner}/{repo}\n",
+            {{"{type}", package.source_type},
+             {"{owner}", package.source_owner},
+             {"{repo}", package.source_repo}});
     } else if (package.source_type == "direct_url") {
         std::cout << tr("Source: direct_url ") << package.source_url << "\n";
     } else if (package.source_type == "website_page") {
@@ -61,8 +64,9 @@ void print_package_source_info(const RepoPackage& package) {
         if (!package.homepage.empty()) {
             std::cout << tr("Homepage: ") << package.homepage << "\n";
         }
-        std::cout << tr("Visit the homepage or AppImageHub page to manually download: ")
-                  << package.homepage << "\n";
+        std::cout << tr_format(
+            "Visit the homepage or AppImageHub page to manually download: {homepage}\n",
+            {{"{homepage}", package.homepage}});
     } else {
         std::cout << tr("Source: unavailable\n");
         print_package_source_reason(package);

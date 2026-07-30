@@ -1167,3 +1167,420 @@ msgstr "YYLX 前缀代理"
 
 msgid "LLKK prefix proxy"
 msgstr "LLKK 前缀代理"
+
+msgid "                   [--package <id>] [--overwrite] [--concurrency <n>]\\n"
+msgstr ""
+
+msgid "                   [--show <xyz>] [--summary|--no-summary]\\n"
+msgstr ""
+
+msgid "              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\\n"
+msgstr ""
+
+msgid "              [--download direct|mirror_first|direct_first]\\n"
+msgstr ""
+
+msgid "              [--downloader auto|curl|wget|wget2|aria2c]\\n"
+msgstr ""
+
+msgid "              [--mirror-template <template>]\\n"
+msgstr ""
+
+msgid "              [--recrawl] [--jobs <n>] [--yes|-y]\\n"
+msgstr ""
+
+msgid "  (AppImageHub catalog page — yai will attempt to find the real download source from the catalog during install)\\n"
+msgstr ""
+
+msgid "  added {count} new packages from apps/\\n"
+msgstr ""
+
+msgid "  enriched {count} packages with metadata (arch, version, description)\\n"
+msgstr ""
+
+msgid "  repo index ready ({count} packages total)\\n"
+msgstr ""
+
+msgid "  yai doctor\\n"
+msgstr ""
+
+msgid "  yai download <package|url|owner/repo> [...]\\n"
+msgstr ""
+
+msgid "  yai help\\n"
+msgstr ""
+
+msgid "  yai info <package>\\n"
+msgstr ""
+
+msgid "  yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>]\\n"
+msgstr ""
+
+msgid "  yai list\\n"
+msgstr ""
+
+msgid "  yai mirror custom <xget-domain-or-template>\\n"
+msgstr ""
+
+msgid "  yai mirror list\\n"
+msgstr ""
+
+msgid "  yai mirror off\\n"
+msgstr ""
+
+msgid "  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\\n"
+msgstr ""
+
+msgid "  yai remove <id> [--yes]\\n"
+msgstr ""
+
+msgid "  yai repair <id> [--yes]\\n"
+msgstr ""
+
+msgid "  yai repo add <name> [url-or-path]\\n"
+msgstr ""
+
+msgid "  yai repo list\\n"
+msgstr ""
+
+msgid "  yai repo remove <name-or-pattern> [--yes]\\n"
+msgstr ""
+
+msgid "  yai repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]\\n"
+msgstr ""
+
+msgid "  yai repo update [name]\\n"
+msgstr ""
+
+msgid "  yai rollback <id> [--yes]\\n"
+msgstr ""
+
+msgid "  yai search <keyword>\\n"
+msgstr ""
+
+msgid "  yai update [id]\\n"
+msgstr ""
+
+msgid "  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\\n"
+msgstr ""
+
+msgid "  {count} apps failed to parse\\n"
+msgstr ""
+
+msgid " job(s)\\n"
+msgstr ""
+
+msgid "' — GitHub API error: "
+msgstr ""
+
+msgid "' — no download link found. data/ and apps/ fallbacks also failed."
+msgstr ""
+
+msgid "(https://github.com/settings/tokens) to increase the limit from 60 to 5000 requests/hour, "
+msgstr ""
+
+msgid "--id/--name are single-install only.\\n"
+msgstr ""
+
+msgid ". AppImageHub, data/, and apps/ fallbacks all failed. Set YAI_GITHUB_TOKEN to avoid rate limits."
+msgstr ""
+
+msgid ". Set YAI_GITHUB_TOKEN environment variable to a GitHub Personal Access Token "
+msgstr ""
+
+msgid ". The repository may be private, restricted, or blocked. "
+msgstr ""
+
+msgid ". Trying AppImageHub catalog fallback...\\n"
+msgstr ""
+
+msgid ". Your YAI_GITHUB_TOKEN may be invalid or expired. "
+msgstr ""
+
+msgid ". custom - enter an Xget domain or template\\n"
+msgstr ""
+
+msgid ": response exceeded maximum size"
+msgstr ""
+
+msgid "AppVersion: "
+msgstr ""
+
+msgid "Architecture: "
+msgstr ""
+
+msgid "China network optimization\\n"
+msgstr ""
+
+msgid "Choose a proxy provider:\\n"
+msgstr ""
+
+msgid "Doctor finished with no warnings\\n"
+msgstr ""
+
+msgid "Doctor finished with {count} warning(s)\\n"
+msgstr ""
+
+msgid "Download cancelled\\n"
+msgstr ""
+
+msgid "FUSE problem detected; yai selected a fallback mode.\\n"
+msgstr ""
+
+msgid "GitHub API rate limit exceeded for "
+msgstr ""
+
+msgid "GitHub API returned 403 Forbidden for "
+msgstr ""
+
+msgid "GitHub Release proxy disabled; yai will use direct GitHub downloads by default\\n"
+msgstr ""
+
+msgid "GitHub release resolution failed for '"
+msgstr ""
+
+msgid "Install cancelled\\n"
+msgstr ""
+
+msgid "No repos configured\\n"
+msgstr ""
+
+msgid "No upgradable packages\\n"
+msgstr ""
+
+msgid "OK   /dev/fuse is accessible\\n"
+msgstr ""
+
+msgid "OK   no installed yai apps found\\n"
+msgstr ""
+
+msgid "OK   {id}: files present, mode={mode}\\n"
+msgstr ""
+
+msgid "Package/id/repo-name arguments support quoted * and ? patterns; multiple matches run in sorted order.\\n"
+msgstr ""
+
+msgid "Please check your token at https://github.com/settings/tokens"
+msgstr ""
+
+msgid "Remove cancelled\\n"
+msgstr ""
+
+msgid "Repair cancelled\\n"
+msgstr ""
+
+msgid "Repo remove cancelled\\n"
+msgstr ""
+
+msgid "Rollback cancelled\\n"
+msgstr ""
+
+msgid "Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\\n"
+msgstr ""
+
+msgid "Source origin: AppImage GitHub (apps/)\\n"
+msgstr ""
+
+msgid "Source: unavailable — cannot be installed automatically\\n"
+msgstr ""
+
+msgid "Source: unavailable\\n"
+msgstr ""
+
+msgid "Updated {count} repo(s)\\n"
+msgstr ""
+
+msgid "Upgrade cancelled\\n"
+msgstr ""
+
+msgid "Upgraded {id} to {version}\\n"
+msgstr ""
+
+msgid "Upgrading {id} from {current} to {latest}\\n"
+msgstr ""
+
+msgid "Usage:\\n"
+msgstr ""
+
+msgid "Use YAI_GITHUB_TOKEN with appropriate permissions to access private repositories."
+msgstr ""
+
+msgid "Visit the homepage or AppImageHub page to manually download: "
+msgstr ""
+
+msgid "WARN /dev/fuse exists but is not accessible by this user\\n"
+msgstr ""
+
+msgid "WARN /dev/fuse is missing; some AppImages may require extracted mode\\n"
+msgstr ""
+
+msgid "WARN {id}: missing AppImage {path}\\n"
+msgstr ""
+
+msgid "WARN {id}: missing desktop entry {path}\\n"
+msgstr ""
+
+msgid "WARN {id}: missing extracted AppRun {path}\\n"
+msgstr ""
+
+msgid "WARN {id}: missing wrapper {path}\\n"
+msgstr ""
+
+msgid "\\nAvailable providers:\\n"
+msgstr ""
+
+msgid "\\nLanguage: follows system locale by default; set YAI_LANG=zh or YAI_LANG=en to override.\\n"
+msgstr ""
+
+msgid "batch stream"
+msgstr ""
+
+msgid "batch stream event write"
+msgstr ""
+
+msgid "batch stream stderr write"
+msgstr ""
+
+msgid "batch stream stdout write"
+msgstr ""
+
+msgid "batch stream: poll failed: "
+msgstr ""
+
+msgid "batch stream: waitpid failed: "
+msgstr ""
+
+msgid "install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\\n"
+msgstr ""
+
+msgid "internal error: use find_repo_packages for multi-match"
+msgstr ""
+
+msgid "multi-match pattern requires list resolver"
+msgstr ""
+
+msgid "no installable AppImage source found for '"
+msgstr ""
+
+msgid "or wait for the rate limit window to reset."
+msgstr ""
+
+msgid "resolved: {resolved} skipped: {skipped} failed: {failed}\\n"
+msgstr ""
+
+msgid "yai: AppImage GitHub integration summary:\\n"
+msgstr ""
+
+msgid "yai: GitHub release resolution failed for "
+msgstr ""
+
+msgid "yai: continuing with feed.json packages only\\n"
+msgstr ""
+
+msgid "yai: direct mode did not pass runtime probe; trying extract-and-run mode\\n"
+msgstr ""
+
+msgid "yai: direct mode reported a FUSE problem; trying extract-and-run mode\\n"
+msgstr ""
+
+msgid "yai: downloaded an AppImage landing page; following embedded AppImage link\\n"
+msgstr ""
+
+msgid "yai: extract-and-run mode did not pass runtime probe; extracting AppImage\\n"
+msgstr ""
+
+msgid "yai: found GitHub repo in apps/: "
+msgstr ""
+
+msgid "yai: found GitHub repo in data/: "
+msgstr ""
+
+msgid "yai: found GitHub repo on AppImageHub: "
+msgstr ""
+
+msgid "yai: found direct download URL in apps/"
+msgstr ""
+
+msgid "yai: found direct download URL in data/"
+msgstr ""
+
+msgid "yai: found direct download URL on AppImageHub\\n"
+msgstr ""
+
+msgid "yai: found homepage on AppImageHub: "
+msgstr ""
+
+msgid "yai: integrating {count} AppImage GitHub app entries into index...\\n"
+msgstr ""
+
+msgid "yai: probing direct AppImage mode\\n"
+msgstr ""
+
+msgid "yai: probing extract-and-run AppImage mode\\n"
+msgstr ""
+
+msgid "yai: selected direct AppImage mode\\n"
+msgstr ""
+
+msgid "yai: selected extract-and-run AppImage mode\\n"
+msgstr ""
+
+msgid "yai: selected extracted AppRun mode\\n"
+msgstr ""
+
+msgid "yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\\n"
+msgstr ""
+
+msgid "yai: trying AppImage GitHub data/ lookup for download fallback...\\n"
+msgstr ""
+
+msgid "yai: warning: failed to clean downloaded HTML landing page before following AppImage link\\n"
+msgstr ""
+
+msgid "yai: warning: failed to clean downloaded HTML landing page\\n"
+msgstr ""
+
+msgid "yai: warning: failed to clean temporary download files\\n"
+msgstr ""
+
+msgid "yai: warning: failed to clean temporary download metadata\\n"
+msgstr ""
+
+msgid "yai: warning: failed to fetch AppImage GitHub apps/ list: "
+msgstr ""
+
+msgid "yai: website search failed; fetching AppImageHub catalog page for "
+msgstr ""
+
+msgid "yai: website search selected {url} after checking {checked} page(s), queued {queued}, skipped {skipped}\\n"
+msgstr ""
+
+msgid "{id} is already up to date ({version})\\n"
+msgstr ""
+
+msgid "  {number}. {name} - {description}\n"
+msgstr ""
+
+msgid "  {number}. custom - enter an Xget domain or template\n"
+msgstr ""
+
+msgid "Choice [1-{max}]: "
+msgstr ""
+
+msgid "Source: {type} {owner}/{repo}\n"
+msgstr ""
+
+msgid "Visit the homepage or AppImageHub page to manually download: {homepage}\n"
+msgstr ""
+
+msgid "skip {id} {arch}"
+msgstr ""
+
+msgid "ok {id} {arch} {url}"
+msgstr ""
+
+msgid "fail {id} {arch}: {error}"
+msgstr ""
+
+msgid "Unknown"
+msgstr ""
