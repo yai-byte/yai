@@ -115,11 +115,11 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
         const fs::path path = file_url_path(url);
         std::error_code ec;
         if (!fs::exists(path, ec) || ec) {
-            return {UrlFreshness::Error, "file not found: " + path.string(), {}};
+            return {UrlFreshness::Error, tr("file not found: ") + path.string(), {}};
         }
         const std::uintmax_t size = fs::file_size(path, ec);
         if (ec) {
-            return {UrlFreshness::Error, "failed to read file size: " + ec.message(), {}};
+            return {UrlFreshness::Error, tr("failed to read file size: ") + ec.message(), {}};
         }
         HttpValidators remote;
         remote.content_length = std::to_string(size);
@@ -127,7 +127,7 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
     }
 
     if (!executable_available("curl")) {
-        return {UrlFreshness::Unknown, "curl is not available for freshness probe", {}};
+        return {UrlFreshness::Unknown, tr("curl is not available for freshness probe"), {}};
     }
 
     const fs::path headers = unique_temp_headers_path();
@@ -152,9 +152,9 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
     (void)removed;
 
     if (result.exit_code != 0 || result.timed_out) {
-        std::string detail = result.timed_out ? "HEAD request timed out" : trim(result.output);
+        std::string detail = result.timed_out ? tr("HEAD request timed out") : trim(result.output);
         if (detail.empty()) {
-            detail = "HEAD request failed";
+            detail = tr("HEAD request failed");
         }
         return {UrlFreshness::Error, detail, remote};
     }

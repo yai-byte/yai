@@ -388,7 +388,7 @@ void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& sou
             ? source.source_url
             : (!source.download_url.empty() ? source.download_url : context.source_url);
     if (candidate_url.empty()) {
-        throw std::runtime_error(tr("package is not upgradable: ") + "missing update source URL");
+        throw std::runtime_error(tr("package is not upgradable: ") + tr("missing update source URL"));
     }
 
     const UrlFreshnessResult probe =

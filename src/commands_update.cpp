@@ -117,7 +117,7 @@ UpdatePreviewResult preview_from_url_freshness(
     const std::string& candidate_url,
     const fs::path& metadata) {
     if (candidate_url.empty()) {
-        return UpdatePreviewResult{id, current_version, "", "error", "missing update source URL"};
+        return UpdatePreviewResult{id, current_version, "", "error", tr("missing update source URL")};
     }
 
     const UrlFreshnessResult probe =

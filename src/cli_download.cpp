@@ -624,7 +624,7 @@ std::string fetch_text_limited(
         constexpr std::size_t kMaxErrorDetail = 500;
         if (detail.size() > kMaxErrorDetail) {
             detail.resize(kMaxErrorDetail);
-            detail += "... (truncated)";
+            detail += tr("... (truncated)");
         }
         throw std::runtime_error(tr("failed to fetch ") + url + tr(": ") + detail);
     }
