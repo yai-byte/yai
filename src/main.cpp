@@ -177,33 +177,39 @@ void run_batch_command(const BatchCommand& batch) {
         tr(" task(s) with ") + std::to_string(batch.jobs) + tr(" job(s)\n"));
 
     if (batch.expanded_multi) {
-        for (std::size_t i = 0; i < batch.targets.size(); ++i) {
-            const std::string& target = batch.targets[i];
-            StreamingBatchResult result;
-            try {
-                result = run_batch_task_streaming(
-                    batch_child_args(batch, target),
-                    std::nullopt,
-                    {{"YAI_BATCH_CHILD", "1"}},
-                    i,
-                    batch.targets.size(),
-                    target,
-                    ui);
-            } catch (const std::exception& ex) {
-                ui.log_line(i, target, ex.what());
-                result.exit_code = 1;
+        try {
+            for (std::size_t i = 0; i < batch.targets.size(); ++i) {
+                check_interrupt();
+                const std::string& target = batch.targets[i];
+                StreamingBatchResult result;
+                try {
+                    result = run_batch_task_streaming(
+                        batch_child_args(batch, target),
+                        std::nullopt,
+                        {{"YAI_BATCH_CHILD", "1"}},
+                        i,
+                        batch.targets.size(),
+                        target,
+                        ui);
+                } catch (const std::exception& ex) {
+                    ui.log_line(i, target, ex.what());
+                    result.exit_code = 1;
+                }
+                if (result.exit_code != 0) {
+                    ui.log_parent(tr_format(
+                        "yai: task failed: {command} {target} (exit {code})\n",
+                        {{"{command}", batch.command},
+                         {"{target}", target},
+                         {"{code}", std::to_string(result.exit_code)}}));
+                    ui.shutdown();
+                    throw std::runtime_error(tr("batch stopped after task failure"));
+                }
             }
-            if (result.exit_code != 0) {
-                ui.log_parent(tr_format(
-                    "yai: task failed: {command} {target} (exit {code})\n",
-                    {{"{command}", batch.command},
-                     {"{target}", target},
-                     {"{code}", std::to_string(result.exit_code)}}));
-                ui.shutdown();
-                throw std::runtime_error(tr("batch stopped after task failure"));
-            }
+            ui.shutdown();
+        } catch (...) {
+            ui.shutdown();
+            throw;
         }
-        ui.shutdown();
         return;
     }
 
@@ -247,6 +253,9 @@ void run_batch_command(const BatchCommand& batch) {
                          {"{target}", results[index].target},
                          {"{code}", std::to_string(results[index].exit_code)}}));
                 }
+                if (was_interrupted()) {
+                    return;
+                }
             }
         });
     }
@@ -261,6 +270,16 @@ void run_batch_command(const BatchCommand& batch) {
         }
     }
     ui.shutdown();
+
+    if (was_interrupted()) {
+        std::cerr << tr("yai: operation interrupted by user\n");
+        if (failed > 0) {
+            std::cerr << tr_format("yai: {failed} of {total} batch task(s) did not complete\n",
+                {{"{failed}", std::to_string(failed)},
+                 {"{total}", std::to_string(results.size())}});
+        }
+        throw std::runtime_error(tr("batch interrupted"));
+    }
     if (failed > 0) {
         throw std::runtime_error(tr_format(
             "{failed} of {total} batch task(s) failed",
@@ -311,6 +330,11 @@ void dispatch_command(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+    // Install signal handler so the program can gracefully handle SIGINT/SIGTERM.
+    install_signal_handler();
+    // Clean up stale temporary files from previous interrupted runs.
+    cleanup_orphan_downloads();
+
     try {
         if (argc < 2) {
             print_usage();

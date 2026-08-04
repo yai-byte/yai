@@ -322,6 +322,7 @@ void repo_resolve_app(int argc, char** argv) {
 
     if (options.concurrency <= 1 || selected.size() <= 1) {
         for (const std::size_t index : selected) {
+            check_interrupt();
             if (resolve_one_package(
                     packages[index],
                     arches,
@@ -356,12 +357,28 @@ void repo_resolve_app(int argc, char** argv) {
                         std::lock_guard<std::mutex> lock(mutex);
                         updated_indices.push_back(index);
                     }
+                    if (was_interrupted()) {
+                        return;
+                    }
                 }
             }));
         }
         for (auto& task : tasks) {
             task.get();
         }
+    }
+
+    // If interrupted, save partial results and report
+    if (was_interrupted()) {
+        if (repo_index_is_locally_writable() && !updated_indices.empty()) {
+            save_repo_packages_index(packages, repo_index_path());
+            for (const std::size_t index : updated_indices) {
+                upsert_repo_package_download_urls(packages[index]);
+            }
+        }
+        std::cerr << tr_format("yai: repo resolve interrupted; {count} package(s) saved\n",
+            {{"{count}", std::to_string(updated_indices.size())}});
+        throw std::runtime_error(tr("repo resolve interrupted"));
     }
 
     // Save the full combined index first so upsert can match ids, then patch

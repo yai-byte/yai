@@ -236,7 +236,7 @@ void save_repo_packages_index(const std::vector<RepoPackage>& packages, const fs
     if (path.has_parent_path()) {
         ensure_directory(path.parent_path());
     }
-    write_text_file(path, repo_index_json_from_package_objects(objects));
+    write_text_file_atomic(path, repo_index_json_from_package_objects(objects));
 }
 
 RepoPackage merge_repo_package_download_url_fields(
@@ -385,7 +385,7 @@ void write_repo_entries(const std::vector<RepoEntry>& entries) {
     for (const RepoEntry& entry : entries) {
         content += entry.name + "\t" + entry.location + "\n";
     }
-    write_text_file(repo_config_path(), content);
+    write_text_file_atomic(repo_config_path(), content);
 }
 
 std::string validate_repo_name(const std::string& value) {
@@ -452,7 +452,7 @@ void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries)
     }
 
     ensure_directory(repos_dir_path());
-    write_text_file(repos_dir_path() / "index.json", repo_index_json_from_package_objects(packages));
+    write_text_file_atomic(repos_dir_path() / "index.json", repo_index_json_from_package_objects(packages));
 }
 
 std::vector<RepoPackage> find_repo_packages(const std::string& id) {
@@ -564,7 +564,7 @@ std::string detect_index_region() {
     // Cache result
     try {
         ensure_directory(repos_dir_path());
-        write_text_file(cache, region);
+        write_text_file_atomic(cache, region);
     } catch (const std::exception&) {
         // Best-effort cache write; must not fail detection.
     }

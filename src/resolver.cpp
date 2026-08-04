@@ -117,6 +117,7 @@ std::string stage_appimage_source(
     // Landing-page redirects mutate a local copy of the source URL so the
     // caller's upstream identity stays intact; validators from the final
     // successful download are copied back onto source.
+    check_interrupt();
     if (source.source_kind == "local_path") {
         copy_file_overwrite(source.source_url, target);
         return source.source_url;
@@ -124,6 +125,7 @@ std::string stage_appimage_source(
 
     ResolvedSource current_source = source;
     for (int redirects = 0; redirects < 3; ++redirects) {
+        check_interrupt();
         const std::string downloaded_url = download_with_strategy(current_source, options, target);
         const std::string landing_appimage_url =
             appimage_url_from_download_landing_page(target, downloaded_url, options.target_arch);

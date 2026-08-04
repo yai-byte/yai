@@ -484,6 +484,7 @@ void run_downloader(
     const std::string& url,
     const fs::path& part,
     const fs::path& headers) {
+    check_interrupt();
     ProcessResult result;
     for (int attempt = 0; attempt < 3; ++attempt) {
         const DownloadToolCommand cmd = build_downloader_command(downloader, url, part, headers);
@@ -517,6 +518,7 @@ HttpValidators download_file(const std::string& url, const fs::path& target, con
 
     std::string last_error;
     for (std::size_t i = 0; i < downloaders.size(); ++i) {
+        check_interrupt();
         const std::string& selected = downloaders[i];
         remove_required(part, tr("preparing temporary download file"));
         remove_required(headers, tr("preparing temporary download headers"));
@@ -542,6 +544,9 @@ HttpValidators download_file(const std::string& url, const fs::path& target, con
         } catch (const std::exception& ex) {
             last_error = selected + ": " + ex.what();
             remove_download_temps(part, headers);
+            if (was_interrupted()) {
+                throw;
+            }
             if (i + 1 < downloaders.size()) {
                 std::cerr << tr("yai: downloader failed, trying next: ")
                           << last_error << "\n";

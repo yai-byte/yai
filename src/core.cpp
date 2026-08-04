@@ -388,6 +388,24 @@ void write_text_file(const fs::path& path, const std::string& content) {
     out << content;
 }
 
+void write_text_file_atomic(const fs::path& path, const std::string& content) {
+    const fs::path temp_path = path.string() + ".tmp";
+    std::ofstream out(temp_path);
+    if (!out) {
+        throw std::runtime_error(tr("failed to write ") + temp_path.string());
+    }
+    out << content;
+    out.flush();
+    std::error_code ec;
+    fs::rename(temp_path, path, ec);
+    if (ec) {
+        // Clean up the temp file on failure
+        std::error_code remove_ec;
+        fs::remove(temp_path, remove_ec);
+        throw std::runtime_error(tr("failed to move file into place: ") + ec.message());
+    }
+}
+
 std::string read_text_file(const fs::path& path) {
     std::ifstream in(path);
     if (!in) {
@@ -500,7 +518,7 @@ void write_network_config(const NetworkConfig& config) {
         "provider=" + config.provider + "\n"
         "download_strategy=" + config.download_strategy + "\n"
         "mirror_template=" + config.mirror_template + "\n";
-    write_text_file(network_config_path(), content);
+    write_text_file_atomic(network_config_path(), content);
 }
 
 std::string china_network_disclaimer() {
@@ -520,4 +538,71 @@ InstallPaths paths_for(const std::string& id) {
         app_dir / "metadata.json",
         app_dir / "metadata.conf",
     };
+}
+
+// --- Signal / interrupt handling ---
+
+namespace {
+
+std::atomic<bool> g_interrupted{false};
+std::atomic<int> g_interrupt_count{0};
+
+void signal_handler(int signal) {
+    if (signal == SIGINT || signal == SIGTERM) {
+        const int count = g_interrupt_count.fetch_add(1) + 1;
+        g_interrupted.store(true);
+        if (count >= 2) {
+            std::_Exit(1);
+        }
+    }
+}
+
+} // namespace
+
+void install_signal_handler() {
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+}
+
+bool was_interrupted() {
+    return g_interrupted.load();
+}
+
+void check_interrupt() {
+    if (g_interrupted.load()) {
+        throw std::runtime_error(tr("Operation interrupted by user"));
+    }
+}
+
+void cleanup_orphan_downloads() {
+    // Remove stale .part and .aria2 files left by previous interrupted runs.
+    // Also remove .tmp files created by atomic writes.
+    const fs::path data_dir = expand_home_path(".local/share/yai");
+    if (!fs::exists(data_dir)) {
+        return;
+    }
+    try {
+        for (const auto& entry : fs::recursive_directory_iterator(data_dir)) {
+            if (!entry.is_regular_file()) {
+                continue;
+            }
+            const std::string filename = entry.path().filename().string();
+            if (filename.size() >= 5 && filename.substr(filename.size() - 5) == ".part") {
+                std::error_code ec;
+                fs::remove(entry.path(), ec);
+            } else if (filename.size() >= 6 && filename.substr(filename.size() - 6) == ".aria2") {
+                std::error_code ec;
+                fs::remove(entry.path(), ec);
+            } else if (filename.size() >= 4 && filename.substr(filename.size() - 4) == ".tmp") {
+                std::error_code ec;
+                fs::remove(entry.path(), ec);
+            }
+        }
+    } catch (const std::exception&) {
+        // Best-effort cleanup; never fail startup.
+    }
 }

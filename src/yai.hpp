@@ -508,6 +508,7 @@ bool remove_best_effort(const fs::path& path);
 bool remove_all_best_effort(const fs::path& path);
 void write_executable_file(const fs::path& path, const std::string& content);
 void write_text_file(const fs::path& path, const std::string& content);
+void write_text_file_atomic(const fs::path& path, const std::string& content);
 std::string read_text_file(const fs::path& path);
 void copy_file_overwrite(const fs::path& from, const fs::path& to);
 std::vector<MirrorProvider> built_in_mirror_providers();
@@ -847,3 +848,9 @@ void mirror_off_app(int argc);
 void mirror_app(int argc, char** argv);
 void doctor_app_files(int& warnings);
 void doctor_app(int argc);
+
+// Signal / interrupt handling
+void install_signal_handler();
+bool was_interrupted();
+void check_interrupt();
+void cleanup_orphan_downloads();
