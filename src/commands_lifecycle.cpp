@@ -107,9 +107,6 @@ void download_app(int argc, char** argv) {
 
     const RepoIndexUrlResolveState index_state = inspect_repo_index_url_state(options);
     ResolvedSource source = resolve_install_source(options);
-    if (source.source_kind == "local_path") {
-        throw std::runtime_error(tr("download does not accept local AppImage paths"));
-    }
 
     const InstallOptions effective_options = apply_network_config_to_options(options, source);
     const fs::path target = fs::current_path() / download_output_name(source);
@@ -119,6 +116,14 @@ void download_app(int argc, char** argv) {
     // The destination is current_path() / {source.id}.AppImage (package id
     // basename). Refusing collisions preserves download-only behavior without
     // silently replacing user files.
+
+    // If the source is a local path, copy the file instead of downloading
+    if (source.source_kind == "local_path") {
+        std::cout << tr("Copying local AppImage...") << "\n";
+        copy_file_overwrite(source.download_url, target);
+        std::cout << tr("Copied to: ") << target << "\n";
+        return;
+    }
 
     print_download_progress_banner(effective_options, source);
     stage_resolved_source_with_index_fallback(options, effective_options, index_state, source, target);

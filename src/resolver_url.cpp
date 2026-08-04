@@ -611,14 +611,23 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
         urls.push_back("https://www.gimp.org/downloads/");
     }
 
-    // Generic URL generation from homepage for projects not covered above
+    // Build seed URLs for hint generation. When the source URL is an AppImageHub
+    // catalog URL, replace it with the proper app page URL since AppImageHub
+    // has been restructured and old download page URLs (e.g. /download, /releases)
+    // no longer exist.
     std::vector<std::string> seeds;
-    if (!package.homepage.empty() && !is_file_url(package.homepage)) {
-        seeds.push_back(package.homepage);
-    }
     if (!package.source_url.empty() && package.source_type == "website_page" &&
         !is_file_url(package.source_url)) {
-        seeds.push_back(package.source_url);
+        if (is_appimage_catalog_url(package.source_url)) {
+            // Use the proper AppImageHub app page URL
+            seeds.push_back(appimage_catalog_page_url(package.name));
+        } else {
+            seeds.push_back(package.source_url);
+        }
+    }
+    if (!package.homepage.empty() && !is_file_url(package.homepage) &&
+        !is_appimage_catalog_url(package.homepage)) {
+        seeds.push_back(package.homepage);
     }
 
     for (const std::string& seed : seeds) {
@@ -627,54 +636,53 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
             continue;
         }
 
-        const std::string base = origin + "/";
-        const std::vector<std::string> patterns = {
-            "download",
-            "downloads",
-            "en/download",
-            "en/downloads",
-            "linux/download",
-            "release",
-            "releases",
-            "platform",
-            "platforms",
-            "download.html",
-            "downloads.html",
-        };
-        for (const std::string& pattern : patterns) {
-            urls.push_back(base + pattern);
+        // For AppImageHub URLs, only the app page itself is valid.
+        // Do not generate sub-page patterns.
+        if (is_appimage_catalog_url(seed)) {
+            continue;
         }
+
+        const std::string base = origin + "/";
 
         // Generate project-specific release page URLs. Many projects follow
         // a pattern like /release/{name}/, /download/{name}/, or similar.
         if (!id.empty()) {
             const std::string proj = id;
-            urls.push_back(base + "release/" + proj + "/");
-            urls.push_back(base + "releases/" + proj + "/");
+            urls.push_back(base + proj + "/");
             urls.push_back(base + "download/" + proj + "/");
             urls.push_back(base + "downloads/" + proj + "/");
+            urls.push_back(base + "release/" + proj + "/");
+            urls.push_back(base + "releases/" + proj + "/");
             urls.push_back(base + proj + "/download");
             urls.push_back(base + proj + "/downloads");
             urls.push_back(base + proj + "/release");
             urls.push_back(base + proj + "/releases");
-            urls.push_back(base + proj + "/platform");
             urls.push_back(base + proj + "/platforms");
+            urls.push_back(base + proj + "/linux");
         }
 
         // Generate version-aware URLs when version is available.
-        // This handles the common /release/{name}-{version}/platforms/ pattern
-        // used by Inkscape and many other projects.
         if (!package.version.empty() && !id.empty()) {
             const std::string& ver = package.version;
             const std::string ver_proj = id + "-" + ver;
             urls.push_back(base + "release/" + ver_proj + "/");
             urls.push_back(base + "release/" + ver_proj + "/platforms/");
-            urls.push_back(base + "release/" + ver_proj + "/platform/");
             urls.push_back(base + "download/" + ver_proj + "/");
-            urls.push_back(base + "downloads/" + ver_proj + "/");
-            urls.push_back(base + ver_proj + "/download");
-            urls.push_back(base + ver_proj + "/platforms");
+            urls.push_back(base + ver + "/");
+            urls.push_back(base + "release/" + ver + "/");
+            urls.push_back(base + "release/" + ver + "/platforms/");
+            urls.push_back(base + "download/" + ver + "/");
         }
+    }
+
+    // Also add AppImageHub patterns that may exist for the project
+    if (!id.empty()) {
+        urls.push_back("https://appimage.github.io/" + url_encode(package.name) + "/");
+        urls.push_back("https://appimage.github.io/" + url_encode(package.name) + "/releases");
+        // Add GitLab releases page URLs for projects that may be on GitLab
+        // This covers the common pattern where projects host AppImages on GitLab
+        urls.push_back("https://gitlab.com/" + id + "/" + id + "/-/releases");
+        urls.push_back("https://gitlab.com/" + id + "/" + id + "/-/releases?sort=created_desc");
     }
 
     return urls;
@@ -718,14 +726,26 @@ bool host_matches_allowed(const std::string& host, const std::vector<std::string
 bool is_known_file_hosting_host(const std::string& host) {
     // Known file hosting services that commonly distribute AppImage binary files.
     // These are trusted third-party hosts that projects use to publish releases.
-    return host == "gitlab.com" ||
-           host == "www.gitlab.com" ||
-           host == "sourceforge.net" ||
-           host == "www.sourceforge.net" ||
-           host == "launchpad.net" ||
-           host == "www.launchpad.net" ||
-           host == "fosshub.com" ||
-           host == "www.fosshub.com";
+    if (host == "gitlab.com" ||
+        host == "www.gitlab.com" ||
+        host == "sourceforge.net" ||
+        host == "www.sourceforge.net" ||
+        host == "launchpad.net" ||
+        host == "www.launchpad.net" ||
+        host == "fosshub.com" ||
+        host == "www.fosshub.com") {
+        return true;
+    }
+    // Self-hosted GitLab instances (e.g. gitlab.inkscape.org, gitlab.gnome.org)
+    if (host.find("gitlab.") != std::string::npos ||
+        host.find(".gitlab.") != std::string::npos) {
+        return true;
+    }
+    // Self-hosted SourceForge mirrors
+    if (host.find("sourceforge") != std::string::npos) {
+        return true;
+    }
+    return false;
 }
 
 bool is_allowed_website_url(

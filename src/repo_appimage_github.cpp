@@ -197,6 +197,8 @@ std::string extract_github_repo(const std::string& url) {
     return "";
 }
 
+}  // namespace
+
 bool looks_like_direct_download_url(const std::string& url) {
     if (url.empty()) return false;
     std::string lower = to_lower(url);
@@ -223,7 +225,62 @@ bool looks_like_github_repo_url(const std::string& url) {
     return true;
 }
 
-}  // namespace
+bool looks_like_gitlab_url(const std::string& url) {
+    if (url.empty()) return false;
+    std::string lower = to_lower(url);
+    return lower.find("gitlab.com/") != std::string::npos ||
+           lower.find("gitlab.") != std::string::npos;
+}
+
+std::string extract_gitlab_project(const std::string& url) {
+    std::string value = trim(url);
+
+    // Handle https://gitlab.com/group/project/-/... patterns
+    if (value.find("gitlab.com/") != std::string::npos) {
+        std::size_t pos = value.find("gitlab.com/");
+        std::string path = value.substr(pos + 11);
+        // Stop at /-/ (GitLab special prefix for pipelines, releases, etc.)
+        std::size_t sep = path.find("/-/");
+        if (sep != std::string::npos) {
+            path = path.substr(0, sep);
+        }
+        // Stop at query or fragment
+        std::size_t qf = path.find_first_of("?#");
+        if (qf != std::string::npos) path = path.substr(0, qf);
+        // Remove trailing slash
+        while (!path.empty() && path.back() == '/') {
+            path.pop_back();
+        }
+        return path;
+    }
+
+    // Handle self-hosted GitLab instances (e.g. gitlab.gnome.org, gitlab.inkscape.org)
+    if (value.find("gitlab.") != std::string::npos) {
+        std::size_t pos = value.find("://");
+        if (pos == std::string::npos) pos = 0;
+        // Find the path after the host
+        std::size_t host_end = value.find('/', pos + 3);
+        if (host_end != std::string::npos) {
+            std::string path = value.substr(host_end + 1);
+            // Stop at /-/ (GitLab special prefix)
+            std::size_t sep = path.find("/-/");
+            if (sep != std::string::npos) {
+                path = path.substr(0, sep);
+            }
+            std::size_t qf = path.find_first_of("?#");
+            if (qf != std::string::npos) path = path.substr(0, qf);
+            while (!path.empty() && path.back() == '/') {
+                path.pop_back();
+            }
+            // Must contain at least one slash (group/project)
+            if (path.find('/') != std::string::npos) {
+                return path;
+            }
+        }
+    }
+
+    return "";
+}
 
 // Fetch list of apps/ directory entries from GitHub API with pagination
 std::vector<std::string> fetch_appimage_apps_list(int timeout_ms) {
@@ -441,11 +498,36 @@ std::optional<AppImageAppsEntry> parse_appimage_apps_entry(
 std::optional<AppImageDataEntry> parse_appimage_data_entry(
     const std::string& name,
     int timeout_ms) {
+    std::string content;
     try {
+        // First try raw.githubusercontent.com
         std::string url = std::string(kAppImageGithubRawBase) +
             "/data/" + url_encode(name);
-        std::string content = fetch_text(url, timeout_ms);
+        content = fetch_text(url, timeout_ms);
+    } catch (const std::exception&) {
+        // raw.githubusercontent.com may be unreachable. Fall back to
+        // the GitHub API which returns base64-encoded content.
+        try {
+            std::string api_url =
+                "https://api.github.com/repos/AppImage/appimage.github.io/contents/data/" +
+                url_encode(name);
+            std::string api_json = fetch_text(api_url, timeout_ms);
+            auto json_content = json_find_string(api_json, "content");
+            if (json_content.has_value()) {
+                content = base64_decode(*json_content);
+                // Remove trailing newline if present in the encoding
+                if (!content.empty() && content.back() == '\n') {
+                    content.pop_back();
+                }
+            } else {
+                return std::nullopt;
+            }
+        } catch (const std::exception&) {
+            return std::nullopt;
+        }
+    }
 
+    try {
         AppImageDataEntry entry;
         entry.name = name;
 
@@ -491,8 +573,18 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
         if (!primary_url.empty()) {
             if (looks_like_direct_download_url(primary_url)) {
                 entry.direct_url = primary_url;
+                // Also extract GitLab project for release page fallback
+                if (looks_like_gitlab_url(primary_url)) {
+                    entry.gitlab_project = extract_gitlab_project(primary_url);
+                }
             } else if (looks_like_github_repo_url(primary_url)) {
                 entry.github_repo = extract_github_repo(primary_url);
+            } else if (looks_like_gitlab_url(primary_url)) {
+                entry.gitlab_project = extract_gitlab_project(primary_url);
+                // Treat GitLab URLs with .AppImage as direct download
+                if (to_lower(primary_url).find(".appimage") != std::string::npos) {
+                    entry.direct_url = primary_url;
+                }
             }
         }
 
@@ -506,8 +598,8 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
             }
         }
 
-        // If still no direct_url, check comments for download links
-        if (entry.direct_url.empty()) {
+        // If still no direct_url but found gitlab_project, that's sufficient
+        if (entry.direct_url.empty() && entry.gitlab_project.empty()) {
             for (const auto& comment_url : comment_urls) {
                 if (looks_like_direct_download_url(comment_url)) {
                     entry.direct_url = comment_url;
@@ -516,8 +608,19 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
             }
         }
 
+        // Check comments for GitLab project URLs
+        if (entry.gitlab_project.empty()) {
+            for (const auto& comment_url : comment_urls) {
+                if (looks_like_gitlab_url(comment_url)) {
+                    entry.gitlab_project = extract_gitlab_project(comment_url);
+                    break;
+                }
+            }
+        }
+
         // If we found nothing useful, return nullopt
-        if (entry.github_repo.empty() && entry.direct_url.empty()) {
+        if (entry.github_repo.empty() && entry.direct_url.empty() &&
+            entry.gitlab_project.empty()) {
             return std::nullopt;
         }
 

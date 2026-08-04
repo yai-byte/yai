@@ -371,6 +371,8 @@ DownloadToolCommand build_downloader_command(
             "--location",
             "--silent",
             "--show-error",
+            "--user-agent",
+            "yai/1.0 (+https://github.com/AppImage/yai)",
             "--retry",
             "3",
             "--continue-at",
@@ -389,6 +391,8 @@ DownloadToolCommand build_downloader_command(
             "--quiet",
             "--tries=3",
             "--continue",
+            "--user-agent",
+            "yai/1.0 (+https://github.com/AppImage/yai)",
             "--output-document",
             part.string(),
             url,
@@ -419,6 +423,7 @@ DownloadToolCommand build_downloader_command(
             "--rpc-listen-all=false",
             "--rpc-allow-origin-all=true",
             "--rpc-listen-port=" + std::to_string(port),
+            "--user-agent=yai/1.0 (+https://github.com/AppImage/yai)",
             "--dir",
             part.parent_path().string(),
             "--out",
@@ -453,6 +458,8 @@ void prefetch_download_headers(const std::string& url, const fs::path& headers) 
         "--silent",
         "--show-error",
         "--head",
+        "--user-agent",
+        "yai/1.0 (+https://github.com/AppImage/yai)",
         "--max-time",
         "10",
         "--dump-header",
@@ -569,22 +576,27 @@ int curl_max_time_seconds(int timeout_ms) {
 std::vector<std::string> fetch_text_curl_args(
     const std::string& url,
     int timeout_ms,
-    std::optional<std::uintmax_t> max_bytes) {
+    std::optional<std::uintmax_t> max_bytes,
+    bool include_effective_url) {
     std::vector<std::string> args = {
         "curl",
         "--fail",
         "--location",
         "--silent",
         "--show-error",
+        "--user-agent",
+        "yai/1.0 (+https://github.com/AppImage/yai)",
         "--max-time",
         std::to_string(curl_max_time_seconds(timeout_ms)),
-        "--header",
-        "Accept: application/vnd.github+json",
     };
-    const char* token = std::getenv("YAI_GITHUB_TOKEN");
-    if (token != nullptr && *token != '\0' && url.find("github.com") != std::string::npos) {
+    if (url.find("github.com") != std::string::npos) {
         args.push_back("--header");
-        args.push_back(std::string("Authorization: Bearer ") + token);
+        args.push_back("Accept: application/vnd.github+json");
+        const char* token = std::getenv("YAI_GITHUB_TOKEN");
+        if (token != nullptr && *token != '\0') {
+            args.push_back("--header");
+            args.push_back(std::string("Authorization: Bearer ") + token);
+        }
     }
     if (max_bytes.has_value() && *max_bytes > 0) {
         args.push_back("--max-filesize");
@@ -593,6 +605,10 @@ std::vector<std::string> fetch_text_curl_args(
             args.push_back("-r");
             args.push_back("0-" + std::to_string(*max_bytes - 1));
         }
+    }
+    if (include_effective_url) {
+        args.push_back("--write-out");
+        args.push_back("\n__YAI_EFFECTIVE_URL__%{url_effective}");
     }
     args.push_back(url);
     return args;
@@ -615,7 +631,7 @@ std::string fetch_text_limited(
     const std::optional<std::uintmax_t> limit =
         max_bytes == 0 ? std::nullopt : std::optional<std::uintmax_t>{max_bytes};
     const ProcessResult result = run_process_capture_timeout(
-        fetch_text_curl_args(url, timeout_ms, limit),
+        fetch_text_curl_args(url, timeout_ms, limit, false),
         timeout_ms + 2000,
         std::nullopt,
         {},
@@ -634,4 +650,40 @@ std::string fetch_text_limited(
         throw std::runtime_error(tr("failed to fetch ") + url + tr(": ") + detail);
     }
     return result.output;
+}
+
+FetchedTextResult fetch_text_with_effective_url(
+    const std::string& url,
+    int timeout_ms,
+    std::uintmax_t max_bytes) {
+    const std::optional<std::uintmax_t> limit =
+        max_bytes == 0 ? std::nullopt : std::optional<std::uintmax_t>{max_bytes};
+    const ProcessResult result = run_process_capture_timeout(
+        fetch_text_curl_args(url, timeout_ms, limit, true),
+        timeout_ms + 2000,
+        std::nullopt,
+        {},
+        static_cast<std::size_t>(max_bytes));
+    if (result.output_limit_exceeded) {
+        throw std::runtime_error(
+            tr("failed to fetch ") + url + tr(": response exceeded maximum size"));
+    }
+    if (result.timed_out || result.exit_code != 0) {
+        std::string detail = result.output;
+        constexpr std::size_t kMaxErrorDetail = 500;
+        if (detail.size() > kMaxErrorDetail) {
+            detail.resize(kMaxErrorDetail);
+            detail += tr("... (truncated)");
+        }
+        throw std::runtime_error(tr("failed to fetch ") + url + tr(": ") + detail);
+    }
+    std::string content = result.output;
+    std::string effective_url;
+    const std::string marker = "\n__YAI_EFFECTIVE_URL__";
+    const auto marker_pos = content.rfind(marker);
+    if (marker_pos != std::string::npos) {
+        effective_url = content.substr(marker_pos + marker.size());
+        content.resize(marker_pos);
+    }
+    return FetchedTextResult{content, effective_url};
 }

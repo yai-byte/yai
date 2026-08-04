@@ -101,6 +101,7 @@ struct AppImageDataEntry {
     std::string name;
     std::string github_repo;
     std::string direct_url;
+    std::string gitlab_project;  // project path for GitLab-hosted AppImages
 };
 
 struct RepoPackage {
@@ -263,6 +264,10 @@ std::string desktop_escape(const std::string& value);
 std::string to_lower(std::string value);
 bool has_url_scheme(const std::string& value);
 bool looks_like_github_repo(const std::string& value);
+bool looks_like_github_repo_url(const std::string& url);
+bool looks_like_gitlab_url(const std::string& url);
+std::string extract_gitlab_project(const std::string& url);
+bool looks_like_direct_download_url(const std::string& url);
 bool looks_like_repo_package_target(const std::string& value);
 bool looks_like_local_appimage_target(const std::string& value);
 bool has_glob_wildcards(const std::string& value);
@@ -561,6 +566,16 @@ std::string fetch_text_limited(
     const std::string& url,
     int timeout_ms,
     std::uintmax_t max_bytes);
+
+struct FetchedTextResult {
+    std::string content;
+    std::string effective_url;
+};
+
+FetchedTextResult fetch_text_with_effective_url(
+    const std::string& url,
+    int timeout_ms,
+    std::uintmax_t max_bytes);
 std::string json_unescape_string(const std::string& value);
 std::optional<std::string> json_string_after(const std::string& text, std::size_t key_pos);
 std::optional<std::string> json_find_string(const std::string& text, const std::string& key);
@@ -659,6 +674,12 @@ std::optional<AppImageAppsEntry> lookup_appimage_apps_entry(
 RepoPackage merge_apps_entry_into_package(
     const AppImageAppsEntry& entry,
     const RepoPackage& existing);
+std::string resolve_gitlab_appimage_download(
+    const std::string& gitlab_base,
+    const std::string& project_path,
+    const std::string& arch = "");
+std::string resolve_gitlab_ci_artifact(
+    const std::string& ci_url);
 std::string yai_package_object_from_appimage_feed_item(
     const std::string& item_text,
     const std::string& id);
@@ -706,6 +727,7 @@ std::vector<WebsiteLinkMeta> select_listing_follow_metas_for_enqueue(
 std::optional<std::int64_t> parse_directory_listing_mtime(const std::string& text);
 std::optional<std::int64_t> parse_http_last_modified_mtime(const std::string& text);
 std::optional<std::int64_t> probe_url_last_modified_mtime(const std::string& url);
+bool is_url_accessible(const std::string& url);
 std::string url_origin(const std::string& url);
 std::string url_host(const std::string& url);
 bool is_file_url(const std::string& url);

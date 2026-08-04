@@ -115,6 +115,9 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$ROOT/src/i18n.cpp" \
   "$ROOT/src/arch.cpp" \
   "$ROOT/src/process.cpp" \
-  "$ROOT/src/download_progress.cpp"
+  "$ROOT/src/download_progress.cpp" \
+  "$ROOT/src/batch_progress_event.cpp" \
+  "$ROOT/src/batch_ui.cpp" \
+  "$ROOT/src/terminal_color.cpp"
 
 "$TMP_DIR/url_freshness_test"

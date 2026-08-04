@@ -138,6 +138,8 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
         "--silent",
         "--show-error",
         "--head",
+        "--user-agent",
+        "yai/1.0 (+https://github.com/AppImage/yai)",
         "--max-time",
         "10",
         "--dump-header",
@@ -180,6 +182,8 @@ std::optional<std::int64_t> probe_url_last_modified_mtime(const std::string& url
         "--silent",
         "--show-error",
         "--head",
+        "--user-agent",
+        "yai/1.0 (+https://github.com/AppImage/yai)",
         "--max-time",
         "10",
         "--dump-header",
@@ -197,4 +201,29 @@ std::optional<std::int64_t> probe_url_last_modified_mtime(const std::string& url
         return std::nullopt;
     }
     return parse_http_last_modified_mtime(remote.last_modified);
+}
+
+bool is_url_accessible(const std::string& url) {
+    if (is_file_url(url)) {
+        return fs::exists(file_url_path(url));
+    }
+    if (!executable_available("curl")) {
+        return true;
+    }
+    const ProcessResult result = run_process_capture_timeout({
+        "curl",
+        "--fail",
+        "--location",
+        "--silent",
+        "--show-error",
+        "--head",
+        "--user-agent",
+        "yai/1.0 (+https://github.com/AppImage/yai)",
+        "--max-time",
+        "10",
+        "--output",
+        "/dev/null",
+        url,
+    }, 12000);
+    return result.exit_code == 0 && !result.timed_out;
 }
