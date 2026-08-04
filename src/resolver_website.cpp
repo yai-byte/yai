@@ -286,13 +286,8 @@ std::optional<std::vector<WebsiteLinkMeta>> fetch_website_links(
             fetch_text_with_effective_url(page_url, timeout_ms, 0);
         const std::string base_url =
             result.effective_url.empty() ? page_url : result.effective_url;
-        std::cerr << "yai: fetched " << page_url
-                  << " (effective: " << base_url
-                  << ", bytes: " << result.content.size() << ")\n";
         return website_page_link_metas(result.content, base_url);
-    } catch (const std::exception& e) {
-        std::cerr << "yai: fetch failed " << page_url
-                  << " (error: " << e.what() << ")\n";
+    } catch (const std::exception&) {
         return std::nullopt;
     }
 }
@@ -368,7 +363,6 @@ void queue_website_link(
         // AppImageHub/AppImage catalog pages are allowed to hand off to a
         // matching project site once; later pages must stay inside the
         // expanded allowed-host set or be a package-name AppImage match.
-        std::cerr << "yai: catalog handoff to project site: " << link << "\n";
         add_allowed_host(state.allowed_hosts, link);
         queue_common_project_download_urls(state, progress, link, page.depth + 1);
     }
@@ -408,7 +402,6 @@ void collect_appimage_candidates(
         if (is_allowed_appimage_candidate(meta.url, package, state.allowed_hosts)) {
             WebsiteLinkMeta candidate = meta;
             candidate.url = resolved_appimage_candidate(meta.url, package, arch);
-            std::cerr << "yai: FOUND CANDIDATE " << candidate.url << "\n";
             record_appimage_candidate(std::move(candidate), page, state, progress);
             continue;
         }
@@ -427,8 +420,6 @@ void collect_appimage_candidates(
         // recording AppImages; also prune may keep URLs that later fail host rules
         // only if should_queue already passed — still re-check depth/seen/queue cap.
         if (should_queue_website_link(meta.url, package, page, state)) {
-            std::cerr << "yai: queuing " << meta.url
-                      << " (depth=" << page.depth + 1 << ")\n";
             queue_website_link(meta, package, page, state, progress);
         }
     }
@@ -591,13 +582,6 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
     WebsiteSearchProgress progress(package.id);
     WebsiteSearchState state = initial_website_search_state(package, progress);
 
-    std::cerr << "yai: START website crawl for " << package.id
-              << " (queue_size=" << state.queue.size()
-              << ", allowed_hosts=" << state.allowed_hosts.size() << ")\n";
-    for (const auto& item : state.queue) {
-        std::cerr << "yai: initial queue: " << item.url << "\n";
-    }
-
     // Pipeline-based website crawling: maintain up to kMaxWebsiteCrawlConcurrency
     // in-flight requests. As each completes, process its result immediately
     // and dispatch the next queued URL. This eliminates batch-level waiting
@@ -624,7 +608,6 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
         WebsiteQueueItem page = state.queue[*index];
         state.seen.push_back(page.url);
         progress.checked(page.url);
-        std::cerr << "yai: dispatching " << page.url << " (depth=" << page.depth << ")\n";
 
         FetchTask task;
         task.page = page;
