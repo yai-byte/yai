@@ -69,10 +69,11 @@ int website_link_stale_penalty(const std::string& url) {
 int website_url_priority(const std::string& url) {
     const std::string clean = strip_url_fragment_query(url);
     const std::size_t scheme = clean.find("://");
-    const std::size_t path_start =
-        scheme == std::string::npos ? 0 : clean.find('/', scheme + 3);
+    const std::string path =
+        scheme == std::string::npos ? "" : clean.substr(scheme + 3);
+    const std::size_t path_start = path.find('/');
     const std::string lower =
-        to_lower(path_start == std::string::npos ? "" : clean.substr(path_start));
+        to_lower(path_start == std::string::npos ? path : path.substr(path_start));
     if (lower.find("appimage") != std::string::npos) {
         return 3;
     }
@@ -82,6 +83,12 @@ int website_url_priority(const std::string& url) {
     if (lower.find("release") != std::string::npos ||
         lower.find("platform") != std::string::npos ||
         lower.find("gallery") != std::string::npos) {
+        return 2;
+    }
+    // Versioned release pages like /release/project-1.2.3/ get a boost
+    // because they are the most likely to contain direct download links.
+    if (lower.find("/release/") != std::string::npos ||
+        lower.find("/releases/") != std::string::npos) {
         return 2;
     }
     if (lower.find("linux") != std::string::npos) {
@@ -637,13 +644,37 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
         for (const std::string& pattern : patterns) {
             urls.push_back(base + pattern);
         }
-    }
 
-    // Add Inkscape-specific pattern since its releases page structure is common
-    // but not easily derivable from URL alone
-    if (id.find("inkscape") != std::string::npos || name.find("inkscape") != std::string::npos) {
-        urls.push_back("https://inkscape.org/release/");
-        urls.push_back("https://inkscape.org/download/");
+        // Generate project-specific release page URLs. Many projects follow
+        // a pattern like /release/{name}/, /download/{name}/, or similar.
+        if (!id.empty()) {
+            const std::string proj = id;
+            urls.push_back(base + "release/" + proj + "/");
+            urls.push_back(base + "releases/" + proj + "/");
+            urls.push_back(base + "download/" + proj + "/");
+            urls.push_back(base + "downloads/" + proj + "/");
+            urls.push_back(base + proj + "/download");
+            urls.push_back(base + proj + "/downloads");
+            urls.push_back(base + proj + "/release");
+            urls.push_back(base + proj + "/releases");
+            urls.push_back(base + proj + "/platform");
+            urls.push_back(base + proj + "/platforms");
+        }
+
+        // Generate version-aware URLs when version is available.
+        // This handles the common /release/{name}-{version}/platforms/ pattern
+        // used by Inkscape and many other projects.
+        if (!package.version.empty() && !id.empty()) {
+            const std::string& ver = package.version;
+            const std::string ver_proj = id + "-" + ver;
+            urls.push_back(base + "release/" + ver_proj + "/");
+            urls.push_back(base + "release/" + ver_proj + "/platforms/");
+            urls.push_back(base + "release/" + ver_proj + "/platform/");
+            urls.push_back(base + "download/" + ver_proj + "/");
+            urls.push_back(base + "downloads/" + ver_proj + "/");
+            urls.push_back(base + ver_proj + "/download");
+            urls.push_back(base + ver_proj + "/platforms");
+        }
     }
 
     return urls;
@@ -684,6 +715,19 @@ bool host_matches_allowed(const std::string& host, const std::vector<std::string
     return false;
 }
 
+bool is_known_file_hosting_host(const std::string& host) {
+    // Known file hosting services that commonly distribute AppImage binary files.
+    // These are trusted third-party hosts that projects use to publish releases.
+    return host == "gitlab.com" ||
+           host == "www.gitlab.com" ||
+           host == "sourceforge.net" ||
+           host == "www.sourceforge.net" ||
+           host == "launchpad.net" ||
+           host == "www.launchpad.net" ||
+           host == "fosshub.com" ||
+           host == "www.fosshub.com";
+}
+
 bool is_allowed_website_url(
     const std::string& url,
     const RepoPackage& package,
@@ -693,9 +737,25 @@ bool is_allowed_website_url(
         return true;
     }
     const std::string host = url_host(url);
-    return !host.empty() &&
-           (host_matches_allowed(host, allowed_hosts) ||
-            (allow_package_name_match && package_name_matches_url(package, url)));
+    if (host.empty()) {
+        return false;
+    }
+    if (host_matches_allowed(host, allowed_hosts) ||
+        (allow_package_name_match && package_name_matches_url(package, url))) {
+        return true;
+    }
+    // Known file hosting services are allowed when the URL looks like a
+    // download or release page, enabling discovery of AppImage binaries
+    // hosted on third-party CDNs (GitLab, SourceForge, Launchpad, FossHub).
+    if (is_known_file_hosting_host(host)) {
+        const std::string lower = to_lower(strip_url_fragment_query(url));
+        return lower.find("download") != std::string::npos ||
+               lower.find("release") != std::string::npos ||
+               lower.find("releases") != std::string::npos ||
+               lower.find("appimage") != std::string::npos ||
+               lower.find(".appimage") != std::string::npos;
+    }
+    return false;
 }
 
 bool should_follow_download_page(
@@ -708,12 +768,28 @@ bool should_follow_download_page(
     // domains, and static resources so catalog noise cannot become a candidate
     // source.
     const std::string lower = to_lower(strip_url_fragment_query(url));
-    if (lower.empty() ||
-        !is_allowed_website_url(url, package, allowed_hosts, allow_package_name_match) ||
-        lower.find("github.com/") != std::string::npos ||
-        (lower.find("appimage.github.io/") != std::string::npos &&
-         !package_name_matches_url(package, lower)) ||
-        lower.find("bugs.") != std::string::npos ||
+    if (lower.empty()) {
+        return false;
+    }
+
+    // Allow known file hosting hosts when the URL contains download-related
+    // keywords. These are trusted third-party CDNs for binary distribution.
+    const std::string host = url_host(url);
+    const bool is_file_hosting = is_known_file_hosting_host(host);
+
+    if (!is_file_hosting &&
+        !is_allowed_website_url(url, package, allowed_hosts, allow_package_name_match)) {
+        return false;
+    }
+    if (lower.find("github.com/") != std::string::npos &&
+        !is_file_hosting) {
+        return false;
+    }
+    if (lower.find("appimage.github.io/") != std::string::npos &&
+        !package_name_matches_url(package, lower)) {
+        return false;
+    }
+    if (lower.find("bugs.") != std::string::npos ||
         lower.find("bugtracker") != std::string::npos ||
         lower.find("donat") != std::string::npos ||
         lower.find("forum") != std::string::npos ||

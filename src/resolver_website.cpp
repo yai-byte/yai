@@ -219,6 +219,9 @@ std::vector<std::string> common_project_download_urls(const std::string& project
         base + "platforms",
         base + "version",
         base + "versions",
+        base + "en/platform",
+        base + "en/platforms",
+        base + "en/download/linux",
     };
 }
 
