@@ -1,5 +1,7 @@
 #include "yai.hpp"
 
+#include <cstdio>
+
 // Repo support owns schema-v1 index parsing, path helpers, and repo entry
 // configuration. AppImage feed normalization lives in repo_feed.cpp.
 
@@ -454,7 +456,7 @@ void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries)
 }
 
 std::vector<RepoPackage> find_repo_packages(const std::string& id) {
-    const std::vector<RepoPackage> packages = load_repo_packages();
+    const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
     if (!has_glob_wildcards(id)) {
         for (const RepoPackage& package : packages) {
             if (package.id == id) {
@@ -496,4 +498,205 @@ std::optional<RepoPackage> find_repo_package(const std::string& id) {
         throw std::runtime_error(tr("internal error: use find_repo_packages for multi-match"));
     }
     return matches.front();
+}
+
+// --- Index strategy and remote index support ---
+
+std::string detect_index_region() {
+    // 1. YAI_INDEX_REGION env var (explicit override)
+    const char* env = std::getenv("YAI_INDEX_REGION");
+    if (env != nullptr && std::string(env) != "") {
+        const std::string value = to_lower(trim(env));
+        if (value == "cn" || value == "global") {
+            return value;
+        }
+    }
+    // 2. Cached region from region.conf
+    const fs::path cache = repos_dir_path() / "region.conf";
+    if (fs::exists(cache)) {
+        const std::string cached = trim(read_text_file(cache));
+        if (cached == "cn" || cached == "global") {
+            return cached;
+        }
+    }
+    // 3. Detect from timezone + locale
+    bool is_cn = false;
+    // Check TZ env var
+    const char* tz = std::getenv("TZ");
+    if (tz != nullptr) {
+        const std::string tz_str(tz);
+        if (tz_str.find("Asia/Shanghai") != std::string::npos ||
+            tz_str.find("Asia/Urumqi") != std::string::npos ||
+            tz_str.find("Asia/Chongqing") != std::string::npos ||
+            tz_str.find("Asia/Harbin") != std::string::npos ||
+            tz_str.find("Asia/Chungking") != std::string::npos ||
+            tz_str.find("PRC") != std::string::npos) {
+            is_cn = true;
+        }
+    }
+    // Check /etc/localtime symlink target
+    if (!is_cn) {
+        std::error_code ec;
+        const fs::path localtime = "/etc/localtime";
+        if (fs::is_symlink(localtime, ec)) {
+            const fs::path target = fs::read_symlink(localtime, ec);
+            const std::string target_str = target.string();
+            if (target_str.find("Asia/Shanghai") != std::string::npos ||
+                target_str.find("Asia/Urumqi") != std::string::npos ||
+                target_str.find("Asia/Chongqing") != std::string::npos ||
+                target_str.find("Asia/Harbin") != std::string::npos) {
+                is_cn = true;
+            }
+        }
+    }
+    // Check locale (LANG / LC_ALL)
+    if (!is_cn) {
+        const char* lang = std::getenv("LANG");
+        if (lang != nullptr && std::string(lang).find("zh_CN") != std::string::npos) {
+            is_cn = true;
+        }
+        const char* lc_all = std::getenv("LC_ALL");
+        if (lc_all != nullptr && std::string(lc_all).find("zh_CN") != std::string::npos) {
+            is_cn = true;
+        }
+    }
+    const std::string region = is_cn ? "cn" : "global";
+    // Cache result
+    try {
+        ensure_directory(repos_dir_path());
+        write_text_file(cache, region);
+    } catch (const std::exception&) {
+        // Best-effort cache write; must not fail detection.
+    }
+    return region;
+}
+
+std::string default_repo_index_url() {
+    return detect_index_region() == "cn" ? kRepoIndexUrlGitee : kRepoIndexUrlGithub;
+}
+
+std::string fetch_remote_repo_index_text() {
+    const char* env = std::getenv("YAI_REPO_INDEX");
+    if (env != nullptr && std::string(env) != "") {
+        if (has_url_scheme(env)) {
+            return fetch_text(env, kFetchRepoIndexTimeoutMs);
+        }
+        return read_text_file(env);
+    }
+    return fetch_text(default_repo_index_url(), kFetchRepoIndexTimeoutMs);
+}
+
+std::string repo_index_updated_at(const std::string& index_text) {
+    return json_find_string(index_text, "updated_at").value_or("");
+}
+
+bool repo_index_is_fresh(const std::string& index_text, int threshold_days) {
+    const std::string updated_at = repo_index_updated_at(index_text);
+    if (updated_at.empty()) {
+        return false;  // No timestamp → treat as stale
+    }
+    // Parse ISO-8601 UTC: "2026-07-30T12:00:00Z"
+    int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0;
+    if (std::sscanf(updated_at.c_str(), "%d-%d-%dT%d:%d:%dZ",
+                    &year, &month, &day, &hour, &min, &sec) != 6) {
+        return false;  // Unparseable → treat as stale
+    }
+    std::tm tm{};
+    tm.tm_year = year - 1900;
+    tm.tm_mon = month - 1;
+    tm.tm_mday = day;
+    tm.tm_hour = hour;
+    tm.tm_min = min;
+    tm.tm_sec = sec;
+    tm.tm_isdst = 0;
+    std::time_t updated = timegm(&tm);
+    if (updated == static_cast<std::time_t>(-1)) {
+        return false;
+    }
+    const std::time_t now = std::time(nullptr);
+    const double age_seconds = std::difftime(now, updated);
+    const double threshold_seconds = static_cast<double>(threshold_days) * 86400.0;
+    return age_seconds <= threshold_seconds;
+}
+
+fs::path resolved_overlay_path() {
+    return repos_dir_path() / "resolved-cache.json";
+}
+
+std::vector<RepoPackage> load_repo_packages_with_overlay() {
+    std::vector<RepoPackage> packages = load_repo_packages();
+    const fs::path overlay = resolved_overlay_path();
+    if (!fs::exists(overlay)) {
+        return packages;
+    }
+    std::map<std::string, RepoPackage> overlay_by_id;
+    try {
+        const std::string overlay_text = read_text_file(overlay);
+        const std::optional<std::string> packages_array = json_find_array(overlay_text, "packages");
+        if (packages_array.has_value()) {
+            for (const std::string& object : json_top_level_objects(*packages_array)) {
+                const RepoPackage pkg = parse_repo_package(object);
+                overlay_by_id[pkg.id] = pkg;
+            }
+        }
+    } catch (const std::exception&) {
+        // Corrupt overlay should not break normal operation.
+        return packages;
+    }
+    for (RepoPackage& pkg : packages) {
+        const auto it = overlay_by_id.find(pkg.id);
+        if (it == overlay_by_id.end()) {
+            continue;
+        }
+        // Merge download URLs: overlay takes precedence for populated arches
+        for (const auto& [arch, url] : it->second.download_urls) {
+            if (!url.empty()) {
+                pkg.download_urls[arch] = url;
+            }
+        }
+        if (!it->second.download_url.empty()) {
+            pkg.download_url = it->second.download_url;
+        }
+        if (!it->second.resolved_at.empty()) {
+            pkg.resolved_at = it->second.resolved_at;
+        }
+        overlay_by_id.erase(it);
+    }
+    // Append packages that exist only in overlay
+    for (const auto& [id, pkg] : overlay_by_id) {
+        packages.push_back(pkg);
+    }
+    return packages;
+}
+
+void upsert_overlay_package_download_url(const RepoPackage& updated) {
+    const fs::path overlay = resolved_overlay_path();
+    std::vector<RepoPackage> packages;
+    if (fs::exists(overlay)) {
+        try {
+            const std::string text = read_text_file(overlay);
+            const std::optional<std::string> arr = json_find_array(text, "packages");
+            if (arr.has_value()) {
+                for (const std::string& obj : json_top_level_objects(*arr)) {
+                    packages.push_back(parse_repo_package(obj));
+                }
+            }
+        } catch (const std::exception&) {
+            // Corrupt overlay → start fresh
+            packages.clear();
+        }
+    }
+    bool found = false;
+    for (RepoPackage& pkg : packages) {
+        if (pkg.id == updated.id) {
+            pkg = updated;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        packages.push_back(updated);
+    }
+    ensure_directory(overlay.parent_path());
+    save_repo_packages_index(packages, overlay);
 }

@@ -537,6 +537,15 @@ constexpr int kFetchTextFallbackTimeoutMs = 5000;
 constexpr int kFetchTextResolveParallelWaitMs = 3000;
 constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
 
+// Remote index defaults (yai-repo). Used by yai update to fetch a centrally
+// resolved index.json when YAI_REPO_INDEX is not set.
+constexpr const char* kRepoIndexUrlGithub =
+    "https://raw.githubusercontent.com/yai-byte/yai-repo/main/index.json";
+constexpr const char* kRepoIndexUrlGitee =
+    "https://gitee.com/no11no16/yai-repo/raw/main/index.json";
+constexpr int kRepoIndexFreshnessDefaultDays = 7;
+constexpr int kFetchRepoIndexTimeoutMs = 30000;
+
 constexpr const char* kAppImageGithubRepoApiBase =
     "https://api.github.com/repos/AppImage/appimage.github.io";
 constexpr const char* kAppImageGithubRawBase =
@@ -592,9 +601,20 @@ std::vector<std::string> repo_package_objects_from_index(const std::string& inde
 bool repo_index_is_locally_writable();
 void save_repo_packages_index(const std::vector<RepoPackage>& packages, const fs::path& path);
 void upsert_repo_package_download_urls(const RepoPackage& updated);
+void upsert_overlay_package_download_url(const RepoPackage& updated);
 RepoPackage merge_repo_package_download_url_fields(
     const RepoPackage& incoming,
     const RepoPackage& previous);
+
+// --- Index strategy and remote index support ---
+enum class IndexStrategy { Auto, Trust, Live };
+std::string detect_index_region();
+std::string default_repo_index_url();
+std::string fetch_remote_repo_index_text();
+std::string repo_index_updated_at(const std::string& index_text);
+bool repo_index_is_fresh(const std::string& index_text, int threshold_days);
+fs::path resolved_overlay_path();
+std::vector<RepoPackage> load_repo_packages_with_overlay();
 std::string merge_named_repo_index_text(
     const RepoEntry& entry,
     const std::string& incoming_index_text);

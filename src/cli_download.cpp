@@ -41,7 +41,8 @@ void print_usage() {
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
         << tr("              [--recrawl] [--jobs <n>] [--yes|-y]\n")
-        << tr("  yai update [id]\n")
+        << tr("  yai update [id] [--index-strategy auto|trust|live] [--index-freshness <days>]\n")
+        << tr("              [--trust-index] [--live-resolve]\n")
         << tr("  yai upgrade <id|--all> [--yes] [--download direct|mirror_first|direct_first]\n")
         << tr("              [--mirror-template <template>]\n")
         << tr("              [--downloader auto|curl|wget|wget2|aria2c]\n")
@@ -56,6 +57,12 @@ void print_usage() {
     std::cout << tr("Side-effect commands list matches and confirm when N>1; use --yes/-y to skip. Zero matches fail.\n");
     std::cout << tr("install/download accept multiple argv targets in parallel (--jobs); wildcard-expanded batches run sequentially.\n");
     std::cout << tr("--id/--name are single-install only.\n");
+    std::cout << tr("\nIndex strategy: yai update fetches a centrally resolved index.json by default.\n");
+    std::cout << tr("  --index-strategy auto  Use remote index if fresh (within --index-freshness days), else live resolve (default)\n");
+    std::cout << tr("  --index-strategy trust Always trust the remote index even if stale\n");
+    std::cout << tr("  --index-strategy live  Skip the index, always crawl GitHub/website live\n");
+    std::cout << tr("  YAI_REPO_INDEX=<url|path>  Override the index source\n");
+    std::cout << tr("  YAI_INDEX_REGION=cn|global  Override Gitee/GitHub selection\n");
 }
 
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option) {

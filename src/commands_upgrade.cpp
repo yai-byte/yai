@@ -313,6 +313,31 @@ void download_probe_and_commit_update(
     print_update_result(context, source, repair);
 }
 
+void writeback_index_download_url(
+    const UpdateContext& context,
+    const ResolvedSource& source) {
+    // Best-effort: write the freshly resolved download URL back into the
+    // local index (or overlay if read-only) so future updates skip crawling.
+    try {
+        const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
+        for (RepoPackage pkg : packages) {
+            if (pkg.id != context.id) {
+                continue;
+            }
+            repo_package_set_download_url(
+                pkg, context.installed_arch, source.download_url, true, true);
+            if (repo_index_is_locally_writable()) {
+                upsert_repo_package_download_urls(pkg);
+            } else {
+                upsert_overlay_package_download_url(pkg);
+            }
+            return;
+        }
+    } catch (const std::exception&) {
+        // Best-effort writeback must not fail the upgrade.
+    }
+}
+
 ResolvedSource build_url_update_source(const UpdateContext& context) {
     const fs::path metadata = readable_metadata_path(context.paths);
     ResolvedSource source;
@@ -403,12 +428,50 @@ void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& sou
 }
 
 void upgrade_installed_target(const InstallOptions& options) {
-    // Upgrade reuses the installed source metadata. GitHub sources query the
-    // release API; repo website sources resolve and compare identity; repo
-    // direct URL uses identity first then same-URL freshness; plain URL uses
-    // freshness then sha256. Transaction order for apply: download/probe ->
-    // save previous -> activate -> write metadata -> clean candidate.
+    // Upgrade reuses the installed source metadata. Index-driven fast path
+    // checks the local repo index (with overlay) for a download URL first;
+    // if found, it downloads directly without crawling GitHub/website. Falls
+    // through to live resolve if the index lacks the URL. Live-resolved
+    // URLs are written back to the index/overlay for future speed.
     const UpdateContext context = load_update_context(options);
+
+    // Index-driven fast path for repo packages.
+    if (context.source_kind.rfind("repo_", 0) == 0 && !context.source_url.empty()) {
+        try {
+            const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
+            for (const RepoPackage& pkg : packages) {
+                if (pkg.id != context.id) {
+                    continue;
+                }
+                const std::optional<std::string> url =
+                    repo_package_download_url_for_arch(pkg, context.installed_arch);
+                if (url.has_value() && !url->empty()) {
+                    if (*url == context.source_url) {
+                        print_already_up_to_date(context);
+                        return;
+                    }
+                    ResolvedSource source;
+                    source.source_kind = context.source_kind;
+                    source.id = context.id;
+                    source.name = context.name;
+                    source.version = basename_from_url(*url);
+                    source.source_url = *url;
+                    source.download_url = *url;
+                    source.arch = context.installed_arch;
+                    if (context.source_kind == "repo_github_release") {
+                        source.github_owner = context.github_owner;
+                        source.github_repo = context.github_repo;
+                        source.github_asset = basename_from_url(*url);
+                    }
+                    download_probe_and_commit_update(context, source);
+                    return;
+                }
+                break;
+            }
+        } catch (const std::exception&) {
+            // Index lookup failed; fall through to live resolve.
+        }
+    }
 
     if (context.source_kind == "github_release" || context.source_kind == "repo_github_release") {
         const GitHubRelease release = resolve_github_latest(
@@ -421,6 +484,7 @@ void upgrade_installed_target(const InstallOptions& options) {
             return;
         }
         download_probe_and_commit_update(context, source);
+        writeback_index_download_url(context, source);
         return;
     }
 
@@ -456,6 +520,7 @@ void upgrade_installed_target(const InstallOptions& options) {
             return;
         }
         download_probe_and_commit_update(context, source);
+        writeback_index_download_url(context, source);
         return;
     }
 
@@ -463,6 +528,7 @@ void upgrade_installed_target(const InstallOptions& options) {
         ResolvedSource source = resolve_repo_update_source(context);
         if (update_source_identity_changed(context, source)) {
             download_probe_and_commit_update(context, source);
+            writeback_index_download_url(context, source);
             return;
         }
         upgrade_via_url_freshness(context, source);

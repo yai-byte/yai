@@ -150,7 +150,7 @@ UpdatePreviewResult preview_from_url_freshness(
     return UpdatePreviewResult{id, current_version, "", "error", probe.detail};
 }
 
-UpdatePreviewResult build_update_preview(const std::string& id) {
+UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) {
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
         throw std::runtime_error(tr("package is not installed: ") + id);
@@ -165,6 +165,41 @@ UpdatePreviewResult build_update_preview(const std::string& id) {
     const std::string github_owner = metadata_value(metadata, "github_owner").value_or("");
     const std::string github_repo = metadata_value(metadata, "github_repo").value_or("");
     const std::string installed_arch = metadata_value(metadata, "arch").value_or(current_arch());
+
+    // Index-driven fast path: if the repo index has a download URL for this
+    // package/arch, compare it against the installed source URL directly,
+    // skipping live GitHub/website crawling.
+    if (use_index && source_kind.rfind("repo_", 0) == 0) {
+        try {
+            const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
+            for (const RepoPackage& pkg : packages) {
+                if (pkg.id != id) {
+                    continue;
+                }
+                const std::optional<std::string> url =
+                    repo_package_download_url_for_arch(pkg, installed_arch);
+                if (url.has_value() && !url->empty()) {
+                    if (*url != source_url && *url != download_url) {
+                        return UpdatePreviewResult{
+                            id,
+                            current_version,
+                            basename_from_url(*url),
+                            "upgradable",
+                            tr("index: ") + *url};
+                    }
+                    return UpdatePreviewResult{
+                        id,
+                        current_version,
+                        current_version,
+                        "current",
+                        tr("already up to date")};
+                }
+                break;
+            }
+        } catch (const std::exception&) {
+            // Index lookup failed; fall through to live resolve.
+        }
+    }
 
     if (source_kind == "url") {
         const std::string candidate = !source_url.empty() ? source_url : download_url;
@@ -274,11 +309,11 @@ UpdatePreviewResult build_update_preview(const std::string& id) {
     }
 }
 
-std::vector<UpdatePreviewResult> build_update_previews(const std::vector<std::string>& ids) {
+std::vector<UpdatePreviewResult> build_update_previews(const std::vector<std::string>& ids, bool use_index) {
     std::vector<UpdatePreviewResult> results;
     results.reserve(ids.size());
     for (const std::string& id : ids) {
-        results.push_back(build_update_preview(id));
+        results.push_back(build_update_preview(id, use_index));
     }
     return results;
 }
@@ -291,7 +326,7 @@ void print_update_previews(const std::vector<UpdatePreviewResult>& results) {
 } // namespace
 
 std::vector<std::string> collect_upgradable_package_ids() {
-    const std::vector<UpdatePreviewResult> previews = build_update_previews(installed_package_ids());
+    const std::vector<UpdatePreviewResult> previews = build_update_previews(installed_package_ids(), true);
     print_update_previews(previews);
 
     std::vector<std::string> upgrade_ids;
@@ -303,15 +338,83 @@ std::vector<std::string> collect_upgradable_package_ids() {
     return upgrade_ids;
 }
 
+namespace {
+void sync_remote_index_to_local(const std::string& index_text) {
+    if (repo_index_is_locally_writable()) {
+        const fs::path path = repo_index_path();
+        ensure_directory(path.parent_path());
+        write_text_file(path, index_text);
+    } else {
+        // Remote URL index is read-only; cache to local overlay.
+        const fs::path overlay = resolved_overlay_path();
+        ensure_directory(overlay.parent_path());
+        write_text_file(overlay, index_text);
+    }
+}
+} // namespace
+
 void update_app(int argc, char** argv) {
-    if (argc > 3) {
-        throw std::runtime_error(tr("update accepts zero or one package id"));
+    IndexStrategy strategy = IndexStrategy::Auto;
+    int freshness = kRepoIndexFreshnessDefaultDays;
+    std::string target_id;
+
+    for (int i = 2; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--trust-index") {
+            strategy = IndexStrategy::Trust;
+        } else if (arg == "--live-resolve") {
+            strategy = IndexStrategy::Live;
+        } else if (arg == "--index-strategy") {
+            const std::string value = read_option_value(argc, argv, i, arg);
+            if (value == "auto") {
+                strategy = IndexStrategy::Auto;
+            } else if (value == "trust") {
+                strategy = IndexStrategy::Trust;
+            } else if (value == "live") {
+                strategy = IndexStrategy::Live;
+            } else {
+                throw std::runtime_error(tr("unknown index strategy: ") + value);
+            }
+        } else if (arg == "--index-freshness") {
+            const std::string value = read_option_value(argc, argv, i, arg);
+            freshness = std::stoi(value);
+            if (freshness <= 0) {
+                throw std::runtime_error(tr("--index-freshness must be a positive integer"));
+            }
+        } else if (arg.rfind("--", 0) == 0) {
+            throw std::runtime_error(tr("unknown update option: ") + arg);
+        } else if (target_id.empty()) {
+            target_id = arg;
+        } else {
+            throw std::runtime_error(tr("update accepts zero or one package id"));
+        }
     }
 
-    if (argc == 3) {
-        print_update_previews(build_update_previews(resolve_installed_package_ids(argv[2])));
+    // Sync remote index to local for auto/trust modes.
+    bool use_index = true;
+    if (strategy != IndexStrategy::Live) {
+        try {
+            const std::string remote_text = fetch_remote_repo_index_text();
+            const bool fresh = repo_index_is_fresh(remote_text, freshness);
+            if (strategy == IndexStrategy::Trust || fresh) {
+                sync_remote_index_to_local(remote_text);
+            } else {
+                // auto mode but index is stale → fall back to live resolve
+                use_index = false;
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << tr("yai: failed to fetch remote index: ") << ex.what() << "\n";
+            std::cerr << tr("yai: falling back to live resolve\n");
+            use_index = false;
+        }
+    } else {
+        use_index = false;
+    }
+
+    if (!target_id.empty()) {
+        print_update_previews(build_update_previews(resolve_installed_package_ids(target_id), use_index));
         return;
     }
 
-    print_update_previews(build_update_previews(installed_package_ids()));
+    print_update_previews(build_update_previews(installed_package_ids(), use_index));
 }

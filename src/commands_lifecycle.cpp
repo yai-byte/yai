@@ -68,9 +68,6 @@ void maybe_write_back_index_download_url(
     if (!index_state.is_repo_package || !index_state.lacked_index_url) {
         return;
     }
-    if (!repo_index_is_locally_writable()) {
-        return;
-    }
     if (source.download_url.empty()) {
         return;
     }
@@ -80,7 +77,11 @@ void maybe_write_back_index_download_url(
     }
     const std::string arch = source.arch.empty() ? index_state.arch : source.arch;
     repo_package_set_download_url(*package, arch, source.download_url, false, true);
-    upsert_repo_package_download_urls(*package);
+    if (repo_index_is_locally_writable()) {
+        upsert_repo_package_download_urls(*package);
+    } else {
+        upsert_overlay_package_download_url(*package);
+    }
 }
 
 void print_download_progress_banner(const InstallOptions& effective_options, const ResolvedSource& source) {
