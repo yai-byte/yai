@@ -33,6 +33,7 @@ SRC := \
 	src/url_freshness.cpp \
 	src/website_resolve_cache.cpp \
 	src/resolver.cpp \
+	src/resolver_gitlab.cpp \
 	src/resolver_github.cpp \
 	src/resolver_url.cpp \
 	src/resolver_website.cpp

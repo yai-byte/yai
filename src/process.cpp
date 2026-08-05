@@ -3,8 +3,15 @@
 #include <poll.h>
 
 // Child-process execution and captured downloads (including progress-aware capture).
+// Internal helpers (fd management, fork/exec, output polling, batch stream
+// parsing) live in the anonymous namespace below; public run_process* entry
+// points are at file scope.
 
 namespace {
+
+// Builds a null-terminated C-style argv array from a vector<string> for execvp.
+// Pointers borrow into the input strings' storage, so the returned vector is
+// only valid while the input args outlive it.
 std::vector<char*> process_argv(const std::vector<std::string>& args) {
     std::vector<char*> argv;
     argv.reserve(args.size() + 1);
@@ -15,12 +22,16 @@ std::vector<char*> process_argv(const std::vector<std::string>& args) {
     return argv;
 }
 
+// Closes fd and throws on failure so callers can surface real errors during
+// mandatory setup steps; do not use for cleanup-after-failure paths.
 void close_fd_required(int fd, const std::string& context) {
     if (close(fd) != 0) {
         throw std::runtime_error(context + tr(": close failed: ") + std::strerror(errno));
     }
 }
 
+// Closes fd (if open) and ignores errors; used in cleanup paths where the fd
+// state may already be uncertain and surfacing late I/O errors is misleading.
 void close_fd_best_effort(int fd) {
     if (fd >= 0) {
         // close() may report late I/O errors, but these cleanup paths are only
@@ -30,6 +41,7 @@ void close_fd_best_effort(int fd) {
     }
 }
 
+// Wraps waitpid, retrying automatically when interrupted by a signal (EINTR).
 pid_t waitpid_nointr(pid_t pid, int* status, int options) {
     pid_t result;
     do {
@@ -38,21 +50,30 @@ pid_t waitpid_nointr(pid_t pid, int* status, int options) {
     return result;
 }
 
+// Wraps waitpid (retrying on EINTR via waitpid_nointr) and throws on failure
+// with the given context, so mandatory reaping cannot silently lose the child.
 void waitpid_required(pid_t pid, int* status, int options, const std::string& context) {
     if (waitpid_nointr(pid, status, options) < 0) {
         throw std::runtime_error(context + tr(": waitpid failed: ") + std::strerror(errno));
     }
 }
 
+// Sends a signal to pid, retrying on EINTR and ignoring other failures so a
+// cleanup sequence never aborts just because the child already vanished.
 void signal_process_best_effort(pid_t pid, int signal) {
     while (kill(pid, signal) != 0 && errno == EINTR) {
     }
 }
 
+// Reaps a zombie child without surfacing errors; used in cleanup teardown where
+// losing the wait status is acceptable but leaving a zombie is not.
 void reap_process_best_effort(pid_t pid) {
     (void)waitpid_nointr(pid, nullptr, 0);
 }
 
+// Child-side setup after fork: applies cwd/env, then execvp()s the command.
+// Exits with 126 on setup failure (chdir/setenv) or 127 if execvp itself fails;
+// never returns to the caller on the success path.
 void exec_child_process(
     const std::vector<std::string>& args,
     const std::optional<fs::path>& cwd,
@@ -70,6 +91,9 @@ void exec_child_process(
     std::_Exit(127);
 }
 
+// Forks a child process that redirects stdout+stderr into a shared pipe.
+// The caller reads from pipefd[0]; the child gets its own process group for
+// clean group-wide signal delivery during timeout teardown.
 pid_t start_captured_process(
     const std::vector<std::string>& args,
     const std::optional<fs::path>& cwd,
@@ -126,6 +150,8 @@ pid_t start_captured_process(
     return pid;
 }
 
+// Sets O_NONBLOCK on fd so reads poll without blocking the UI loop; throws on
+// fcntl failure rather than silently leaving the fd in blocking mode.
 void set_nonblocking(int fd) {
     const int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
@@ -136,12 +162,16 @@ void set_nonblocking(int fd) {
     }
 }
 
+// Forceful teardown: SIGKILL both the process group (-pid) and the direct pid,
+// then reap the child. Used once callers have decided the child must stop now.
 void kill_and_reap(pid_t pid) {
     signal_process_best_effort(-pid, SIGKILL);
     signal_process_best_effort(pid, SIGKILL);
     reap_process_best_effort(pid);
 }
 
+// Outcome of a single read_output_chunk call: Data (got bytes), End (EOF),
+// RetryLater (would block in non-blocking mode), or LimitExceeded (cap hit).
 enum class ReadOutputResult {
     Data,
     End,
@@ -149,6 +179,9 @@ enum class ReadOutputResult {
     LimitExceeded,
 };
 
+// Reads one chunk from fd into output, enforcing max_output_bytes. In
+// non-blocking mode returns RetryLater when no data is available; returns
+// LimitExceeded when the cap is reached so callers can bail out early.
 ReadOutputResult read_output_chunk(
     int fd,
     std::string& output,
@@ -175,6 +208,8 @@ ReadOutputResult read_output_chunk(
     throw std::runtime_error(std::string(tr("read failed: ")) + std::strerror(errno));
 }
 
+// Reads fd into output until EOF or a transient retry. In nonblocking mode
+// returns on EAGAIN/EWOULDBLOCK; returns true if the output cap was hit.
 bool append_output_until_stop(
     int fd,
     std::string& output,
@@ -197,6 +232,8 @@ bool append_output_until_stop(
     }
 }
 
+// Nonblocking drain of fd into output; on read error kills and reaps pid so a
+// failing subprocess is not left running once capture has already failed.
 bool append_available_output(
     int fd,
     std::string& output,
@@ -210,10 +247,14 @@ bool append_available_output(
     }
 }
 
+// Blocking read of fd until EOF; used when the caller will waitpid on the child
+// anyway, so blocking on the pipe is acceptable.
 void append_blocking_output(int fd, std::string& output) {
     (void)append_output_until_stop(fd, output, false);
 }
 
+// Escalation sequence for timed-out processes: SIGTERM, a brief grace period, then
+// SIGKILL if still running, and finally reaps the child so no zombie remains.
 void terminate_for_timeout(pid_t pid, int& status) {
     signal_process_best_effort(-pid, SIGTERM);
     signal_process_best_effort(pid, SIGTERM);
@@ -233,17 +274,24 @@ void terminate_for_timeout(pid_t pid, int& status) {
 
 constexpr std::size_t kBatchStreamMaxLineBytes = 64 * 1024;
 
+// Removes a trailing '\r' so CRLF log lines render consistently in the UI.
 void strip_trailing_cr(std::string& line) {
     if (!line.empty() && line.back() == '\r') {
         line.pop_back();
     }
 }
 
+// --- Batch stream parsing: line-by-line dispatch from child pipes to the UI ---
+
+// Identifies which child pipe a batch stream line came from: Log (stdout/stderr
+// merged) or Event (progress event JSON from the child's batch event fd).
 enum class BatchStreamChannel {
     Log,
     Event,
 };
 
+// Dispatches one complete line to the UI: parsed as a progress event on the
+// Event channel, otherwise logged as a plain log line (after CR stripping).
 void flush_batch_stream_line(
     BatchStreamChannel channel,
     std::string line,
@@ -261,6 +309,8 @@ void flush_batch_stream_line(
     ui.log_line(index, target, line);
 }
 
+// Splits buffer on '\n' and flushes each complete line; emits the trailing
+// partial line when flush_remainder is set, and caps oversized buffered lines.
 void dispatch_batch_stream_buffer(
     std::string& buffer,
     BatchStreamChannel channel,
@@ -287,6 +337,8 @@ void dispatch_batch_stream_buffer(
     }
 }
 
+// Nonblocking read loop for one batch stream fd: appends to buffer and dispatches
+// complete lines. Returns true on EOF, false when no more data is available.
 bool read_batch_stream_fd(
     int fd,
     std::string& buffer,
@@ -317,6 +369,10 @@ bool read_batch_stream_fd(
 }
 } // namespace
 
+// --- Public API: process execution with varying capture/timeout semantics ---
+
+// Runs args in a forked child with inherited stdio and waits for completion.
+// Returns the exit code, or 128 if the child was killed by a signal.
 int run_process(const std::vector<std::string>& args) {
     if (args.empty()) {
         return 1;
@@ -338,6 +394,8 @@ int run_process(const std::vector<std::string>& args) {
     return 128;
 }
 
+// Runs args with stdout+stderr merged into a pipe and returns ProcessResult.
+// Exit code is the child's, or 128 if it died from a signal.
 ProcessResult run_process_capture(
     const std::vector<std::string>& args,
     const std::optional<fs::path>& cwd,
@@ -360,6 +418,8 @@ ProcessResult run_process_capture(
     return ProcessResult{128, output};
 }
 
+// Like run_process_capture, but captures stdout and stderr into separate
+// pipes so callers can distinguish command output from error diagnostics.
 ProcessOutput run_process_capture_separate(
     const std::vector<std::string>& args,
     const std::optional<fs::path>& cwd,
@@ -430,6 +490,8 @@ ProcessOutput run_process_capture_separate(
     return ProcessOutput{128, stdout_text, stderr_text};
 }
 
+// Like run_process_capture but enforces a timeout via nonblocking poll: drains
+// available output, escalates SIGTERM->SIGKILL on timeout, returns partial output.
 ProcessResult run_process_capture_timeout(
     const std::vector<std::string>& args,
     int timeout_ms,
@@ -499,6 +561,8 @@ ProcessResult run_process_capture_timeout(
     return ProcessResult{128, output, false};
 }
 
+// Captures a downloader's merged output while rendering live progress (aria2
+// RPC when a port is configured, otherwise .part size and dumped headers).
 ProcessResult run_process_capture_download_progress(
     const std::vector<std::string>& args,
     const fs::path& part,
@@ -518,6 +582,9 @@ ProcessResult run_process_capture_download_progress(
         throw;
     }
 
+    // Poll loop: read available output, check if child exited, render progress.
+    // Progress is rendered from .part file size growth and HTTP headers dumped
+    // by curl; aria2 uses RPC for richer state. Runs until child exits or timeout.
     std::string output;
     std::size_t last_width = 0;
     DownloadProgressState progress_state;
@@ -561,15 +628,17 @@ ProcessResult run_process_capture_download_progress(
     return ProcessResult{128, output};
 }
 
+// Spawns one batch child process and streams its stdout/stderr line-by-line
+// to the terminal UI. Handles timeout, output cap, and interrupt. Returns
+// exit code, captured output, and timing information for the UI to render.
 StreamingBatchResult run_batch_task_streaming(
-    const std::vector<std::string>& args,
-    const std::optional<fs::path>& cwd,
-    const std::vector<std::pair<std::string, std::string>>& base_env,
-    std::size_t index,
-    std::size_t total,
-    const std::string& target,
+    const BatchTaskRequest& request,
     BatchTerminalUi& ui) {
-    (void)total;
+    const auto& args = request.args;
+    const auto& cwd = request.cwd;
+    const auto& base_env = request.base_env;
+    const std::size_t index = request.index;
+    const auto& target = request.target;
     if (args.empty()) {
         ui.clear_task(index);
         return StreamingBatchResult{1};
@@ -630,6 +699,8 @@ StreamingBatchResult run_batch_task_streaming(
             std::_Exit(126);
         }
 
+        // Signal to the child that it is a batch task and tell it which fd to
+        // write progress events to (parsed by flush_batch_stream_line above).
         std::vector<std::pair<std::string, std::string>> env = base_env;
         env.emplace_back("YAI_BATCH_CHILD", "1");
         env.emplace_back("YAI_BATCH_EVENT_FD", std::to_string(event_pipe[1]));
@@ -666,6 +737,8 @@ StreamingBatchResult run_batch_task_streaming(
         bool exited = false;
         int status = 0;
 
+        // Main polling loop: drain stdout/stderr/event pipes non-blocking,
+        // check child exit via WNOHANG, apply timeout, dispatch lines to UI.
         while (stdout_open || stderr_open || event_open || !exited) {
             if (!exited) {
                 const pid_t wait_result = waitpid_nointr(pid, &status, WNOHANG);

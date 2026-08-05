@@ -1,9 +1,18 @@
+// main.cpp - Entry point for the yai CLI.
+//
+// Responsibilities:
+//   * Parse argv and dispatch to the matching sub-command handler.
+//   * For install/download, expand target globs and run tasks either
+//     sequentially (after a multi-match confirmation) or in a parallel
+//     worker pool bounded by --jobs.
 #include "yai.hpp"
 
 namespace {
 
 using CommandHandler = void (*)(int, char**);
 
+// Aggregated state for a batch install/download run: the resolved targets,
+// forwarded options, parallelism, and flags derived during parsing.
 struct BatchCommand {
     std::string program;
     std::string command;
@@ -17,34 +26,34 @@ struct BatchCommand {
     bool cancelled = false;
 };
 
+// Maps a command name (as typed on the CLI) to its handler function.
 struct CommandEntry {
     const char* name;
     CommandHandler handler;
 };
 
+// Thin adapter: forwards to the doctor sub-app with the original argc.
 void doctor_command(int argc, char**) {
     doctor_app(argc);
 }
 
+// Thin adapter: lists locally installed apps.
 void list_command(int, char**) {
     list_apps();
 }
 
+// Thin adapter: prints top-level usage/help text.
 void help_command(int, char**) {
     print_usage();
 }
 
+// Returns true only for commands that support batch (multi-target) execution.
 bool is_batch_command(const std::string& command) {
     return command == "install" || command == "download";
 }
 
-bool batch_option_takes_value(const std::string& command, const std::string& arg) {
-    if (arg == "--arch" || arg == "--download" || arg == "--mirror-template" || arg == "--downloader") {
-        return true;
-    }
-    return command == "install" && (arg == "--id" || arg == "--name");
-}
-
+// Validates and parses a --jobs value; rejects empty/non-numeric input and
+// clamps the result to the supported 1..32 range.
 std::size_t parse_jobs_value(const std::string& value) {
     if (value.empty() || !std::all_of(value.begin(), value.end(), [](unsigned char ch) {
             return std::isdigit(ch) != 0;
@@ -58,7 +67,33 @@ std::size_t parse_jobs_value(const std::string& value) {
     return static_cast<std::size_t>(parsed);
 }
 
+// Parses argv for an install/download invocation: classifies options vs
+// targets, expands repo-id globs into concrete package ids, and decides
+// whether the run is a single-target dispatch or a batch (setting jobs,
+// prompting on multi-match expansion). Returns a BatchCommand with
+// `requested` false for non-batch commands.
 BatchCommand parse_batch_command(int argc, char** argv) {
+    enum class OptKind { flag_forward, value_forward, jobs };
+    struct OptDef {
+        const char* name;
+        OptKind kind;
+        bool install_only = false;
+        bool sets_yes = false;
+        bool sets_install_identity = false;
+    };
+    static const OptDef opts[] = {
+        {"--yes",             OptKind::flag_forward,  false, true,  false},
+        {"-y",                OptKind::flag_forward,  false, true,  false},
+        {"--recrawl",         OptKind::flag_forward,  false, false, false},
+        {"--arch",            OptKind::value_forward, false, false, false},
+        {"--download",        OptKind::value_forward, false, false, false},
+        {"--mirror-template", OptKind::value_forward, false, false, false},
+        {"--downloader",      OptKind::value_forward, false, false, false},
+        {"--id",              OptKind::value_forward, true,  false, true},
+        {"--name",            OptKind::value_forward, true,  false, true},
+        {"--jobs",            OptKind::jobs,          false, false, false},
+    };
+
     BatchCommand batch;
     batch.program = argv[0];
     batch.command = argv[1];
@@ -68,40 +103,38 @@ BatchCommand parse_batch_command(int argc, char** argv) {
 
     for (int i = 2; i < argc; ++i) {
         const std::string arg = argv[i];
-        if (arg == "--jobs") {
-            if (++i >= argc) {
-                throw std::runtime_error(tr("--jobs requires a value"));
+        bool matched = false;
+        for (const auto& opt : opts) {
+            if (arg != opt.name) continue;
+            if (opt.install_only && batch.command != "install") continue;
+            matched = true;
+            switch (opt.kind) {
+                case OptKind::flag_forward:
+                    if (opt.sets_yes) batch.yes = true;
+                    batch.option_args.push_back(arg);
+                    break;
+                case OptKind::value_forward:
+                    if (++i >= argc) throw std::runtime_error(arg + tr(" requires a value"));
+                    if (opt.sets_install_identity) batch.install_identity_explicit = true;
+                    batch.option_args.push_back(arg);
+                    batch.option_args.push_back(argv[i]);
+                    break;
+                case OptKind::jobs:
+                    if (++i >= argc) throw std::runtime_error(tr("--jobs requires a value"));
+                    batch.jobs = parse_jobs_value(argv[i]);
+                    batch.requested = true;
+                    break;
             }
-            batch.jobs = parse_jobs_value(argv[i]);
-            batch.requested = true;
-            continue;
+            break;
         }
-        if (arg == "--yes" || arg == "-y") {
-            batch.yes = true;
-            batch.option_args.push_back(arg);
-            continue;
-        }
-        if (arg == "--recrawl") {
-            batch.option_args.push_back(arg);
-            continue;
-        }
-        if (batch_option_takes_value(batch.command, arg)) {
-            if (++i >= argc) {
-                throw std::runtime_error(arg + tr(" requires a value"));
+        if (!matched) {
+            if (arg.rfind("--", 0) == 0) {
+                throw std::runtime_error(tr_format(
+                        "unknown {command} option: {arg}",
+                        {{"{command}", batch.command}, {"{arg}", arg}}));
             }
-            if (arg == "--id" || arg == "--name") {
-                batch.install_identity_explicit = true;
-            }
-            batch.option_args.push_back(arg);
-            batch.option_args.push_back(argv[i]);
-            continue;
+            batch.targets.push_back(arg);
         }
-        if (arg.rfind("--", 0) == 0) {
-            throw std::runtime_error(tr_format(
-                    "unknown {command} option: {arg}",
-                    {{"{command}", batch.command}, {"{arg}", arg}}));
-        }
-        batch.targets.push_back(arg);
     }
 
     std::vector<std::string> expanded_targets;
@@ -122,6 +155,7 @@ BatchCommand parse_batch_command(int argc, char** argv) {
     }
     batch.targets = std::move(expanded_targets);
 
+    // Multi-target mode: force parallel execution even if --jobs was not given.
     if (batch.targets.size() > 1) {
         batch.requested = true;
     }
@@ -160,6 +194,8 @@ BatchCommand parse_batch_command(int argc, char** argv) {
     return batch;
 }
 
+// Builds the argv vector for one batch child process: program + command +
+// single target, followed by the original forwarded options.
 std::vector<std::string> batch_child_args(const BatchCommand& batch, const std::string& target) {
     std::vector<std::string> args;
     args.reserve(batch.option_args.size() + 3);
@@ -170,6 +206,12 @@ std::vector<std::string> batch_child_args(const BatchCommand& batch, const std::
     return args;
 }
 
+// Executes a batch run. When `expanded_multi` is set (a glob expansion that
+// the user confirmed), tasks run sequentially and the first failure aborts.
+// Otherwise a pool of `batch.jobs` worker threads pulls targets from a shared
+// atomic index; failures are recorded but do not stop sibling tasks. Reports
+// aggregate results via the BatchTerminalUi and throws on any failure or
+// user interrupt.
 void run_batch_command(const BatchCommand& batch) {
     BatchTerminalUi ui(batch.targets.size());
     ui.log_parent(
@@ -184,12 +226,13 @@ void run_batch_command(const BatchCommand& batch) {
                 StreamingBatchResult result;
                 try {
                     result = run_batch_task_streaming(
-                        batch_child_args(batch, target),
-                        std::nullopt,
-                        {{"YAI_BATCH_CHILD", "1"}},
-                        i,
-                        batch.targets.size(),
-                        target,
+                        BatchTaskRequest{
+                            batch_child_args(batch, target),
+                            std::nullopt,
+                            {{"YAI_BATCH_CHILD", "1"}},
+                            i,
+                            target,
+                        },
                         ui);
                 } catch (const std::exception& ex) {
                     ui.log_line(i, target, ex.what());
@@ -234,12 +277,13 @@ void run_batch_command(const BatchCommand& batch) {
                 }
                 try {
                     const StreamingBatchResult result = run_batch_task_streaming(
-                        batch_child_args(batch, results[index].target),
-                        std::nullopt,
-                        {{"YAI_BATCH_CHILD", "1"}},
-                        index,
-                        batch.targets.size(),
-                        results[index].target,
+                        BatchTaskRequest{
+                            batch_child_args(batch, results[index].target),
+                            std::nullopt,
+                            {{"YAI_BATCH_CHILD", "1"}},
+                            index,
+                            results[index].target,
+                        },
                         ui);
                     results[index].exit_code = result.exit_code;
                 } catch (const std::exception& ex) {
@@ -307,6 +351,9 @@ const CommandEntry COMMANDS[] = {
     {"-h", help_command},
 };
 
+// Top-level command routing: first parses a potential batch request; if it
+// is a batch run, executes it. Otherwise looks up the command name in
+// COMMANDS and invokes the matching handler. Throws on unknown commands.
 void dispatch_command(int argc, char** argv) {
     const std::string command = argv[1];
     const BatchCommand batch = parse_batch_command(argc, argv);
@@ -329,6 +376,9 @@ void dispatch_command(int argc, char** argv) {
 
 }
 
+// Program entry point: installs signal handlers, cleans up orphaned
+// downloads from prior runs, dispatches the requested command, and
+// translates any thrown exception into a user-facing error message.
 int main(int argc, char** argv) {
     // Install signal handler so the program can gracefully handle SIGINT/SIGTERM.
     install_signal_handler();

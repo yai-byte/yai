@@ -8,6 +8,8 @@ const char* APPIMAGE_FEED_URL = "https://appimage.github.io/feed.json";
 
 namespace {
 
+// True for tokens shaped like a version: optional 'v'/'V' prefix, then only
+// digits and dots, requiring at least one digit (e.g. "v1.2", "1.0.0").
 bool token_looks_like_version(const std::string& token) {
     if (token.empty()) {
         return false;
@@ -36,6 +38,8 @@ bool token_looks_like_version(const std::string& token) {
 
 }  // namespace
 
+// Reads an env var, returning nullopt for both unset and empty-string values
+// (so callers can treat "not configured" uniformly).
 std::optional<std::string> env_string(const char* name) {
     const char* value = std::getenv(name);
     if (value == nullptr || std::string(value).empty()) {
@@ -44,6 +48,8 @@ std::optional<std::string> env_string(const char* name) {
     return std::string(value);
 }
 
+// Lowercasing variant intended for ASCII-only identifiers/IDs; kept separate
+// from the general-purpose to_lower to mark call sites that must stay ASCII.
 std::string ascii_lower(std::string value) {
     for (char& ch : value) {
         ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -60,6 +66,8 @@ std::string home_dir() {
     return home;
 }
 
+// Resolves a relative path against $HOME (tilde-style "~/foo" expansion
+// without the leading slash), throwing if HOME is unset.
 fs::path expand_home_path(const std::string& path) {
     return fs::path(home_dir()) / path;
 }
@@ -90,6 +98,9 @@ std::string trim(std::string value) {
     return value;
 }
 
+// Extracts the filename component of a URL by dropping any fragment ('#...')
+// and query ('?...') before the last path segment; falls back to
+// "app.AppImage" when the URL has no usable filename.
 std::string basename_from_url(const std::string& url) {
     std::string clean = url;
     const std::size_t fragment = clean.find('#');
@@ -111,6 +122,8 @@ std::string basename_from_url(const std::string& url) {
     return name.empty() ? "app.AppImage" : name;
 }
 
+// Removes a trailing ".AppImage" suffix (case-sensitive) if present; leaves
+// other suffixes like ".AppImage.zsync" untouched.
 std::string strip_appimage_suffix(std::string value) {
     const std::string suffix = ".AppImage";
     if (value.size() >= suffix.size() &&
@@ -120,6 +133,9 @@ std::string strip_appimage_suffix(std::string value) {
     return value;
 }
 
+// Derives a clean app id from a release asset filename: strips the .AppImage
+// suffix, splits on '-'/'_', then drops trailing tokens that look like a
+// version or CPU arch (e.g. "App-1.2.3-x86_64" -> "App").
 std::string base_name_from_appimage_filename(const std::string& filename) {
     const std::string stem = strip_appimage_suffix(fs::path(filename).filename().string());
     std::vector<std::string> tokens;
@@ -155,6 +171,10 @@ std::string base_name_from_appimage_filename(const std::string& filename) {
     return out;
 }
 
+// Normalizes an arbitrary string into a safe app id: lowercases, keeps
+// [a-z0-9_.-], collapses every other run of disallowed chars into a single
+// '-', and trims leading/trailing '-' and '.'. Returns "appimage-app" if
+// nothing remains.
 std::string sanitize_id(const std::string& value) {
     std::string out;
     bool previous_dash = false;
@@ -180,6 +200,9 @@ std::string sanitize_id(const std::string& value) {
     return out.empty() ? "appimage-app" : out;
 }
 
+// Escapes '\', '"', '$' and '`' so the value is safe to interpolate inside a
+// double-quoted shell string. Incomplete on its own — the caller must wrap
+// the result in double quotes.
 std::string shell_escape_double_quoted(const std::string& value) {
     std::string out;
     out.reserve(value.size() + 8);
@@ -192,6 +215,9 @@ std::string shell_escape_double_quoted(const std::string& value) {
     return out;
 }
 
+// Escapes a value for use in a .desktop file: backslash-escapes '\' and ';'
+// (the .desktop field separator) and silently drops newlines, since the
+// Desktop Entry spec does not allow raw CR/LF in field values.
 std::string desktop_escape(const std::string& value) {
     std::string out;
     out.reserve(value.size());
@@ -286,7 +312,7 @@ bool glob_match_case_insensitive(const std::string& pattern, const std::string& 
 }
 
 std::string url_encode(const std::string& value) {
-    static const char* hex = "0123456789ABCDEF";
+    static const char* kHexChars = "0123456789ABCDEF";
     std::string out;
     for (unsigned char ch : value) {
         const bool safe = (ch >= 'a' && ch <= 'z') ||
@@ -297,8 +323,8 @@ std::string url_encode(const std::string& value) {
             out.push_back(static_cast<char>(ch));
         } else {
             out.push_back('%');
-            out.push_back(hex[ch >> 4]);
-            out.push_back(hex[ch & 15]);
+            out.push_back(kHexChars[ch >> 4]);
+            out.push_back(kHexChars[ch & 15]);
         }
     }
     return out;
@@ -316,6 +342,9 @@ std::string replace_all(std::string value, const std::string& from, const std::s
     return value;
 }
 
+// Heuristically detects FUSE/libfuse/squashfuse failures (missing /dev/fuse,
+// unmounted kernel module, "AppImages require fuse", etc.) in subprocess
+// output so the caller can suggest the fix rather than a generic error.
 bool output_has_fuse_error(const std::string& output) {
     const std::string lower = to_lower(output);
     return lower.find("libfuse") != std::string::npos ||
@@ -388,6 +417,9 @@ void write_text_file(const fs::path& path, const std::string& content) {
     out << content;
 }
 
+// Writes content atomically: dumps to a sibling ".tmp" file, flushes, then
+// renames over the target so a crash mid-write never leaves a truncated file.
+// The temp file is removed if the rename fails.
 void write_text_file_atomic(const fs::path& path, const std::string& content) {
     const fs::path temp_path = path.string() + ".tmp";
     std::ofstream out(temp_path);
@@ -402,6 +434,10 @@ void write_text_file_atomic(const fs::path& path, const std::string& content) {
         // Clean up the temp file on failure
         std::error_code remove_ec;
         fs::remove(temp_path, remove_ec);
+        if (remove_ec) {
+            std::cerr << "yai: failed to clean up temp file " << temp_path
+                      << ": " << remove_ec.message() << "\n";
+        }
         throw std::runtime_error(tr("failed to move file into place: ") + ec.message());
     }
 }
@@ -416,6 +452,8 @@ std::string read_text_file(const fs::path& path) {
     return buffer.str();
 }
 
+// Copies a file, creating the destination's parent directory and replacing
+// any existing file at the destination. Throws on any copy error.
 void copy_file_overwrite(const fs::path& from, const fs::path& to) {
     std::error_code ec;
     ensure_directory(to.parent_path());
@@ -425,6 +463,9 @@ void copy_file_overwrite(const fs::path& from, const fs::path& to) {
     }
 }
 
+// The bundled GitHub mirror proxies used to accelerate release downloads from
+// China; each maps a name to a template and human-readable description. The
+// {raw_url}/{owner}/{repo}/{tag}/{asset} placeholders are filled in later.
 std::vector<MirrorProvider> built_in_mirror_providers() {
     return {
         MirrorProvider{"ghfast", "https://ghfast.top/{raw_url}", "GHFast prefix proxy"},
@@ -444,6 +485,9 @@ std::optional<MirrorProvider> mirror_provider_by_name(const std::string& name) {
     return std::nullopt;
 }
 
+// True if a mirror template contains any recognized placeholder
+// ({raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}),
+// i.e. it is a real template rather than a bare host prefix.
 bool template_has_placeholder(const std::string& value) {
     return value.find("{raw_url}") != std::string::npos ||
            value.find("{raw_url_noscheme}") != std::string::npos ||
@@ -454,6 +498,10 @@ bool template_has_placeholder(const std::string& value) {
            value.find("{asset}") != std::string::npos;
 }
 
+// Normalizes a user-supplied mirror template: rejects empty/multi-line input,
+// returns it verbatim if it already contains a placeholder, otherwise strips
+// trailing slashes, defaults the scheme to https://, and appends "/{raw_url}"
+// so a bare host becomes a prefix-style proxy.
 std::string normalize_custom_mirror_template(std::string value) {
     value = trim(value);
     if (value.empty() || contains_line_break(value)) {
@@ -471,6 +519,9 @@ std::string normalize_custom_mirror_template(std::string value) {
     return value + "/{raw_url}";
 }
 
+// Reads the first "key=value" line (INI-style, no section support) from a
+// text file and returns the value after '='. Whitespace and comments are not
+// handled — the prefix must match exactly.
 std::optional<std::string> key_value_file_value(const fs::path& file, const std::string& key) {
     std::ifstream in(file);
     std::string line;
@@ -511,6 +562,9 @@ NetworkConfig load_network_config() {
     return config;
 }
 
+// Persists a NetworkConfig to network.conf as simple "key=value" lines
+// (china_network_prompted, provider, download_strategy, mirror_template),
+// written atomically so a concurrent reader never sees a partial file.
 void write_network_config(const NetworkConfig& config) {
     ensure_directory(config_dir_path());
     const std::string content =
@@ -521,6 +575,9 @@ void write_network_config(const NetworkConfig& config) {
     write_text_file_atomic(network_config_path(), content);
 }
 
+// Returns the translated legal/compliance disclaimer shown before enabling a
+// mirror provider, reminding the user that proxies are third-party and that
+// yai only rewrites URLs, never the binaries themselves.
 std::string china_network_disclaimer() {
     return tr("This tool only accelerates public GitHub Release assets for lawful open source downloads;\n"
         "proxy services are third-party providers, and you are responsible for following local laws;\n"
@@ -547,6 +604,9 @@ namespace {
 std::atomic<bool> g_interrupted{false};
 std::atomic<int> g_interrupt_count{0};
 
+// SIGINT/SIGTERM handler: sets the interrupted flag on the first signal so
+// long-running operations can wind down gracefully, and force-exits via
+// _Exit on the second so a stuck process can always be killed.
 void signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         const int count = g_interrupt_count.fetch_add(1) + 1;
@@ -559,6 +619,8 @@ void signal_handler(int signal) {
 
 } // namespace
 
+// Installs signal_handler for SIGINT and SIGTERM using sigaction with an
+// empty mask and no flags (so default SA_RESTART behavior applies).
 void install_signal_handler() {
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -572,6 +634,9 @@ bool was_interrupted() {
     return g_interrupted.load();
 }
 
+// Cooperative cancellation check: throws "Operation interrupted by user" if
+// the interrupt flag is set. Callers poll this between cancellable steps so
+// the first Ctrl-C unwinds cleanly rather than being ignored.
 void check_interrupt() {
     if (g_interrupted.load()) {
         throw std::runtime_error(tr("Operation interrupted by user"));
@@ -585,21 +650,26 @@ void cleanup_orphan_downloads() {
     if (!fs::exists(data_dir)) {
         return;
     }
+    const auto ends_with = [](const std::string& s, const char* suffix) {
+        const std::size_t len = std::char_traits<char>::length(suffix);
+        return s.size() >= len && s.compare(s.size() - len, len, suffix) == 0;
+    };
     try {
         for (const auto& entry : fs::recursive_directory_iterator(data_dir)) {
             if (!entry.is_regular_file()) {
                 continue;
             }
             const std::string filename = entry.path().filename().string();
-            if (filename.size() >= 5 && filename.substr(filename.size() - 5) == ".part") {
-                std::error_code ec;
-                fs::remove(entry.path(), ec);
-            } else if (filename.size() >= 6 && filename.substr(filename.size() - 6) == ".aria2") {
-                std::error_code ec;
-                fs::remove(entry.path(), ec);
-            } else if (filename.size() >= 4 && filename.substr(filename.size() - 4) == ".tmp") {
-                std::error_code ec;
-                fs::remove(entry.path(), ec);
+            if (!ends_with(filename, ".part") &&
+                !ends_with(filename, ".aria2") &&
+                !ends_with(filename, ".tmp")) {
+                continue;
+            }
+            std::error_code ec;
+            fs::remove(entry.path(), ec);
+            if (ec) {
+                std::cerr << "yai: failed to remove orphan file " << entry.path()
+                          << ": " << ec.message() << "\n";
             }
         }
     } catch (const std::exception&) {

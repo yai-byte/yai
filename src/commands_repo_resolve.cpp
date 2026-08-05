@@ -263,30 +263,32 @@ int calculate_default_concurrency(bool aggressive) {
 }
 
 RepoResolveOptions parse_repo_resolve_options(int argc, char** argv) {
+    using Apply = void(*)(RepoResolveOptions&, const std::string&);
+    struct OptDef { const char* name; bool takes_value; Apply apply; };
+    static const OptDef opts[] = {
+        {"--output",      true,  [](RepoResolveOptions& o, const std::string& v){ o.output = v; }},
+        {"--arch",        true,  [](RepoResolveOptions& o, const std::string& v){ o.arches.push_back(v); }},
+        {"--type",        true,  [](RepoResolveOptions& o, const std::string& v){ o.types.push_back(v); }},
+        {"--package",     true,  [](RepoResolveOptions& o, const std::string& v){ o.packages.push_back(v); }},
+        {"--concurrency", true,  [](RepoResolveOptions& o, const std::string& v){ o.concurrency = parse_concurrency_value(v); }},
+        {"--show",        true,  [](RepoResolveOptions& o, const std::string& v){ parse_show_mask(v, o); }},
+        {"--overwrite",   false, [](RepoResolveOptions& o, const std::string&){ o.overwrite = true; }},
+        {"--aggressive",  false, [](RepoResolveOptions& o, const std::string&){ o.aggressive = true; }},
+        {"--summary",     false, [](RepoResolveOptions& o, const std::string&){ o.summary = true; }},
+        {"--no-summary",  false, [](RepoResolveOptions& o, const std::string&){ o.summary = false; }},
+    };
+
     RepoResolveOptions options;
     for (int i = 0; i < argc; ++i) {
         const std::string arg = argv[i];
-        if (arg == "--output") {
-            options.output = read_option_value(argc, argv, i, arg);
-        } else if (arg == "--arch") {
-            options.arches.push_back(read_option_value(argc, argv, i, arg));
-        } else if (arg == "--type") {
-            options.types.push_back(read_option_value(argc, argv, i, arg));
-        } else if (arg == "--package") {
-            options.packages.push_back(read_option_value(argc, argv, i, arg));
-        } else if (arg == "--overwrite") {
-            options.overwrite = true;
-        } else if (arg == "--concurrency") {
-            options.concurrency = parse_concurrency_value(read_option_value(argc, argv, i, arg));
-        } else if (arg == "--aggressive") {
-            options.aggressive = true;
-        } else if (arg == "--show") {
-            parse_show_mask(read_option_value(argc, argv, i, arg), options);
-        } else if (arg == "--summary") {
-            options.summary = true;
-        } else if (arg == "--no-summary") {
-            options.summary = false;
-        } else {
+        bool matched = false;
+        for (const auto& opt : opts) {
+            if (arg != opt.name) continue;
+            opt.apply(options, opt.takes_value ? read_option_value(argc, argv, i, arg) : "");
+            matched = true;
+            break;
+        }
+        if (!matched) {
             throw std::runtime_error(tr("unknown repo resolve option: ") + arg);
         }
     }

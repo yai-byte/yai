@@ -130,18 +130,6 @@ std::string find_yaml_value(
     return "";
 }
 
-std::string find_yaml_value(
-    const std::map<std::string, std::string>& yaml,
-    const std::vector<std::string>& keys) {
-    for (const auto& key : keys) {
-        auto it = yaml.find(key);
-        if (it != yaml.end() && !it->second.empty()) {
-            return it->second;
-        }
-    }
-    return "";
-}
-
 // Extract owner/repo from a GitHub URL or path
 std::string extract_github_repo(const std::string& url) {
     std::string value = trim(url);
@@ -323,171 +311,128 @@ std::vector<std::string> fetch_appimage_apps_list(int timeout_ms) {
     return all_names;
 }
 
-// Parse a single apps/<Name>.md file from GitHub API
+// Fetches the markdown content for an apps/<name>.md file.
+// Tries the GitHub API (base64 content) first, then falls back to
+// raw.githubusercontent.com. Returns nullopt if both paths fail.
+std::optional<std::string> fetch_apps_markdown(const std::string& name, int timeout_ms) {
+    try {
+        const std::string url = std::string(kAppImageGithubRepoApiBase) +
+            "/contents/apps/" + url_encode(name) + ".md";
+        const std::string response = fetch_text(url, timeout_ms);
+        const std::string content_b64 = json_find_string(response, "content").value_or("");
+        if (!content_b64.empty()) {
+            std::string clean_b64;
+            for (char c : content_b64) {
+                if (c != '\n' && c != '\r') clean_b64 += c;
+            }
+            return base64_decode(clean_b64);
+        }
+    } catch (const std::exception&) {
+        // Fall through to raw.githubusercontent.com
+    }
+    try {
+        const std::string raw_url = std::string(kAppImageGithubRawBase) +
+            "/apps/" + url_encode(name) + ".md";
+        std::string raw_content = fetch_text(raw_url, timeout_ms);
+        if (!raw_content.empty()) return raw_content;
+    } catch (const std::exception&) {
+        // Both paths failed
+    }
+    return std::nullopt;
+}
+
+// Fills an AppImageAppsEntry from parsed YAML frontmatter. Scans link entries
+// (type/url pairs) for GitHub, Download, and Web/Homepage links in a single
+// pass, then applies pattern-based fallback searches for any field not found.
+void fill_apps_entry_from_yaml(AppImageAppsEntry& entry, const std::map<std::string, std::string>& parsed) {
+    bool found_github = false;
+    bool found_download = false;
+
+    // Primary: single pass over all link type/url pairs
+    for (const auto& [k, v] : parsed) {
+        bool is_link_type = false;
+        std::string prefix;
+        if (k == "links.type" ||
+            (k.size() > 11 && k.substr(0, 6) == "links." &&
+             k.substr(k.size() - 5) == ".type")) {
+            is_link_type = true;
+            prefix = k.substr(0, k.rfind(".type"));
+        }
+        if (!is_link_type) continue;
+
+        const std::string link_type = to_lower(v);
+        const std::string link_url = find_yaml_value(parsed, prefix + ".url");
+
+        if ((link_type == "github" || link_type == "repository") &&
+            !link_url.empty() && !found_github) {
+            entry.github_repo = extract_github_repo(link_url);
+            found_github = true;
+        } else if (link_type == "download" &&
+                   !link_url.empty() && !found_download) {
+            entry.direct_url = link_url;
+            found_download = true;
+        } else if ((link_type == "web" || link_type == "homepage") &&
+                   !link_url.empty() && entry.homepage.empty()) {
+            entry.homepage = link_url;
+        }
+    }
+
+    // Fallback: search for GitHub URLs in any link field
+    if (entry.github_repo.empty()) {
+        for (const auto& [k, v] : parsed) {
+            if (k.find("url") != std::string::npos &&
+                v.find("github.com/") != std::string::npos) {
+                entry.github_repo = extract_github_repo(v);
+                break;
+            }
+        }
+    }
+
+    // Fallback: search for direct download URLs in any link field
+    if (entry.direct_url.empty()) {
+        for (const auto& [k, v] : parsed) {
+            if (k.find("url") != std::string::npos &&
+                looks_like_direct_download_url(v)) {
+                entry.direct_url = v;
+                break;
+            }
+        }
+    }
+
+    // Fallback: search for homepage via type/url pattern
+    if (entry.homepage.empty()) {
+        for (const auto& [k, v] : parsed) {
+            if (k.find("type") != std::string::npos &&
+                (to_lower(v) == "web" || to_lower(v) == "homepage")) {
+                const std::string prefix = k.substr(0, k.rfind(".type"));
+                entry.homepage = find_yaml_value(parsed, prefix + ".url");
+                break;
+            }
+        }
+    }
+
+    // Scalar fields
+    entry.description = find_yaml_value(parsed, "description");
+    entry.license = find_yaml_value(parsed, "license");
+    entry.arch = find_yaml_value(parsed, "desktop.X-AppImage-Arch");
+    entry.version = find_yaml_value(parsed, "desktop.X-AppImage-Version");
+}
+
+// Parse a single apps/<Name>.md file from GitHub
 std::optional<AppImageAppsEntry> parse_appimage_apps_entry(
     const std::string& name,
     int timeout_ms) {
     try {
-        // Fetch via GitHub API to get base64 content
-        std::string url = std::string(kAppImageGithubRepoApiBase) +
-            "/contents/apps/" + url_encode(name) + ".md";
-        std::string response = fetch_text(url, timeout_ms);
+        const auto content = fetch_apps_markdown(name, timeout_ms);
+        if (!content.has_value()) return std::nullopt;
 
-        // Extract the base64 content field
-        std::string content_b64 = json_find_string(response, "content").value_or("");
-        if (content_b64.empty()) {
-            // Fallback: try raw.githubusercontent.com
-            std::string raw_url = std::string(kAppImageGithubRawBase) +
-                "/apps/" + url_encode(name) + ".md";
-            std::string raw_content = fetch_text(raw_url, timeout_ms);
-            if (raw_content.empty()) return std::nullopt;
-
-            // Parse the raw markdown
-            std::string yaml = extract_yaml_frontmatter(raw_content);
-            if (yaml.empty()) return std::nullopt;
-
-            auto parsed = parse_yaml_frontmatter(yaml);
-            AppImageAppsEntry entry;
-            entry.name = name;
-
-            // Extract GitHub repo from links
-            std::string github_link_type = find_yaml_value(parsed, "links.type");
-            std::string github_link_url = find_yaml_value(parsed, "links.url");
-            if (github_link_type.empty()) {
-                // Try alternative nesting with indexed keys
-                for (const auto& [k, v] : parsed) {
-                    bool is_link_type = false;
-                    if (k == "links.type" ||
-                        (k.size() > 11 && k.substr(0, 6) == "links." &&
-                         k.substr(k.size() - 5) == ".type")) {
-                        is_link_type = true;
-                    }
-                    if (is_link_type && to_lower(v) == "github") {
-                        std::string prefix = k.substr(0, k.rfind(".type"));
-                        entry.github_repo = extract_github_repo(
-                            find_yaml_value(parsed, prefix + ".url"));
-                        break;
-                    }
-                }
-            } else if (to_lower(github_link_type) == "github" ||
-                       to_lower(github_link_type) == "repository") {
-                entry.github_repo = extract_github_repo(github_link_url);
-            }
-
-            // If still no github repo, try all link entries
-            if (entry.github_repo.empty()) {
-                for (const auto& [k, v] : parsed) {
-                    if (k.find("url") != std::string::npos &&
-                        v.find("github.com/") != std::string::npos) {
-                        entry.github_repo = extract_github_repo(v);
-                        break;
-                    }
-                }
-            }
-
-            // Extract direct download URL
-            for (const auto& [k, v] : parsed) {
-                if (k.find("url") != std::string::npos &&
-                    looks_like_direct_download_url(v)) {
-                    entry.direct_url = v;
-                    break;
-                }
-            }
-
-            // Extract homepage
-            entry.homepage = find_yaml_value(parsed,
-                {"links.Web", "links.Homepage", "links.Home"});
-            if (entry.homepage.empty()) {
-                for (const auto& [k, v] : parsed) {
-                    if (k.find("type") != std::string::npos &&
-                        (to_lower(v) == "web" || to_lower(v) == "homepage")) {
-                        std::string prefix = k.substr(0, k.rfind(".type"));
-                        entry.homepage = find_yaml_value(parsed, prefix + ".url");
-                        break;
-                    }
-                }
-            }
-
-            // Extract description and license
-            entry.description = find_yaml_value(parsed, "description");
-            entry.license = find_yaml_value(parsed, "license");
-
-            // Extract arch and version from desktop section
-            entry.arch = find_yaml_value(parsed, "desktop.X-AppImage-Arch");
-            entry.version = find_yaml_value(parsed, "desktop.X-AppImage-Version");
-
-            return entry;
-        }
-
-        // Decode base64 content (GitHub API returns it with newlines)
-        // Remove newlines from base64 string
-        std::string clean_b64;
-        for (char c : content_b64) {
-            if (c != '\n' && c != '\r') clean_b64 += c;
-        }
-        std::string decoded = base64_decode(clean_b64);
-
-        // Extract YAML frontmatter
-        std::string yaml = extract_yaml_frontmatter(decoded);
+        const std::string yaml = extract_yaml_frontmatter(*content);
         if (yaml.empty()) return std::nullopt;
 
-        auto parsed = parse_yaml_frontmatter(yaml);
+        const auto parsed = parse_yaml_frontmatter(yaml);
         AppImageAppsEntry entry;
         entry.name = name;
-
-        // Extract GitHub repo from links - look for the GitHub type link
-        bool found_github = false;
-        bool found_download = false;
-        for (const auto& [k, v] : parsed) {
-            // Match both "links.type" and "links.N.type" patterns
-            bool is_link_type = false;
-            std::string prefix;
-            if (k == "links.type" ||
-                (k.size() > 11 && k.substr(0, 6) == "links." &&
-                 k.substr(k.size() - 5) == ".type")) {
-                is_link_type = true;
-                prefix = k.substr(0, k.rfind(".type"));
-            }
-            if (is_link_type) {
-                std::string link_type = to_lower(v);
-                std::string link_url = find_yaml_value(parsed, prefix + ".url");
-
-                if ((link_type == "github" || link_type == "repository") &&
-                    !link_url.empty() && !found_github) {
-                    entry.github_repo = extract_github_repo(link_url);
-                    found_github = true;
-                } else if (link_type == "download" &&
-                           !link_url.empty() && !found_download) {
-                    entry.direct_url = link_url;
-                    found_download = true;
-                } else if ((link_type == "web" || link_type == "homepage") &&
-                           !link_url.empty() && entry.homepage.empty()) {
-                    entry.homepage = link_url;
-                }
-            }
-        }
-
-        // If no explicit GitHub link found, search for GitHub URLs in any link
-        if (entry.github_repo.empty()) {
-            for (const auto& [k, v] : parsed) {
-                if (k.find("url") != std::string::npos &&
-                    v.find("github.com/") != std::string::npos) {
-                    entry.github_repo = extract_github_repo(v);
-                    break;
-                }
-            }
-        }
-
-        // Extract description and license
-        entry.description = find_yaml_value(parsed, "description");
-        entry.license = find_yaml_value(parsed, "license");
-
-        // Extract arch and version from desktop section
-        entry.arch = find_yaml_value(parsed,
-            "desktop.X-AppImage-Arch");
-        entry.version = find_yaml_value(parsed,
-            "desktop.X-AppImage-Version");
-
+        fill_apps_entry_from_yaml(entry, parsed);
         return entry;
     } catch (const std::exception&) {
         return std::nullopt;
@@ -630,40 +575,34 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
     }
 }
 
+// Generic lookup: tries the package name as-is, then lowercase.
+template <typename Entry>
+std::optional<Entry> lookup_appimage_entry(
+    const std::string& package_name,
+    int timeout_ms,
+    std::optional<Entry> (*parser)(const std::string&, int)) {
+    auto entry = parser(package_name, timeout_ms);
+    if (entry) return entry;
+    const std::string lower_name = to_lower(package_name);
+    if (lower_name != package_name) {
+        entry = parser(lower_name, timeout_ms);
+        if (entry) return entry;
+    }
+    return std::nullopt;
+}
+
 // Lookup a data/ entry by package name (used during repo resolve)
 std::optional<AppImageDataEntry> lookup_appimage_data_entry(
     const std::string& package_name,
     int timeout_ms) {
-    // Try the package name as-is
-    auto entry = parse_appimage_data_entry(package_name, timeout_ms);
-    if (entry.has_value()) return entry;
-
-    // Try sanitized ID (lowercase)
-    std::string lower_name = to_lower(package_name);
-    if (lower_name != package_name) {
-        entry = parse_appimage_data_entry(lower_name, timeout_ms);
-        if (entry.has_value()) return entry;
-    }
-
-    return std::nullopt;
+    return lookup_appimage_entry(package_name, timeout_ms, parse_appimage_data_entry);
 }
 
 // Lookup an apps/ entry by package name (used during repo resolve)
 std::optional<AppImageAppsEntry> lookup_appimage_apps_entry(
     const std::string& package_name,
     int timeout_ms) {
-    // Try the package name as-is
-    auto entry = parse_appimage_apps_entry(package_name, timeout_ms);
-    if (entry.has_value()) return entry;
-
-    // Try sanitized ID (lowercase)
-    std::string lower_name = to_lower(package_name);
-    if (lower_name != package_name) {
-        entry = parse_appimage_apps_entry(lower_name, timeout_ms);
-        if (entry.has_value()) return entry;
-    }
-
-    return std::nullopt;
+    return lookup_appimage_entry(package_name, timeout_ms, parse_appimage_apps_entry);
 }
 
 // Merge an apps/ entry into an existing RepoPackage

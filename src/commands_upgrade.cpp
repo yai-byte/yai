@@ -16,25 +16,36 @@ UpgradeCommandOptions parse_upgrade_command_options(int argc, char** argv) {
         throw std::runtime_error(tr("upgrade requires a package id or --all"));
     }
 
+    using Apply = void(*)(UpgradeCommandOptions&, const std::string&);
+    struct OptDef { const char* name; bool takes_value; Apply apply; };
+    static const OptDef opts[] = {
+        {"--all",             false, [](UpgradeCommandOptions& c, const std::string&){ c.all = true; }},
+        {"--yes",             false, [](UpgradeCommandOptions& c, const std::string&){ c.yes = true; }},
+        {"-y",                false, [](UpgradeCommandOptions& c, const std::string&){ c.yes = true; }},
+        {"--download",        true,  [](UpgradeCommandOptions& c, const std::string& v){ parse_download_strategy_option(c.options, v); }},
+        {"--mirror-template", true,  [](UpgradeCommandOptions& c, const std::string& v){ parse_mirror_template_option(c.options, v); }},
+        {"--downloader",      true,  [](UpgradeCommandOptions& c, const std::string& v){ parse_downloader_option(c.options, v); }},
+    };
+
     UpgradeCommandOptions command;
     for (int i = 2; i < argc; ++i) {
         const std::string arg = argv[i];
-        if (arg == "--all") {
-            command.all = true;
-        } else if (arg == "--yes" || arg == "-y") {
-            command.yes = true;
-        } else if (arg == "--download") {
-            parse_download_strategy_option(command.options, read_option_value(argc, argv, i, arg));
-        } else if (arg == "--mirror-template") {
-            parse_mirror_template_option(command.options, read_option_value(argc, argv, i, arg));
-        } else if (arg == "--downloader") {
-            parse_downloader_option(command.options, read_option_value(argc, argv, i, arg));
-        } else if (arg.rfind("--", 0) == 0) {
-            throw std::runtime_error(tr("unknown upgrade option: ") + arg);
-        } else if (command.options.target.empty()) {
-            command.options.target = arg;
-        } else {
-            throw std::runtime_error(tr("upgrade accepts one package id or --all"));
+        bool matched = false;
+        for (const auto& opt : opts) {
+            if (arg != opt.name) continue;
+            opt.apply(command, opt.takes_value ? read_option_value(argc, argv, i, arg) : "");
+            matched = true;
+            break;
+        }
+        if (!matched) {
+            if (arg.rfind("--", 0) == 0) {
+                throw std::runtime_error(tr("unknown upgrade option: ") + arg);
+            }
+            if (command.options.target.empty()) {
+                command.options.target = arg;
+            } else {
+                throw std::runtime_error(tr("upgrade accepts one package id or --all"));
+            }
         }
     }
 
@@ -241,7 +252,11 @@ void write_activated_update(
     write_wrapper(paths, repair.mode);
     write_desktop_entry(paths, source.name);
     write_metadata(paths, source, repair.mode);
-    run_process({"update-desktop-database", paths.desktop.parent_path().string()});
+    const int desktop_db_rc = run_process({"update-desktop-database", paths.desktop.parent_path().string()});
+    if (desktop_db_rc != 0) {
+        std::cerr << "yai: update-desktop-database failed (exit " << desktop_db_rc
+                  << "); desktop entries may not appear immediately\n";
+    }
 }
 
 void activate_update_candidate(

@@ -487,13 +487,19 @@ struct StreamingBatchResult {
     int exit_code = 1;
 };
 
+// Inputs for a single batched child process. Bundling these into a struct keeps
+// call sites readable and avoids the 7-parameter signature that previously
+// forced callers to remember argument order.
+struct BatchTaskRequest {
+    std::vector<std::string> args;
+    std::optional<fs::path> cwd;
+    std::vector<std::pair<std::string, std::string>> base_env;
+    std::size_t index = 0;
+    std::string target;
+};
+
 StreamingBatchResult run_batch_task_streaming(
-    const std::vector<std::string>& args,
-    const std::optional<fs::path>& cwd,
-    const std::vector<std::pair<std::string, std::string>>& base_env,
-    std::size_t index,
-    std::size_t total,
-    const std::string& target,
+    const BatchTaskRequest& request,
     BatchTerminalUi& ui);
 
 ProcessResult run_process_capture_download_progress(
@@ -589,6 +595,10 @@ std::optional<std::string> json_extract_balanced(
 std::optional<std::string> json_find_object(const std::string& text, const std::string& key);
 std::optional<std::string> json_find_array(const std::string& text, const std::string& key);
 std::optional<int> json_find_int(const std::string& text, const std::string& key);
+// Returns the textual representation of a JSON number value (int or float) for
+// the given key. Useful for IDs that exceed int range (e.g. GitLab pipeline
+// IDs) or when a field may be either a quoted string or a bare number.
+std::optional<std::string> json_find_number_as_string(const std::string& text, const std::string& key);
 std::map<std::string, std::string> json_find_string_map(const std::string& object_text, const std::string& key);
 std::vector<std::string> json_top_level_objects(const std::string& array_text);
 fs::path repo_index_path();

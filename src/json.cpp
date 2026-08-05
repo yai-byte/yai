@@ -293,6 +293,43 @@ std::optional<int> json_find_int(const std::string& text, const std::string& key
     return std::stoi(text.substr(*start, end - *start));
 }
 
+std::optional<std::string> json_find_number_as_string(const std::string& text, const std::string& key) {
+    // Scans the full JSON number grammar: -? (0 | [1-9][0-9]*) (\.[0-9]+)?
+    // ([eE][+-]?[0-9]+)? Returns the textual form so callers can handle IDs
+    // that overflow int (e.g. GitLab pipeline/job IDs) without losing precision.
+    const std::optional<std::size_t> start = json_value_start_after_key(text, key);
+    if (!start.has_value()) {
+        return std::nullopt;
+    }
+    std::size_t pos = *start;
+    if (pos < text.size() && text[pos] == '-') {
+        ++pos;
+    }
+    const std::size_t digits_start = pos;
+    while (pos < text.size() && std::isdigit(static_cast<unsigned char>(text[pos]))) {
+        ++pos;
+    }
+    if (pos == digits_start) {
+        return std::nullopt;
+    }
+    if (pos < text.size() && text[pos] == '.') {
+        ++pos;
+        while (pos < text.size() && std::isdigit(static_cast<unsigned char>(text[pos]))) {
+            ++pos;
+        }
+    }
+    if (pos < text.size() && (text[pos] == 'e' || text[pos] == 'E')) {
+        ++pos;
+        if (pos < text.size() && (text[pos] == '+' || text[pos] == '-')) {
+            ++pos;
+        }
+        while (pos < text.size() && std::isdigit(static_cast<unsigned char>(text[pos]))) {
+            ++pos;
+        }
+    }
+    return text.substr(*start, pos - *start);
+}
+
 std::vector<std::string> json_top_level_objects(const std::string& array_text) {
     std::vector<std::string> objects;
     if (array_text.size() < 2 || array_text.front() != '[') {

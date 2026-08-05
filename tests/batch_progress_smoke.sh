@@ -89,12 +89,13 @@ cat > "$TMP_DIR/batch_stream_test.cpp" <<CPP
 int main() {
     BatchTerminalUi ui(1);
     const StreamingBatchResult result = run_batch_task_streaming(
-        {"$TMP_DIR/fake_child"},
-        std::nullopt,
-        {},
-        0,
-        1,
-        "pkg",
+        BatchTaskRequest{
+            {"$TMP_DIR/fake_child"},
+            std::nullopt,
+            {},
+            0,
+            "pkg",
+        },
         ui);
     ui.shutdown();
     if (result.exit_code != 0) {
