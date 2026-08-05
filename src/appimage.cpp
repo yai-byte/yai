@@ -22,17 +22,11 @@ std::optional<std::string> metadata_value(const fs::path& file, const std::strin
 }
 
 fs::path readable_metadata_path(const InstallPaths& paths) {
-    if (fs::exists(paths.metadata)) {
-        return paths.metadata;
-    }
-    if (fs::exists(paths.legacy_metadata)) {
-        return paths.legacy_metadata;
-    }
     return paths.metadata;
 }
 
 bool metadata_exists(const InstallPaths& paths) {
-    return fs::exists(paths.metadata) || fs::exists(paths.legacy_metadata);
+    return fs::exists(paths.metadata);
 }
 
 std::string sha256_file(const fs::path& path) {
@@ -91,7 +85,4 @@ void write_metadata(
         "  }\n"
         "}\n";
     write_text_file(paths.metadata, metadata);
-
-    const bool legacy_removed = remove_best_effort(paths.legacy_metadata);
-    (void)legacy_removed; // Legacy metadata is a compatibility cleanup only.
 }

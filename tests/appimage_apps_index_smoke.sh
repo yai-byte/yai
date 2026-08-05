@@ -287,7 +287,6 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$ROOT/src/batch_ui.cpp" \
   "$ROOT/src/download_progress.cpp" \
   "$ROOT/src/terminal_color.cpp" \
-  "$ROOT/src/website_resolve_cache.cpp" \
   "$ROOT/src/resolver.cpp" \
   "$ROOT/src/resolver_github.cpp" \
   "$ROOT/src/resolver_url.cpp" \

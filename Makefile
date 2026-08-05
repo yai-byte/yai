@@ -31,7 +31,6 @@ SRC := \
 	src/repo_index_urls.cpp \
 	src/terminal_color.cpp \
 	src/url_freshness.cpp \
-	src/website_resolve_cache.cpp \
 	src/resolver.cpp \
 	src/resolver_gitlab.cpp \
 	src/resolver_github.cpp \

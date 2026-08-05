@@ -87,7 +87,6 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$ROOT/src/batch_ui.cpp" \
   "$ROOT/src/download_progress.cpp" \
   "$ROOT/src/terminal_color.cpp" \
-  "$ROOT/src/website_resolve_cache.cpp" \
   "$ROOT/src/resolver_url.cpp" \
   -pthread
 
@@ -216,7 +215,6 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$ROOT/src/batch_ui.cpp" \
   "$ROOT/src/download_progress.cpp" \
   "$ROOT/src/terminal_color.cpp" \
-  "$ROOT/src/website_resolve_cache.cpp" \
   "$ROOT/src/resolver_url.cpp" \
   -pthread
 
@@ -319,7 +317,6 @@ make_appimage "$TASK3_ASSETS/prefer-v2-x86_64.AppImage" "prefer v2"
 cat > "$TASK3_SITE/index.html" <<HTML
 <html><body><a href="file://$TASK3_ASSETS/prefer-v2-x86_64.AppImage">AppImage</a></body></html>
 HTML
-rm -f "$TASK3_HOME/.local/share/yai/website-resolve-cache.json"
 rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
 (
   cd "$TASK3_WORKDIR"
@@ -346,7 +343,6 @@ PY
 }
 
 # 3) --recrawl uses crawl (v2); index URL still unchanged
-rm -f "$TASK3_HOME/.local/share/yai/website-resolve-cache.json"
 rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
 (
   cd "$TASK3_WORKDIR"
@@ -385,7 +381,6 @@ pkg["download_urls"] = {"x86_64": broken}
 json.dump(data, open(path, "w"), indent=2)
 open(path, "a").write("\n")
 PY
-rm -f "$TASK3_HOME/.local/share/yai/website-resolve-cache.json"
 rm -f "$TASK3_WORKDIR/prefer-site-pkg.AppImage"
 (
   cd "$TASK3_WORKDIR"
@@ -558,7 +553,6 @@ g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
   "$ROOT/src/batch_ui.cpp" \
   "$ROOT/src/download_progress.cpp" \
   "$ROOT/src/terminal_color.cpp" \
-  "$ROOT/src/website_resolve_cache.cpp" \
   -pthread
 
 HOME="$FINAL_HOME" "$TMP_DIR/final_prefer_regress_unit"

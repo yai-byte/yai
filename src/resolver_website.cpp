@@ -133,6 +133,9 @@ constexpr std::size_t kWebsiteCandidateSoftCap = 8;
 constexpr std::size_t kWebsiteHeadFillMax = 4;
 constexpr std::size_t kWebsiteListingFollowNonStaleMax = 3;
 constexpr std::size_t kWebsiteListingFollowStaleMax = 1;
+// Maximum crawl depth for multi-layer navigation (e.g.
+// homepage -> download -> version -> platform pages).
+constexpr int kWebsiteMaxDepth = 5;
 
 bool queue_item_better(const WebsiteQueueItem& a, const WebsiteQueueItem& b) {
     if (a.stale_penalty != b.stale_penalty) {
@@ -342,7 +345,7 @@ bool should_queue_website_link(
     const RepoPackage& package,
     const WebsiteQueueItem& page,
     const WebsiteSearchState& state) {
-    return page.depth < 5 &&
+    return page.depth < kWebsiteMaxDepth &&
            should_follow_download_page(
                link,
                package,

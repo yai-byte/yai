@@ -296,20 +296,13 @@ void restore_previous_version(const std::string& id) {
     const fs::path previous = previous_version_dir(paths);
     const fs::path previous_appimage = previous / "current.AppImage";
     const fs::path previous_metadata = previous / "metadata.json";
-    const fs::path previous_legacy_metadata = previous / "metadata.conf";
-    if (!fs::exists(previous_appimage) ||
-        (!fs::exists(previous_metadata) && !fs::exists(previous_legacy_metadata))) {
+    if (!fs::exists(previous_appimage) || !fs::exists(previous_metadata)) {
         throw std::runtime_error(tr("no rollback version is available for ") + id);
     }
 
     copy_file_overwrite(previous_appimage, paths.appimage);
     remove_required(paths.metadata, tr("restoring rollback metadata"));
-    remove_required(paths.legacy_metadata, tr("restoring rollback metadata"));
-    if (fs::exists(previous_metadata)) {
-        copy_file_overwrite(previous_metadata, paths.metadata);
-    } else {
-        copy_file_overwrite(previous_legacy_metadata, paths.legacy_metadata);
-    }
+    copy_file_overwrite(previous_metadata, paths.metadata);
     repair_installed_package(id);
 }
 

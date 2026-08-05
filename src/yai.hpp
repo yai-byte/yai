@@ -176,7 +176,6 @@ struct InstallPaths {
     fs::path wrapper;
     fs::path desktop;
     fs::path metadata;
-    fs::path legacy_metadata;
 };
 
 struct ProcessResult {
@@ -327,59 +326,6 @@ HttpValidators parse_http_validators_from_headers(const fs::path& headers);
 UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpValidators& remote);
 UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidators& stored);
 HttpValidators validators_from_metadata(const fs::path& metadata);
-
-constexpr std::int64_t kWebsiteResolveCacheTtlSeconds = 7 * 24 * 60 * 60;
-constexpr std::int64_t kWebsiteIntermediateCacheTtlSeconds = 6 * 60 * 60;
-
-struct WebsiteResolveCacheEntry {
-    std::string package_id;
-    std::string arch;
-    std::string source_url;
-    std::string download_url;
-    std::int64_t resolved_at = 0;
-    HttpValidators validators;
-    HttpValidators listing_validators;
-
-    // Intermediate fallback results (cached separately with shorter TTL).
-    // These avoid re-fetching AppImageHub catalog / data/ / apps/ pages
-    // when the primary website resolution fails and the same package has
-    // been resolved before.
-    std::int64_t intermediate_resolved_at = 0;
-    std::optional<std::string> catalog_github_repo;
-    std::optional<std::string> catalog_direct_url;
-    std::optional<std::string> catalog_homepage;
-    std::optional<std::string> data_github_repo;
-    std::optional<std::string> data_direct_url;
-    std::optional<std::string> apps_github_repo;
-    std::optional<std::string> apps_direct_url;
-};
-
-fs::path website_resolve_cache_path();
-std::string website_resolve_cache_key(
-    const std::string& package_id,
-    const std::string& arch,
-    const std::string& source_url);
-std::vector<WebsiteResolveCacheEntry> load_website_resolve_cache();
-void save_website_resolve_cache(const std::vector<WebsiteResolveCacheEntry>& entries);
-std::optional<WebsiteResolveCacheEntry> find_website_resolve_cache_entry(
-    const std::vector<WebsiteResolveCacheEntry>& entries,
-    const std::string& package_id,
-    const std::string& arch,
-    const std::string& source_url);
-bool website_resolve_cache_entry_expired(
-    const WebsiteResolveCacheEntry& entry,
-    std::int64_t now_epoch_seconds);
-void upsert_website_resolve_cache_entry(WebsiteResolveCacheEntry entry);
-bool website_cached_download_url_usable(
-    const std::string& download_url,
-    const HttpValidators& stored);
-bool website_cached_listing_fresh(
-    const std::string& source_url,
-    const HttpValidators& stored);
-bool website_intermediate_cache_valid(
-    const WebsiteResolveCacheEntry& entry,
-    std::int64_t now_epoch_seconds);
-HttpValidators capture_url_validators(const std::string& url);
 
 std::optional<std::uintmax_t> download_total_from_headers(const fs::path& headers);
 
@@ -659,13 +605,6 @@ struct AppImageCatalogSources {
 AppImageCatalogSources fetch_appimage_catalog_sources(
     const std::string& name,
     int timeout_ms = 15000);
-void store_website_intermediate_results(
-    const std::string& package_id,
-    const std::string& arch,
-    const std::string& source_url,
-    const AppImageCatalogSources* catalog,
-    const AppImageDataEntry* data_entry,
-    const AppImageAppsEntry* apps_entry);
 
 std::vector<std::string> fetch_appimage_apps_list(
     int timeout_ms = kFetchAppImageGithubListTimeoutMs);

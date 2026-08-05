@@ -508,28 +508,6 @@ void upgrade_installed_target(const InstallOptions& options) {
         // deeper landing/listing hop may have moved to a newer asset while the old
         // file still exists. Install disk cache still accelerates fresh installs.
         ResolvedSource source = resolve_repo_update_source(context);
-        try {
-            const std::optional<RepoPackage> package = find_repo_package(context.id);
-            if (package.has_value() && package->source_type == "website_page") {
-                const std::int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
-                                             std::chrono::system_clock::now().time_since_epoch())
-                                             .count();
-                WebsiteResolveCacheEntry entry;
-                entry.package_id = package->id;
-                entry.arch = normalize_arch(context.installed_arch);
-                entry.source_url = strip_url_fragment_query(package->source_url);
-                entry.download_url =
-                    !source.download_url.empty() ? source.download_url : source.source_url;
-                entry.resolved_at = now;
-                entry.validators.etag = source.http_etag;
-                entry.validators.last_modified = source.http_last_modified;
-                entry.validators.content_length = source.http_content_length;
-                entry.listing_validators = capture_url_validators(package->source_url);
-                upsert_website_resolve_cache_entry(entry);
-            }
-        } catch (const std::exception&) {
-            // Index lookup is best-effort for cache upsert only.
-        }
         if (!update_source_identity_changed(context, source)) {
             print_already_up_to_date(context);
             return;

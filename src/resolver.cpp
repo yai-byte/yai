@@ -339,44 +339,9 @@ ResolvedSource repo_github_release_source(const InstallOptions& options, const R
 
 ResolvedSource repo_website_page_source(const InstallOptions& options, const RepoPackage& package) {
     const std::string arch = install_arch_for_options(options);
-    const std::string source_page = package.source_url;
-    const std::int64_t now = std::chrono::duration_cast<std::chrono::seconds>(
-                                 std::chrono::system_clock::now().time_since_epoch())
-                                 .count();
-    const bool use_website_resolve_cache =
-        !(options.id_explicit && options.name_explicit && options.arch_explicit);
-
-    if (use_website_resolve_cache) {
-        const auto entries = load_website_resolve_cache();
-        const auto hit = find_website_resolve_cache_entry(entries, package.id, arch, source_page);
-        if (hit.has_value() &&
-            !website_resolve_cache_entry_expired(*hit, now)) {
-            // Fast path: if the listing page hasn't changed, we can trust the
-            // cached download URL check. If the listing changed, skip the
-            // download URL probe and go straight to re-resolving.
-            const bool listing_fresh =
-                website_cached_listing_fresh(source_page, hit->listing_validators);
-            if (listing_fresh) {
-                if (website_cached_download_url_usable(hit->download_url, hit->validators)) {
-                    return make_repo_website_source(options, package, hit->download_url);
-                }
-            }
-        }
-    }
 
     try {
         const std::string download_url = resolve_website_appimage_download(package, options.target_arch);
-        if (use_website_resolve_cache) {
-            WebsiteResolveCacheEntry fresh;
-            fresh.package_id = package.id;
-            fresh.arch = normalize_arch(arch);
-            fresh.source_url = strip_url_fragment_query(package.source_url);
-            fresh.download_url = download_url;
-            fresh.resolved_at = now;
-            fresh.listing_validators = capture_url_validators(package.source_url);
-            upsert_website_resolve_cache_entry(fresh);
-        }
-
         return make_repo_website_source(options, package, download_url);
     } catch (const std::exception&) {
         const bool may_be_appimage_catalog =
@@ -389,38 +354,9 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
         std::cerr << tr("yai: website search failed; trying parallel fallbacks for ")
                   << package.name << "\n";
 
-        // Check cached intermediate results before making network requests
-        if (use_website_resolve_cache) {
-            const auto entries = load_website_resolve_cache();
-            const auto hit = find_website_resolve_cache_entry(entries, package.id, arch, source_page);
-            if (hit.has_value() && website_intermediate_cache_valid(*hit, now)) {
-                // Try to use cached catalog result
-                if (hit->catalog_github_repo.has_value()) {
-                    std::cerr << tr("yai: using cached AppImageHub catalog for ") << package.name << "\n";
-                    RepoPackage github_package = package;
-                    const std::size_t slash = hit->catalog_github_repo->find('/');
-                    github_package.source_owner = hit->catalog_github_repo->substr(0, slash);
-                    github_package.source_repo = hit->catalog_github_repo->substr(slash + 1);
-                    github_package.source_type = "github_release";
-                    github_package.asset_pattern = ".*\\.AppImage$";
-                    return repo_github_release_source(options, github_package);
-                }
-                if (hit->catalog_direct_url.has_value()) {
-                    std::cerr << tr("yai: using cached direct download URL from AppImageHub\n");
-                    return make_repo_website_source(options, package, *hit->catalog_direct_url);
-                }
-            }
-        }
-
         auto make_catalog_fallback = [&]() -> ResolvedSource {
             std::cerr << tr("yai: fetching AppImageHub catalog for ") << package.name << "\n";
             const AppImageCatalogSources catalog = fetch_appimage_catalog_sources(package.name);
-
-            // Cache intermediate results
-            if (use_website_resolve_cache) {
-                store_website_intermediate_results(
-                    package.id, arch, source_page, &catalog, nullptr, nullptr);
-            }
 
             if (catalog.github_repo.has_value()) {
                 std::cerr << tr("yai: found GitHub repo on AppImageHub: ") << *catalog.github_repo << "\n";
@@ -450,17 +386,11 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
             throw std::runtime_error(tr("AppImageHub catalog has no usable source for ") + package.name);
         };
 
-        auto make_data_fallback = [&, use_website_resolve_cache, package, arch, source_page]() -> ResolvedSource {
+        auto make_data_fallback = [&]() -> ResolvedSource {
             std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
             auto data_entry = lookup_appimage_data_entry(package.name);
             if (!data_entry.has_value()) {
                 throw std::runtime_error(tr("no data/ entry for ") + package.name);
-            }
-
-            // Cache intermediate results
-            if (use_website_resolve_cache) {
-                store_website_intermediate_results(
-                    package.id, arch, source_page, nullptr, &*data_entry, nullptr);
             }
 
             if (!data_entry->direct_url.empty()) {
@@ -578,17 +508,11 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
             throw std::runtime_error(tr("data/ entry has no usable source for ") + package.name);
         };
 
-        auto make_apps_fallback = [&, use_website_resolve_cache, package, arch, source_page]() -> ResolvedSource {
+        auto make_apps_fallback = [&]() -> ResolvedSource {
             std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
             auto apps_entry = lookup_appimage_apps_entry(package.name);
             if (!apps_entry.has_value()) {
                 throw std::runtime_error(tr("no apps/ entry for ") + package.name);
-            }
-
-            // Cache intermediate results
-            if (use_website_resolve_cache) {
-                store_website_intermediate_results(
-                    package.id, arch, source_page, nullptr, nullptr, &*apps_entry);
             }
 
             if (!apps_entry->github_repo.empty()) {

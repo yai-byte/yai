@@ -80,8 +80,8 @@ AppImage 的优势是应用本体通常只有一个文件，不强依赖发行�
 ```bash
 yai search <keyword>
 yai info <package>
-yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>] [--jobs <n>] [--downloader auto|curl|wget|wget2|aria2c]
-yai download <package|url|owner/repo> [...] [--jobs <n>] [--downloader auto|curl|wget|wget2|aria2c]
+yai install <package|path|url|owner/repo> [...] [--id <id>] [--name <name>] [--jobs <n>] [--downloader auto|curl|wget|wget2|aria2c] [--recrawl]
+yai download <package|url|owner/repo> [...] [--jobs <n>] [--downloader auto|curl|wget|wget2|aria2c] [--recrawl]
 yai remove <id>
 yai update [id]
 yai upgrade <id|--all> [--yes]
@@ -94,6 +94,8 @@ yai doctor
 `<package>` 和 `<id>` 参数支持 shell 风格 `*`、`?` 通配符，但只作为唯一匹配的快捷写法：精确 ID 优先；没有精确命中时，如果通配符匹配 0 个或多个包，命令必须失败并提示候选，不能自动批量安装、更新或卸载。用户应写成 `'obs*'` 这类带引号形式，避免 shell 在 yai 收到参数前先展开。
 
 `install` 和 `download` 可以在同一条命令中接收多个目标，并通过 `--jobs <n>` 控制并发任务数。未指定时默认最多 4 个并发 worker，且不会超过目标数量；`--jobs` 接受 1 到 32。批量命令中的 `--arch`、`--download`、`--mirror-template`、`--downloader` 作用于所有目标。`--id` 和 `--name` 只允许用于单目标安装，因为批量安装需要为每个目标分别推导 package id 和显示名。
+
+`--recrawl` 用于强制从原始包源重新解析，而非使用仓库索引中已记录的下载 URL。适用于索引中的下载链接过期或需要获取最新版本的场景。`repo resolve` 命令同样支持此选项。
 
 `--downloader` 控制实际传输 AppImage 文件的外部下载器。默认值为 `auto`，HTTP(S) 下载按 `aria2c`、`wget2`、`wget`、`curl` 的优先级选择当前系统已安装的工具；如果 auto 选中的工具失败，会尝试下一个可用工具。用户也可以显式指定 `curl`、`wget`、`wget2` 或 `aria2c`。`file://` 下载在 auto 模式下继续使用 `curl`，以保证本地 Release fixture 和本地资产行为稳定。GitHub API 查询、仓库索引下载和网站发现仍使用 `curl`，下载器选项只影响 AppImage 文件本体的下载。非 curl 下载器开始传输前，yai 会用 `curl` 尝试预取响应头；如果服务器提供 `Content-Length`，进度行同样显示总大小。进度行中的速度使用最近约 1 秒窗口内的接收增量，而不是当前下载量除以总耗时；`aria2c` 下载会优先读取 aria2 控制文件中的完成量，避免分片稀疏写入时把 `.part` 文件的 apparent size 误报为真实已下载量。
 
@@ -288,6 +290,29 @@ yai doctor
 }
 ```
 
+#### 远程索引与区域自动分流
+
+当用户未通过 `YAI_REPO_INDEX` 指定本地索引时，yai 会自动从远程仓库 `yai-byte/yai-repo` 获取最新的 `index.json`：
+
+- **默认源**：`https://raw.githubusercontent.com/yai-byte/yai-repo/main/index.json`（GitHub）
+- **CN 分流**：当 `detect_index_region()` 判断当前环境为中国大陆（`LC_CTYPE` 或时区为 `Asia/Shanghai` 等）时，自动切换到 Gitee 镜像 `https://gitee.com/no11no16/yai-repo/raw/main/index.json`，以降低网络延迟。
+- **策略枚举**：内部使用 `IndexStrategy { Auto, Trust, Live }`，Auto 模式根据区域自动选择，Trust 模式强制使用 GitHub 源，Live 模式强制实时远程拉取。详见下文。
+- **环境变量覆盖**：`YAI_REPO_INDEX=<url-or-path>` 可强制指定索引来源；`YAI_GITHUB_API_BASE=<url>` 可覆盖 GitHub API 根地址，便于测试或接入兼容代理。
+
+##### IndexStrategy 策略枚举
+
+`IndexStrategy` 用于控制 `update` 命令在执行包版本比对时是信任本地索引、强制信任远程索引，还是完全绕过索引进行实时解析。对应 CLI 选项 `--index-strategy auto|trust|live`、`--trust-index`（等价于 `--index-strategy trust`）、`--live-resolve`（等价于 `--index-strategy live`）。内部由 `commands_update.cpp` 的 `update_app()` 实现：
+
+| 策略 | 行为 |
+|------|------|
+| `Auto`（默认） | 远程拉取索引 → 用 `repo_index_is_fresh()` 检查 `updated_at` 时间戳（默认 7 天有效期，可通过 `--index-freshness <days>` 调整）。若索引新鲜则 `sync_remote_index_to_local()` 同步到本地并使用；若已过期则降级为实时解析（`use_index = false`）。远程拉取失败同样降级为实时解析，不抛错。 |
+| `Trust` | 强制信任远程索引。即使 `updated_at` 已超出有效期阈值，也会调用 `sync_remote_index_to_local()` 覆盖本地索引，随后按本地索引中的版本号进行更新比对。适合用户知道远程索引刚刚更新、但时间戳字段还未刷新的情况。 |
+| `Live` | 完全绕过索引机制。直接对每个已安装包执行实时解析（GitHub Release API / Website Crawl / AppImageHub 三级回退），适合调试索引差异或强制获取最新版本的场景。 |
+
+##### 远程索引的新鲜度检查
+
+`repo_index_is_fresh()` 会解析 `index.json` 顶层 `updated_at` 字段（ISO-8601 UTC，格式 `YYYY-MM-DDTHH:MM:SSZ`），并与当前时间对比。当 `updated_at` 字段缺失或无法解析时，视为陈旧索引，`Auto` 模式下会降级为实时解析。
+
 ### 8.2 安装状态格式
 
 每个已安装应用保存一份状态文件：
@@ -376,6 +401,20 @@ yai mirror off
 - curl 响应头临时写入同目录 `.headers` 文件，用于读取 `Content-Length` 并渲染 TTY 进度。
 - 下载失败时清理 `.part` 和 `.headers`；清理失败只作为 warning，不改变主要失败原因。
 
+#### Landing-Page 重定向 AppImage 解析
+
+`stage_appimage_source()` 在下载完成后会对响应体进行自动检测，以处理"下载链接指向中间 HTML 页面、实际 AppImage 需要跟随内嵌链接才能获取"的场景（常见于版本选择页、权限确认页等）：
+
+1. 下载完成后，调用 `appimage_url_from_download_landing_page(target, downloaded_url, arch)` 检查 `.part` 文件内容
+2. 如果响应不是 HTML（`file_looks_like_html` 返回 false），按正常 AppImage 处理流程继续
+3. 如果响应是 HTML 但解析不出 AppImage 链接，清除临时文件并抛出错误，提示用户"下载 URL 返回了 HTML 页面"
+4. 如果解析出的 AppImage URL 与原下载 URL 相同，视为直接下载完成，返回该 URL 的 HTTP 校验头
+5. 如果解析出**新的** AppImage URL，清除临时 HTML 文件，记录日志，然后将 `source_url`/`download_url` 更新为解析出的新 URL，进入下一轮下载
+6. 最多重定向 **3 层**（`for (int redirects = 0; redirects < 3; ++redirects)`），超过限制时抛出 `too many nested AppImage landing pages` 错误
+7. 重定向过程中 `http_etag`/`http_last_modified`/`http_content_length` 始终取**最后一次**成功下载的校验头，`source_url` 则保留**最外层**原始 URL（用于 metadata 溯源）
+
+HTML 解析由 `appimage_url_from_download_landing_html()` 实现，内部通过 `html_appimage_urls()` 提取所有 `<a href>` 中指向 `.AppImage` 的候选 URL，再用 `best_appimage_url_from_candidates()` 按架构匹配度评分选出最优候选。
+
 ### 9.4 安全要求
 
 - 当前实现会计算 SHA256 用于记录和排查，但没有可信上游哈希校验。
@@ -425,7 +464,7 @@ AppImage 通常依赖 FUSE 挂载自身内容。不同发行版的 FUSE 包名�
 检测到此 AppImage 直接运行需要 FUSE，但当前系统不可用。
 可选方案：
 1. 安装发行版提供的 FUSE 2 兼容包。
-2. 使用 yai repair <app> --mode extracted，将应用解压后运行。
+2. 运行 yai repair <app>，yai 会自动探测并回退到 extract-and-run 或 extracted 模式。
 ```
 
 包管理器本身不应在未确认的情况下自动执行 `sudo apt install` 或 `sudo dnf install`。
@@ -697,6 +736,8 @@ owner/repo
 - 升级使用原子替换，避免半安装状态。
 - GitHub 仓库在访问 API 或生成代理 URL 前先执行 451 检查。
 - 用户可在 `~/.config/yai/github_blocklist.conf` 中添加精确 `owner/repo` 黑名单；命中时返回 `451 Unavailable For Legal Reasons`。
+- **内置 blocklist**：除用户自定义黑名单外，yai 还内置了基于仓库名关键词的合规性过滤。任何仓库 owner/repo 包含 `crack`、`keygen`、`warez`、`piracy`、`pirated`、`ransomware`、`malware`、`phishing`、`botnet` 等关键词时，会在 `enforce_github_release_policy()` 中被直接拒绝，返回同样的 451 错误。内置过滤不依赖用户配置，始终生效。
+- **GitHub Token 环境变量**：`YAI_GITHUB_TOKEN` 环境变量用于提升 GitHub API 速率限制（从 60 req/h 提升到 5000 req/h），并允许访问私有仓库。当未设置 Token 时遇到速率限制或 403，yai 会在错误消息中提示用户设置该变量。Token 通过 `Authorization: Bearer` 请求头传递，仅发往 `api.github.com`，不会被写入配置文件或日志。
 
 ## 17. 错误处理与用户提示
 
@@ -739,40 +780,56 @@ C++ 优点：
 
 ### 18.2 模块划分
 
+当前实现采用扁平布局，所有源文件直接放在 `src/` 根目录下，按文件名前缀归类职责，不再使用子目录拆分：
+
 ```text
 src/
   main.cpp
-  cli/
-  config/
-  repo/
-  resolver/
-  downloader/
-  mirror/
-  checksum/
-  installer/
-  appimage/
-  desktop/
-  doctor/
-  state/
-  fsutil/
+  core.cpp                # 配置、路径、信号、通用工具
+  commands.cpp            # 命令分发
+  commands_lifecycle.cpp  # install / download / repair / rollback 生命周期
+  commands_query.cpp      # search / info / list / remove
+  commands_update.cpp     # update 预览
+  commands_upgrade.cpp    # upgrade 事务
+  commands_repo.cpp       # repo list / add / update / remove
+  commands_repo_resolve.cpp  # repo resolve
+  commands_doctor.cpp     # doctor 诊断
+  cli_download.cpp        # CLI 解析、下载器选择、curl 封装
+  download_progress.cpp   # 进度条、aria2 RPC、批量进度
+  batch_progress_event.cpp
+  batch_ui.cpp
+  terminal_color.cpp
+  arch.cpp                # 架构归一化与 asset 评分
+  process.cpp             # 子进程执行
+  json.cpp                # 轻量 JSON scanner
+  i18n.cpp                # tr() / tr_format() / PO 加载
+  repo.cpp                # 仓库索引读写、合并
+  repo_feed.cpp           # AppImage feed 导入、catalog 解析
+  repo_appimage_github.cpp  # apps/ 与 data/ 数据源解析
+  repo_index_urls.cpp     # 仓库索引 URL 字段操作
+  resolver.cpp            # 解析入口、并行 fallback 框架
+  resolver_github.cpp     # GitHub Release 解析、blocklist
+  resolver_gitlab.cpp     # GitLab CI artifact 解析
+  resolver_url.cpp        # URL 校验、allowed_hosts、官网域策略
+  resolver_website.cpp    # 网站流水线抓取
+  url_freshness.cpp       # HTTP 校验头探测
+  appimage.cpp            # metadata 读写、sha256
+  appimage_desktop.cpp    # .desktop 重写、图标提取
+  appimage_runtime.cpp    # 运行模式探测
+  yai.hpp                 # 公共头文件
 ```
 
-模块职责：
+文件名前缀对应原设计中的模块职责：
 
-- `main.cpp`：阶段一入口；MVP 可先集中实现，稳定后再拆分模块。
-- `cli`：命令解析和输出。
-- `config`：读取配置文件。
-- `repo`：包源索引读取和更新。
-- `resolver`：解析包名、版本、架构和资产。
-- `downloader`：下载、断点续传、重试。
-- `mirror`：代理 URL 生成、测速、失败降级。
-- `checksum`：SHA256 校验。
-- `installer`：安装、更新、卸载事务。
-- `appimage`：AppImage 探测、解压、运行模式选择。
-- `desktop`：图标提取和 `.desktop` 生成。
-- `doctor`：环境诊断。
-- `state`：安装状态读写。
-- `fsutil`：原子写入、路径规范化、权限处理。
+- `main.cpp` / `commands*.cpp`：入口与命令分发，对应原 `cli` / `installer` / `doctor`。
+- `core.cpp`：配置文件、路径、信号处理，对应原 `config` / `fsutil` / `state`。
+- `cli_download.cpp` / `download_progress.cpp` / `batch_*.cpp`：命令解析与下载进度，对应原 `cli` / `downloader`。
+- `repo*.cpp`：包源索引读取与更新，对应原 `repo`。
+- `resolver*.cpp`：包名、版本、架构和资产解析，对应原 `resolver`。
+- `resolver_github.cpp` 内含 blocklist 与代理 URL 生成，对应原 `mirror`。
+- `appimage*.cpp`：AppImage 探测、解压、运行模式、`.desktop` 与图标，对应原 `appimage` / `desktop`。
+- `arch.cpp` / `process.cpp` / `json.cpp` / `i18n.cpp` / `terminal_color.cpp`：底层工具，对应原 `fsutil` / `checksum`。
+- SHA256 校验直接由 `appimage.cpp` 中的 `sha256_file` 提供，不再单独拆分 `checksum` 模块。
 
 ## 19. 工程约定与实现优化
 
@@ -801,21 +858,18 @@ src/
 - 消除了传统批处理模型中"慢请求阻塞同批次其他请求"的问题
 - 使用 `FetchTask` 结构体封装抓取任务，`process_fetch_results()` 处理完成回调
 - 单包最多检查 **96** 个页面（`kWebsiteMaxPages`），AppImage 候选软上限 **8** 个（`kWebsiteCandidateSoftCap`）
+- 抓取深度上限 **5**（`kWebsiteMaxDepth`），用于支持 `homepage → download → version → platform` 等多层导航结构
+- 下载相关 URL 采用启发式优先级队列，具体限制包括：
+  - `kWebsiteHeadFillMax = 4`：初始种子 URL 的填充上限
+  - `kWebsiteListingFollowNonStaleMax = 3`：从目录列表中跟随时效最近链接的上限
+  - `kWebsiteListingFollowStaleMax = 1`：从目录列表中跟随陈旧链接的上限
+- 下载 timeout 分为两档：推测性 `kFetchTextSpeculativeTimeoutMs = 5000` 与正常 `kFetchTextDefaultTimeoutMs = 15000`
+- 并行 fallback 框架使用 `kFetchTextResolveParallelWaitMs = 3000` 的首次轮询间隔，超时后进入 `kFetchTextFallbackTimeoutMs = 5000` 的第二轮等待，最后阻塞等待所有 future 完成
+- 落地页响应体最大 `kFetchTextLandingMaxBytes = 512KB`，防止误将 AppImage 文件体当作 HTML 解析
 
 ### 19.4 缓存策略
 
-#### 网站解析缓存（WebsiteResolveCache）
-
-- 缓存 TTL：**7 天**（`kWebsiteResolveCacheTtlSeconds`）
-- 缓存键：`package_id + arch + source_url`
-- 使用 HTTP `Last-Modified` 头比较检查缓存新鲜度（`website_cached_listing_fresh()`）
-- 仅当列表页未变化时才信任缓存的下载 URL
-
-#### 中间结果缓存（Intermediate Cache）
-
-- TTL：**6 小时**（`kWebsiteIntermediateCacheTtlSeconds`）
-- 存储 `catalog_github_repo`、`catalog_direct_url`、`catalog_homepage`、`data_github_repo`、`data_direct_url`、`apps_github_repo`、`apps_direct_url` 等中间回退结果
-- 避免主网站解析失败后重复抓取 AppImageHub catalog / data/ / apps/ 页面
+website_page 包源的解析结果通过 `yai repo resolve` 写入仓库索引，后续 install/download/upgrade 直接从索引中读取已记录的下载 URL，无需重复抓取官网。`--recrawl` 选项可强制绕过索引 URL，从原始包源重新解析。
 
 ### 19.5 回退解析链
 
@@ -829,12 +883,50 @@ src/
 
 ### 19.6 AppImage GitHub 数据源
 
-除 AppImageHub catalog 页面外，还直接查询 AppImage 项目 GitHub 仓库的两个 JSON 数据源：
+除 AppImageHub catalog 页面外，yai 还直接查询 AppImage 项目 GitHub 仓库的两个数据源（实现位于 [repo_appimage_github.cpp](file:///home/fsx/yai/src/repo_appimage_github.cpp)）。两者作为 catalog 页面的补充，提供更结构化的元数据。
 
-- **`data/` 目录**：`https://raw.githubusercontent.com/AppImage/appimage.github.io/master/data/<name>.json`，包含 GitHub repo 和 direct URL
-- **`apps/` 目录**：`https://raw.githubusercontent.com/AppImage/appimage.github.io/master/apps/<name>.json`，包含 GitHub repo 和 direct URL
+#### `data/` 源解析
 
-这两个数据源作为 catalog 页面的补充，提供更结构化的元数据。
+`data/<Name>` 文件（无扩展名，纯文本）为 AppImage 项目维护的"原始数据源"，通常一行 URL、注释行以 `#` 开头。`parse_appimage_data_entry()` 的处理流程：
+
+1. 优先从 `raw.githubusercontent.com/AppImage/appimage.github.io/contents/data/<Name>` 拉取原文
+2. 若 `raw.githubusercontent.com` 不可达，降级到 GitHub API `api.github.com/repos/AppImage/appimage.github.io/contents/data/<Name>`，返回 base64 编码内容并解码
+3. 逐行解析：
+   - 跳过空行
+   - `#` 开头的行视为注释；若注释中包含 `http(s)://` URL，记录为 `comment_urls` 供后续补充
+   - 非注释行首个 URL 记为 `primary_url`
+4. 类型识别（按 `primary_url` 判定，注释 URL 作为补充）：
+   - `.AppImage` 结尾、GitHub Release 资产、或含 `download`/`release` 关键词 → `direct_url`
+   - 含 `github.com/owner/repo` 模式 → `github_repo`
+   - 含 `gitlab.com/group/project` → `gitlab_project`；若 GitLab URL 本身指向 `.AppImage`，同时记为 `direct_url`
+5. 若主 URL 没有提供有用信息，回退到 `comment_urls` 中寻找 GitHub 仓库或直接下载 URL
+6. 若最后 `github_repo`、`direct_url`、`gitlab_project` 均为空，返回 `nullopt`（该条目视为不存在）
+
+查找时先按包名原文查询，失败后再按包名小写查询（`lookup_appimage_entry` 模板），以兼容大小写不一致的条目。
+
+#### `apps/` 源解析
+
+`apps/<Name>.md` 文件为带 YAML frontmatter 的 Markdown，包含 AppImage 社区维护的应用元数据。`parse_appimage_apps_entry()` 的处理流程：
+
+1. 通过 `fetch_apps_markdown()` 拉取 Markdown 文件内容（先尝试 `raw.githubusercontent.com`，失败回退到 GitHub API base64 解码）
+2. `extract_yaml_frontmatter()` 提取 `---` 与 `---` 之间的 YAML 头
+3. 使用 `parse_yaml_frontmatter()` 将 YAML 列表展开为带索引子键的扁平字典（如 `links.0.type`、`links.0.url`），保留原始结构
+4. 遍历所有 `links.N.type`/`links.N.url` 配对：
+   - `type=github` 或 `repository` → 用 `extract_github_repo()` 解析为 `github_repo`
+   - `type=download` → 记为 `direct_url`
+   - `type=web` 或 `homepage` → 记为 `homepage`
+5. 回退扫描：若上一步未识别到 `github_repo` / `direct_url` / `homepage`，遍历所有含 `url`/`type` 键的字段，分别按 GitHub URL 模式、下载 URL 模式、web/homepage 类型匹配
+6. 标量字段解析：
+   - `description` → 摘要
+   - `license` → 许可证
+   - `desktop.X-AppImage-Arch` → 架构（如 `x86_64`、`aarch64`）
+   - `desktop.X-AppImage-Version` → 版本号
+
+Apps 条目解析完成后，通过 `merge_apps_entry_into_package()` 合并到已有的 `RepoPackage` 中，补充 feed/catalog 未提供的描述、许可证、架构和版本字段，并标记 `source_origin = "appimage_apps"`。
+
+#### 解析失败回退
+
+`data/` 与 `apps/` 在解析链中作为 GitHub Release 和 Website Crawl 的后级回退，`resolve_parallel_fallback()` 会让两者并行竞争，最先成功的结果被采用。
 
 ### 19.7 国际化（i18n）
 
@@ -1036,9 +1128,6 @@ MVP 暂不做：
 - 架构归一化与 asset 评分。
 - `repo resolve` 并发计算（`calculate_default_concurrency` 普通模式/aggressive 模式/手动模式）。
 - Website Crawl 流水线调度（`FetchTask` + `process_fetch_results`）。
-- WebsiteResolveCache 序列化/反序列化。
-- 中间结果缓存（Intermediate Cache）过期判断（6 小时 TTL）。
-- HTTP `Last-Modified` 缓存新鲜度检查（`website_cached_listing_fresh`）。
 - 并行 fallback 框架（`resolve_parallel_fallback`）竞争逻辑。
 - AppImageHub catalog 页面解析（`fetch_appimage_catalog_sources`）。
 - AppImage GitHub `data/` 和 `apps/` 数据源解析。
@@ -1065,9 +1154,6 @@ MVP 暂不做：
 - `repo resolve`：`--output` 输出到指定路径。
 - `repo resolve`：`--overwrite` 强制覆盖已有 URL。
 - `repo remove`：通配符模式匹配与批量删除。
-- WebsiteResolveCache：首次解析写入缓存，二次命中缓存（含 HTTP 头验证）。
-- WebsiteResolveCache：过期缓存触发重新解析。
-- 中间结果缓存：主解析失败后命中缓存的 catalog/data/apps 结果。
 - 回退解析链：GitHub Release 失败 → AppImageHub catalog 回退 → data/ 回退 → apps/ 回退。
 - 回退解析链：Website Crawl 失败 → 并行 fallback 竞争。
 - 不可用包（unavailable）安装：data/ 和 apps/ 并行回退。

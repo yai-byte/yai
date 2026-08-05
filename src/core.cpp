@@ -593,7 +593,6 @@ InstallPaths paths_for(const std::string& id) {
         expand_home_path(".local/bin") / id,
         expand_home_path(".local/share/applications") / ("yai-" + id + ".desktop"),
         app_dir / "metadata.json",
-        app_dir / "metadata.conf",
     };
 }
 
