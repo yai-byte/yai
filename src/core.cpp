@@ -708,10 +708,20 @@ void start_idle_inhibitor(int& pipe_write_fd, pid_t& child_pid) {
 
     // Keep the write end out of every subprocess yai spawns later (aria2, curl,
     // batch children): only yai itself should hold it, so closing it on yai's
-    // exit is enough to release the lock.
+    // exit is enough to release the lock. If we cannot set FD_CLOEXEC, bail out
+    // rather than risk a leaky inhibitor (a subprocess inheriting this fd would
+    // keep the pipe open past yai's death and pin the lock).
     const int flags = fcntl(write_fd, F_GETFD);
     if (flags >= 0) {
-        fcntl(write_fd, F_SETFD, flags | FD_CLOEXEC);
+        if (fcntl(write_fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
+            close(read_fd);
+            close(write_fd);
+            return;
+        }
+    } else {
+        close(read_fd);
+        close(write_fd);
+        return;
     }
 
     const pid_t pid = fork();
