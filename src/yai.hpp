@@ -825,3 +825,22 @@ void install_signal_handler();
 bool was_interrupted();
 void check_interrupt();
 void cleanup_orphan_downloads();
+
+// Best-effort logind "idle" inhibitor: while an instance lives, asks logind
+// (via systemd-inhibit) to keep the system from auto-suspending. It is a no-op
+// when systemd-inhibit is unavailable and in batch worker children (their
+// parent already holds the lock). The lock is released automatically when the
+// process exits, including abnormal termination (crash/SIGKILL): the inhibitor
+// child blocks on a pipe whose write end lives in yai, so the kernel closes it
+// on death and the lock goes away by itself.
+class IdleInhibitor {
+public:
+    IdleInhibitor();
+    ~IdleInhibitor();
+    IdleInhibitor(const IdleInhibitor&) = delete;
+    IdleInhibitor& operator=(const IdleInhibitor&) = delete;
+
+private:
+    int pipe_write_fd_ = -1;
+    pid_t child_pid_ = -1;
+};

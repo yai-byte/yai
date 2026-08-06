@@ -384,6 +384,9 @@ int main(int argc, char** argv) {
     install_signal_handler();
     // Clean up stale temporary files from previous interrupted runs.
     cleanup_orphan_downloads();
+    // Hold a logind idle inhibitor for the whole run so the system does not
+    // auto-suspend while yai is busy (e.g. mid-download). Released on exit.
+    IdleInhibitor idle_inhibitor;
 
     try {
         if (argc < 2) {

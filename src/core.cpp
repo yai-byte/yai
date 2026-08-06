@@ -675,3 +675,111 @@ void cleanup_orphan_downloads() {
         // Best-effort cleanup; never fail startup.
     }
 }
+
+// --- Idle inhibitor (keep the system from auto-suspending while yai runs) ---
+
+namespace {
+
+// Forks a best-effort systemd-inhibit wrapper that holds a logind "idle"
+// inhibitor for the lifetime of this process. The wrapper runs `cat`, which
+// blocks reading a pipe whose write end the parent keeps open; when the parent
+// exits (any path, including crash or SIGKILL) the kernel closes that write
+// end, `cat` sees EOF and exits, and systemd-inhibit releases the lock. The
+// inhibitor therefore never outlives yai. Failures (no systemd-inhibit, fork
+// failure) are silently ignored so startup never breaks.
+void start_idle_inhibitor(int& pipe_write_fd, pid_t& child_pid) {
+    pipe_write_fd = -1;
+    child_pid = -1;
+
+    // Batch worker children are already covered by their parent's inhibitor.
+    if (env_string("YAI_BATCH_CHILD").has_value()) {
+        return;
+    }
+    if (!executable_available("systemd-inhibit")) {
+        return;
+    }
+
+    int pipefds[2] = {-1, -1};
+    if (pipe(pipefds) != 0) {
+        return;
+    }
+    const int read_fd = pipefds[0];
+    const int write_fd = pipefds[1];
+
+    // Keep the write end out of every subprocess yai spawns later (aria2, curl,
+    // batch children): only yai itself should hold it, so closing it on yai's
+    // exit is enough to release the lock.
+    const int flags = fcntl(write_fd, F_GETFD);
+    if (flags >= 0) {
+        fcntl(write_fd, F_SETFD, flags | FD_CLOEXEC);
+    }
+
+    const pid_t pid = fork();
+    if (pid < 0) {
+        close(read_fd);
+        close(write_fd);
+        return;
+    }
+    if (pid == 0) {
+        // Child: stdin <- pipe read end, stdio -> /dev/null, new session so the
+        // inhibitor is detached from yai's controlling terminal and survives
+        // until the pipe is closed.
+        close(write_fd);
+        if (dup2(read_fd, STDIN_FILENO) < 0) {
+            _Exit(127);
+        }
+        if (read_fd != STDIN_FILENO) {
+            close(read_fd);
+        }
+        const int devnull = open("/dev/null", O_RDWR);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > STDERR_FILENO) {
+                close(devnull);
+            }
+        }
+        setsid();
+        execlp("systemd-inhibit", "systemd-inhibit",
+               "--what=idle", "--who=yai",
+               "--why=yai is running",
+               "--mode=block",
+               "cat", static_cast<char*>(nullptr));
+        _Exit(127);
+    }
+
+    close(read_fd);
+    pipe_write_fd = write_fd;
+    child_pid = pid;
+}
+
+} // namespace
+
+IdleInhibitor::IdleInhibitor() {
+    start_idle_inhibitor(pipe_write_fd_, child_pid_);
+}
+
+IdleInhibitor::~IdleInhibitor() {
+    // Closing the write end unblocks `cat`; systemd-inhibit then exits and the
+    // logind lock is released. A defensive SIGTERM ensures the child dies even
+    // if it somehow stalled, then reap it so it does not become a zombie.
+    if (pipe_write_fd_ >= 0) {
+        close(pipe_write_fd_);
+        pipe_write_fd_ = -1;
+    }
+    if (child_pid_ > 0) {
+        kill(child_pid_, SIGTERM);
+        for (;;) {
+            int status = 0;
+            const pid_t waited = waitpid(child_pid_, &status, 0);
+            if (waited == child_pid_) {
+                break;
+            }
+            if (waited < 0 && errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+        child_pid_ = -1;
+    }
+}
