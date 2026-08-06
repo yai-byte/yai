@@ -129,25 +129,11 @@ CPP
 
 # Link the same resolver/core pieces other smokes need once symbols resolve.
 # Start minimal; add sources until link succeeds.
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/mtime_unit" \
-  "$TMP_DIR/mtime_unit.cpp" \
-  "$ROOT/src/resolver_url.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/process.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/repo_feed.cpp" \
-  "$ROOT/src/repo.cpp" \
-  "$ROOT/src/repo_appimage_github.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/cli_download.cpp" \
-  "$ROOT/src/url_freshness.cpp" \
-  "$ROOT/src/appimage.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  -lpthread
+  "$TMP_DIR/mtime_unit.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/mtime_unit"
 

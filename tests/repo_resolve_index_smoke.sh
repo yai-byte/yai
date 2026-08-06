@@ -68,27 +68,10 @@ int main() {
 }
 CPP
 
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/url_unit" \
-  "$TMP_DIR/url_unit.cpp" \
-  "$ROOT/src/repo_index_urls.cpp" \
-  "$ROOT/src/repo.cpp" \
-  "$ROOT/src/repo_feed.cpp" \
-  "$ROOT/src/repo_appimage_github.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/process.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/cli_download.cpp" \
-  "$ROOT/src/url_freshness.cpp" \
-  "$ROOT/src/appimage.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/terminal_color.cpp" \
-  "$ROOT/src/resolver_url.cpp" \
-  -pthread
+  "$TMP_DIR/url_unit.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/url_unit"
 
@@ -196,27 +179,9 @@ int main() {
 }
 CPP
 
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/persist_merge_unit" \
-  "$TMP_DIR/persist_merge_unit.cpp" \
-  "$ROOT/src/repo_index_urls.cpp" \
-  "$ROOT/src/repo.cpp" \
-  "$ROOT/src/repo_feed.cpp" \
-  "$ROOT/src/repo_appimage_github.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/process.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/cli_download.cpp" \
-  "$ROOT/src/url_freshness.cpp" \
-  "$ROOT/src/appimage.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/terminal_color.cpp" \
-  "$ROOT/src/resolver_url.cpp" \
-  -pthread
+  "$TMP_DIR/persist_merge_unit.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/persist_merge_unit"
 
@@ -528,32 +493,9 @@ int main() {
 }
 CPP
 
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/final_prefer_regress_unit" \
-  "$TMP_DIR/final_prefer_regress_unit.cpp" \
-  "$ROOT/src/resolver.cpp" \
-  "$ROOT/src/resolver_github.cpp" \
-  "$ROOT/src/resolver_url.cpp" \
-  "$ROOT/src/resolver_website.cpp" \
-  "$ROOT/src/repo_index_urls.cpp" \
-  "$ROOT/src/repo.cpp" \
-  "$ROOT/src/repo_feed.cpp" \
-  "$ROOT/src/repo_appimage_github.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/process.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/cli_download.cpp" \
-  "$ROOT/src/url_freshness.cpp" \
-  "$ROOT/src/appimage.cpp" \
-  "$ROOT/src/appimage_desktop.cpp" \
-  "$ROOT/src/appimage_runtime.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/terminal_color.cpp" \
-  -pthread
+  "$TMP_DIR/final_prefer_regress_unit.cpp" "$ROOT/libyai.a"
 
 HOME="$FINAL_HOME" "$TMP_DIR/final_prefer_regress_unit"
 

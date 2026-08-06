@@ -37,16 +37,27 @@ SRC := \
 	src/resolver_url.cpp \
 	src/resolver_website.cpp
 
+# Library sources: everything except main.cpp, so smoke tests can link
+# against libyai.a and automatically pick up new source files.
+LIB_SRCS := $(filter-out src/main.cpp,$(SRC))
+LIB_OBJS := $(LIB_SRCS:.cpp=.o)
+
 .PHONY: all clean install
 
-all: $(TARGET)
+all: $(TARGET) libyai.a
 
 $(TARGET): $(SRC)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+src/%.o: src/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+libyai.a: $(LIB_OBJS)
+	ar rcs $@ $^
 
 install: $(TARGET)
 	install -Dm755 $(TARGET) "$(HOME)/.local/bin/$(TARGET)"
 	for file in po/*.po; do install -Dm644 "$$file" "$(HOME)/.local/share/yai/po/$$(basename "$$file")"; done
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) libyai.a $(LIB_OBJS)

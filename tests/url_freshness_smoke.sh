@@ -100,24 +100,10 @@ sed -i "s|HEADERS_PATH|$TMP_DIR/headers.txt|g" "$TMP_DIR/url_freshness_test.cpp"
 sed -i "s|HEADERS_NO_CL_PATH|$TMP_DIR/headers_no_cl.txt|g" "$TMP_DIR/url_freshness_test.cpp"
 sed -i "s|PROBE_FILE_PATH|$TMP_DIR/probe.bin|g" "$TMP_DIR/url_freshness_test.cpp"
 
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/url_freshness_test" \
-  "$TMP_DIR/url_freshness_test.cpp" \
-  "$ROOT/src/url_freshness.cpp" \
-  "$ROOT/src/appimage.cpp" \
-  "$ROOT/src/resolver_url.cpp" \
-  "$ROOT/src/repo_feed.cpp" \
-  "$ROOT/src/repo.cpp" \
-  "$ROOT/src/repo_appimage_github.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/cli_download.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/process.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/terminal_color.cpp"
+  "$TMP_DIR/url_freshness_test.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/url_freshness_test"

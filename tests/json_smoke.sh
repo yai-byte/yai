@@ -99,8 +99,10 @@ int main() {
 }
 CPP
 
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/json_test" \
-  "$TMP_DIR/json_test.cpp" "$ROOT/src/json.cpp"
+  "$TMP_DIR/json_test.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/json_test"

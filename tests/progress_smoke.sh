@@ -223,17 +223,11 @@ int main(int argc, char** argv) {
 }
 CPP
 
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+
 g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/progress_test" \
-  "$TMP_DIR/progress_test.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/process.cpp"
+  "$TMP_DIR/progress_test.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/progress_test" "$TMP_DIR"
 

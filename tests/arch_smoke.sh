@@ -58,10 +58,10 @@ int main() {
 }
 CPP
 
-g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -I"$ROOT/src" \
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+
+g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/arch_test" \
-  "$TMP_DIR/arch_test.cpp" "$ROOT/src/arch.cpp" "$ROOT/src/core.cpp" \
-  "$ROOT/src/i18n.cpp" "$ROOT/src/process.cpp" \
-  "$ROOT/src/download_progress.cpp"
+  "$TMP_DIR/arch_test.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/arch_test"

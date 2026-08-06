@@ -20,17 +20,11 @@ int main() {
 }
 CPP
 
+make -C "$ROOT" libyai.a >/dev/null 2>&1
+
 g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/batch_ui_test" \
-  "$TMP_DIR/batch_ui_test.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/process.cpp"
+  "$TMP_DIR/batch_ui_test.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/batch_ui_test" >"$TMP_DIR/out" 2>"$TMP_DIR/err"
 grep -q '\[1/2 foo\] Downloading x' "$TMP_DIR/err"
@@ -74,15 +68,7 @@ CPP
 
 g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/fake_child" \
-  "$TMP_DIR/fake_child.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/process.cpp"
+  "$TMP_DIR/fake_child.cpp" "$ROOT/libyai.a"
 
 cat > "$TMP_DIR/batch_stream_test.cpp" <<CPP
 #include "yai.hpp"
@@ -107,15 +93,7 @@ CPP
 
 g++ -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread -I"$ROOT/src" \
   -o "$TMP_DIR/batch_stream_test" \
-  "$TMP_DIR/batch_stream_test.cpp" \
-  "$ROOT/src/batch_ui.cpp" \
-  "$ROOT/src/batch_progress_event.cpp" \
-  "$ROOT/src/download_progress.cpp" \
-  "$ROOT/src/core.cpp" \
-  "$ROOT/src/arch.cpp" \
-  "$ROOT/src/i18n.cpp" \
-  "$ROOT/src/json.cpp" \
-  "$ROOT/src/process.cpp"
+  "$TMP_DIR/batch_stream_test.cpp" "$ROOT/libyai.a"
 
 "$TMP_DIR/batch_stream_test" >"$TMP_DIR/stream_out" 2>"$TMP_DIR/stream_err"
 grep -q '\[1/1 pkg\] hello-out' "$TMP_DIR/stream_err"
