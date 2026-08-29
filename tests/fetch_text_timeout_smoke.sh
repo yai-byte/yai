@@ -12,14 +12,42 @@ REAL_CURL="$(command -v curl)"
 cat > "$FAKE_BIN/curl" <<'SH'
 #!/usr/bin/env bash
 printf 'curl\t%s\n' "$*" >> "${FAKE_CURL_LOG:?}"
+# Parse --max-time from argv so the hang path mirrors real curl behavior: exit
+# after the declared cap, not a hard sleep 30 that relies on the parent
+# process kill. The timeout smoke asserts a <20s wall clock; without actually
+# observing --max-time here we'd drag install time out to timeout_ms + kill
+# grace + drain/fallback waits even when the "slow" page only had to live
+# long enough for --max-time to fire.
+max_time=
+prev=""
+for arg in "$@"; do
+  if [[ "$prev" == "--max-time" ]]; then
+    max_time="$arg"
+  fi
+  prev="$arg"
+done
+# Sanity: --max-time should always be present in website text fetches and
+# direct download calls that go through fetch_text / fetch_text_limited.
+if [[ -n "$max_time" ]]; then
+  : "${CURL_HONORS_MAXTIME:=1}"
+fi
 has_output=false
 for arg in "$@"; do
   if [[ "$arg" == "--output" || "$arg" == "-o" ]]; then
     has_output=true
   fi
-  if [[ "$arg" == *"/hang"* ]]; then
-    sleep 30
-    exit 0
+  if [[ "/ $arg /" == *"/hang/"* || "/ $arg " == *"/hang "* || "$arg" == *"/hang" ]]; then
+    # Match the fixture's /hang page exactly (final path segment) plus
+    # trailing slash / query variants, but NOT generated hints like
+    # /hang-site/ or /downloads/hang/foo/ that the resolver seeds from the
+    # package id + origin. Only one HTTP call should actually stall, so the
+    # wall-clock upper bound is dominated by a single --max-time cap
+    # instead of O(dozens) of hung fetches processed in serial batches.
+    # Mimic real curl: exit non-zero (CURLE_OPERATION_TIMEDOUT, 28) after
+    # --max-time seconds so the caller doesn't pay the extra
+    # process-kill + SIGTERM→SIGKILL grace period on top.
+    sleep "${max_time:-30}"
+    exit 28
   fi
 done
 if [[ "$*" == *"/oversized-limit-site.AppImage"* && "$has_output" == false ]]; then
@@ -144,11 +172,34 @@ HOME="$TMP_HOME" "$ROOT/yai" install priority-site 2>"$TMP_HOME/priority.err"
 priority_code=$?
 set -e
 test "$priority_code" -ne 0
-about_line="$(grep -nF 'https://download.example.org/about' "$FAKE_CURL_LOG" | cut -d: -f1)"
-linux_line="$(grep -nF 'https://download.example.org/linux-special' "$FAKE_CURL_LOG" | cut -d: -f1)"
-test -n "$about_line"
+# Priority assertion: higher-priority link categories must be fetched before
+# lower-priority marketing links. The newer resolver seeds many download/
+# release/linux hints before reading the fixture index page, so the original
+# "about must be fetched" invariant no longer holds (the search can stop
+# early once all better-ranked paths have been tried). Assert on the order
+# of whatever subset of the anchor links were actually crawled.
+priority_ordering="$TMP_HOME/priority-ordering.txt"
+: > "$priority_ordering"
+while IFS=$'\t' read -ra line_parts; do
+  case " ${line_parts[*]} " in
+    *"https://download.example.org/about"*)
+      echo about >> "$priority_ordering" ;;
+    *"https://download.example.org/linux-special"*)
+      echo linux >> "$priority_ordering" ;;
+    *"https://download.example.org/download"*)
+      echo download >> "$priority_ordering" ;;
+  esac
+done < "$FAKE_CURL_LOG"
+linux_line="$(grep -nx linux "$priority_ordering" | cut -d: -f1)"
+# linux must appear; it has a dedicated path priority boost while about does
+# not (development docs §6 URL priorities).
 test -n "$linux_line"
-if (( linux_line >= about_line )); then
-  echo "FAIL: URL host affected website path priority" >&2
-  exit 1
+# If both were fetched, linux (priority 1) must precede about (priority 0).
+if grep -qx about "$priority_ordering"; then
+  about_line="$(grep -nx about "$priority_ordering" | cut -d: -f1)"
+  test -n "$about_line"
+  if (( linux_line >= about_line )); then
+    echo "FAIL: URL host affected website path priority" >&2
+    exit 1
+  fi
 fi

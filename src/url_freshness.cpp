@@ -90,6 +90,11 @@ UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpVal
 
     if (!has_etag_pair && !has_lm_pair && has_cl_pair) {
         ++comparable_pairs;
+        // Content-Length alone is a negative-only signal: different sizes prove
+        // the body changed, but matching sizes do not prove the body stayed the
+        // same. Treat equal-length without ETag / Last-Modified as Unknown so
+        // the preview reports "download verification required" and upgrade
+        // re-downloads + re-hashes to confirm. See development docs §13.
         if (stored.content_length != remote.content_length) {
             return UrlFreshness::Changed;
         }

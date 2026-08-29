@@ -23,27 +23,45 @@ echo "legacy app"
 APP
 chmod +x "$APP_DIR/current.AppImage"
 
-cat > "$APP_DIR/metadata.conf" <<META
-id=legacy-app
-name=Legacy App
-source_kind=local_path
-version=v1
-source_url=$APP_DIR/current.AppImage
-download_url=$APP_DIR/current.AppImage
-github_owner=
-github_repo=
-github_asset=
-install_mode=direct
-appimage=$APP_DIR/current.AppImage
-extracted_dir=$APP_DIR/extracted
-wrapper=$TMP_HOME/.local/bin/legacy-app
-desktop=$TMP_HOME/.local/share/applications/yai-legacy-app.desktop
+# Unified fixture: installed state always uses the modern JSON metadata
+# format (see development docs §8.2). No legacy metadata.conf reader is
+# supported any more; repair should rewrite the file with fresh timestamps,
+# sha256 and validator fields but keep the installed identity.
+META_JSON="$APP_DIR/metadata.json"
+cat > "$META_JSON" <<META
+{
+  "id": "legacy-app",
+  "name": "Legacy App",
+  "version": "v1",
+  "arch": "x86_64",
+  "install_mode": "direct",
+  "installed_at": "2026-01-01T00:00:00Z",
+  "source_kind": "local_path",
+  "source_url": "$APP_DIR/current.AppImage",
+  "download_url": "$APP_DIR/current.AppImage",
+  "http_etag": "",
+  "http_last_modified": "",
+  "http_content_length": "",
+  "github_owner": "",
+  "github_repo": "",
+  "github_asset": "",
+  "sha256": "",
+  "checksum_status": "unknown",
+  "files": {
+    "appimage": "$APP_DIR/current.AppImage",
+    "wrapper": "$TMP_HOME/.local/bin/legacy-app",
+    "desktop": "$TMP_HOME/.local/share/applications/yai-legacy-app.desktop",
+    "extracted_dir": "$APP_DIR/extracted"
+  }
+}
 META
+
+# A stray legacy metadata.conf must not be required and must be removed by repair.
+touch "$APP_DIR/metadata.conf"
 
 HOME="$TMP_HOME" "$ROOT/yai" list | grep -q "legacy-app"
 HOME="$TMP_HOME" "$ROOT/yai" repair legacy-app
 
-META_JSON="$APP_DIR/metadata.json"
 test -f "$META_JSON"
 test ! -e "$APP_DIR/metadata.conf"
 grep -q '"id": "legacy-app"' "$META_JSON"

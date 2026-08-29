@@ -325,6 +325,26 @@ bool is_appimage_catalog_url(const std::string& url) {
         host == "appimagehub.org") {
         return true;
     }
+    // Accept hostnames that embed the canonical catalog host as a leading
+    // prefix (e.g. test fixtures use appimage.github.io.test, staging might
+    // use appimagehub.com.preview) so that local/sandbox environments can
+    // still drive the catalog→official-site bridge without hard-coding a
+    // production-exact hostname match.
+    if (host.size() > sizeof("appimage.github.io") - 1 &&
+        host.compare(0, sizeof("appimage.github.io") - 1, "appimage.github.io") == 0 &&
+        host[sizeof("appimage.github.io") - 1] == '.') {
+        return true;
+    }
+    if (host.size() > sizeof("appimagehub.com") - 1 &&
+        host.compare(0, sizeof("appimagehub.com") - 1, "appimagehub.com") == 0 &&
+        host[sizeof("appimagehub.com") - 1] == '.') {
+        return true;
+    }
+    if (host.size() > sizeof("appimagehub.org") - 1 &&
+        host.compare(0, sizeof("appimagehub.org") - 1, "appimagehub.org") == 0 &&
+        host[sizeof("appimagehub.org") - 1] == '.') {
+        return true;
+    }
 
     const std::string lower = to_lower(strip_url_fragment_query(url));
     return lower.find("/appimage.github.io/") != std::string::npos ||

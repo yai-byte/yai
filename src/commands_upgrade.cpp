@@ -451,7 +451,19 @@ void upgrade_installed_target(const InstallOptions& options) {
     const UpdateContext context = load_update_context(options);
 
     // Index-driven fast path for repo packages.
-    if (context.source_kind.rfind("repo_", 0) == 0 && !context.source_url.empty()) {
+    //
+    // NOTE: repo_website_page intentionally opts out of the index fast path
+    // entirely. After install, the overlay index caches the final resolved
+    // AppImage URL as the package's download_url, which then equals
+    // context.source_url and would short-circuit "already up to date" below
+    // without ever re-crawling the upstream site. For GitHub releases and
+    // direct URLs the index URL IS the authoritative identity, but a website
+    // page may have moved to a newer asset while the old cached URL still
+    // resolves to the original bytes. See commands_update.cpp §13 and the
+    // repo_website_page branch below ("Always re-resolve").
+    if (context.source_kind.rfind("repo_", 0) == 0 &&
+        !context.source_url.empty() &&
+        context.source_kind != "repo_website_page") {
         try {
             const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
             for (const RepoPackage& pkg : packages) {
