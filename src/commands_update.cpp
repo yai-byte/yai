@@ -168,7 +168,11 @@ UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) 
 
     // Index-driven fast path: if the repo index has a download URL for this
     // package/arch, compare it against the installed source URL directly,
-    // skipping live GitHub/website crawling.
+    // skipping live GitHub/website crawling. When the index URL does not
+    // match the installed identity we can immediately report upgradable.
+    // When the index URL still *matches* the installed URL we still cannot
+    // claim "current" without validator freshness: same URL + same size does
+    // not prove same bytes (see development docs §13).
     if (use_index && source_kind.rfind("repo_", 0) == 0) {
         try {
             const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
@@ -187,12 +191,12 @@ UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) 
                             "upgradable",
                             tr("index: ") + *url};
                     }
-                    return UpdatePreviewResult{
-                        id,
-                        current_version,
-                        current_version,
-                        "current",
-                        tr("already up to date")};
+                    // Identity matches the cached index URL. The index cannot
+                    // tell us whether the remote bytes changed, so fall
+                    // through to the per-kind freshness check below: that
+                    // still inspects HTTP validators (or file size with the
+                    // correct Unknown semantics for equal-length rewrites).
+                    break;
                 }
                 break;
             }

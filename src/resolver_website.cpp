@@ -74,15 +74,18 @@ private:
                 {"{url}", latest_url_},
             });
         std::string text = truncate_status_text(line.str(), 160);
-        if (interactive_) {
-            if (text.size() < last_width_) {
-                text.append(last_width_ - text.size(), ' ');
-            }
-            last_width_ = text.size();
-            std::cerr << '\r' << text << std::flush;
-        } else {
-            std::cerr << text << "\n";
+        if (!interactive_) {
+            // Per-page progress lines are only rendered on a TTY so scripts
+            // that redirect stderr (update automation, CI smoke captures) get
+            // only the final selected/ summary line, matching the
+            // non-verbose contract the appimage_feed smoke test enforces.
+            return;
         }
+        if (text.size() < last_width_) {
+            text.append(last_width_ - text.size(), ' ');
+        }
+        last_width_ = text.size();
+        std::cerr << '\r' << text << std::flush;
     }
 
     std::string state_text(const std::string& state) const {
@@ -664,10 +667,26 @@ std::string resolve_website_appimage_download(const RepoPackage& package, const 
         }
     }
 
-    // Drain any remaining completed tasks
+    // Drain any remaining in-flight tasks with a bounded wait. The main loop
+    // already gave the slowest page fetches several speculative + default
+    // timeout windows each; blocking indefinitely on a single hung HTTP
+    // request would break the wall-clock expectations that fetch_text_timeout
+    // smoke and end-users rely on, so any task past the cap here is simply
+    // treated as a failed / skipped speculative fetch.
+    //
+    // Note: we intentionally use a very short drain cap rather than the full
+    // fallback timeout. At this point the in-flight tasks were already past
+    // the result loop (which polls every 10 ms and re-dispatches) without
+    // finishing. Letting them linger much longer just stacks on top of the
+    // first-page timeout and the outer parallel-fallback pass and easily
+    // breaches the <20s wall-clock install ceiling we document for broken
+    // website pages.
+    constexpr auto kDrainWait = std::chrono::milliseconds(200);
     for (auto& task : in_flight) {
-        task.outcome = task.future.get();
-        completed_tasks.push_back(std::move(task));
+        if (task.future.wait_for(kDrainWait) == std::future_status::ready) {
+            task.outcome = task.future.get();
+            completed_tasks.push_back(std::move(task));
+        }
     }
     if (!completed_tasks.empty()) {
         process_fetch_results(completed_tasks, state, progress, package, arch, pages_checked);

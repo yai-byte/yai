@@ -227,6 +227,16 @@ RepairResult repair_installed_package(const std::string& id) {
     write_wrapper(paths, repair.mode);
     write_desktop_entry(paths, source.name);
     write_metadata(paths, source, repair.mode);
+    // Legacy metadata.conf format is no longer supported; ensure any stray
+    // file left over from very old installs is removed so the app directory
+    // reflects the single modern contract (development docs §8.2).
+    {
+        const fs::path legacy_conf = paths.app_dir / "metadata.conf";
+        std::error_code ec;
+        if (fs::exists(legacy_conf, ec)) {
+            fs::remove(legacy_conf, ec);
+        }
+    }
     run_process({"update-desktop-database", paths.desktop.parent_path().string()});
     return repair;
 }

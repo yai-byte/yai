@@ -78,8 +78,14 @@ ResolvedSource resolve_parallel_fallback(
 
     std::exception_ptr last_exception;
     std::vector<bool> consumed(N, false);
+    // kFetchTextResolveParallelWaitMs is already fairly generous (a few
+    // seconds) when measured per-future sequentially. Use a smaller clock
+    // here so the overall fallback window stays strictly below a single
+    // "this is taking too long" user-visible delay — broken speculative
+    // mirrors should not compound the primary resolver's timeout.
+    constexpr auto kFallbackRapidWait = std::chrono::milliseconds(800);
     for (std::size_t i = 0; i < N; ++i) {
-        auto status = futures[i].wait_for(std::chrono::milliseconds(kFetchTextResolveParallelWaitMs));
+        auto status = futures[i].wait_for(kFallbackRapidWait);
         if (status == std::future_status::ready) {
             auto result = futures[i].get();
             consumed[i] = true;
@@ -90,11 +96,16 @@ ResolvedSource resolve_parallel_fallback(
         }
     }
 
+    // Final tight polling round. If a fallback still isn't ready after the
+    // rapid pass, it's slower than the primary resolver path and we surface
+    // whatever error we already have rather than letting tail latency stack
+    // past the command-level wall-clock ceiling.
+    constexpr auto kFallbackFinalWait = std::chrono::milliseconds(500);
     for (std::size_t i = 0; i < N; ++i) {
         if (consumed[i]) {
             continue;
         }
-        auto status = futures[i].wait_for(std::chrono::milliseconds(kFetchTextFallbackTimeoutMs));
+        auto status = futures[i].wait_for(kFallbackFinalWait);
         if (status == std::future_status::ready) {
             consumed[i] = true;
             auto result = futures[i].get();
@@ -103,20 +114,6 @@ ResolvedSource resolve_parallel_fallback(
             }
             last_exception = result.exception;
         }
-    }
-
-    // Final blocking wait: some fallbacks (e.g. catalog-driven website search)
-    // may take much longer than the polling timeouts above. Block until all
-    // remaining futures complete so their results are not lost.
-    for (std::size_t i = 0; i < N; ++i) {
-        if (consumed[i]) {
-            continue;
-        }
-        auto result = futures[i].get();
-        if (result.success) {
-            return result.source;
-        }
-        last_exception = result.exception;
     }
 
     if (last_exception) {
