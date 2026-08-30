@@ -47,6 +47,11 @@ void help_command(int, char**) {
     print_usage();
 }
 
+// Thin adapter: prints the yai version string.
+void version_command(int, char**) {
+    print_version();
+}
+
 // Returns true only for commands that support batch (multi-target) execution.
 bool is_batch_command(const std::string& command) {
     return command == "install" || command == "download";
@@ -349,6 +354,9 @@ const CommandEntry COMMANDS[] = {
     {"help", help_command},
     {"--help", help_command},
     {"-h", help_command},
+    {"version", version_command},
+    {"--version", version_command},
+    {"-v", version_command},
 };
 
 // Top-level command routing: first parses a potential batch request; if it

@@ -65,6 +65,10 @@ void print_usage() {
     std::cout << tr("  YAI_INDEX_REGION=cn|global  Override Gitee/GitHub selection\n");
 }
 
+void print_version() {
+    std::cout << "yai " << kYaiVersion << "\n";
+}
+
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option) {
     if (++index >= argc) {
         throw std::runtime_error(option + tr(" requires a value"));

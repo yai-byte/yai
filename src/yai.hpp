@@ -236,6 +236,10 @@ enum class Language {
 };
 
 
+// Semantic version of the yai binary, used by --version / -v and as the
+// canonical source for any user-facing version string. Bump this on releases.
+constexpr const char* kYaiVersion = "0.1.0";
+
 extern const char* APPIMAGE_FEED_URL;
 
 std::optional<std::string> env_string(const char* name);
@@ -478,6 +482,7 @@ void write_network_config(const NetworkConfig& config);
 std::string china_network_disclaimer();
 InstallPaths paths_for(const std::string& id);
 void print_usage();
+void print_version();
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option);
 void parse_arch_option(InstallOptions& options, const std::string& value);
 void parse_download_strategy_option(InstallOptions& options, const std::string& value);
