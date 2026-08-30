@@ -37,6 +37,9 @@ SRC := \
 	src/resolver_url.cpp \
 	src/resolver_website.cpp
 
+# All object files (including main.o) for incremental linking of the binary.
+OBJS := $(SRC:.cpp=.o)
+
 # Library sources: everything except main.cpp, so smoke tests can link
 # against libyai.a and automatically pick up new source files.
 LIB_SRCS := $(filter-out src/main.cpp,$(SRC))
@@ -46,7 +49,9 @@ LIB_OBJS := $(LIB_SRCS:.cpp=.o)
 
 all: $(TARGET) libyai.a
 
-$(TARGET): $(SRC)
+# Link the binary from compiled object files so editing one .cpp only
+# recompiles that file plus the final link, not every source.
+$(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 src/%.o: src/%.cpp
@@ -60,4 +65,7 @@ install: $(TARGET)
 	for file in po/*.po; do install -Dm644 "$$file" "$(HOME)/.local/share/yai/po/$$(basename "$$file")"; done
 
 clean:
-	rm -f $(TARGET) libyai.a $(LIB_OBJS)
+	rm -f $(TARGET) libyai.a $(OBJS)
+
+# Remove partial targets if a build step fails or is interrupted.
+.DELETE_ON_ERROR:
