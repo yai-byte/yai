@@ -367,7 +367,7 @@ yai installs into the **current user's** home directory. There are no global wri
 | `.local/share/yai/repos/repos.conf`                             | List of configured repos                        |
 | `.local/share/yai/repos/<name>.json`                            | Per-repo cached index                           |
 | `.local/share/yai/repos/index.json`                             | Merged index                                    |
-| `.config/yai/mirror.conf`                                       | Persisted mirror policy                         |
+| `.config/yai/network.conf`                                      | Persisted mirror policy                         |
 | `.config/yai/github_blocklist.conf`                             | Exact `owner/repo` lines to block with 451      |
 
 Install metadata (`metadata.json`) is always JSON — the legacy `metadata.conf` format is no
