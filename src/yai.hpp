@@ -791,6 +791,10 @@ void write_metadata(
     const std::string& mode);
 void print_mode_line(const std::string& mode);
 void print_fuse_fallback_line();
+// Refreshes the freedesktop.org application database for a directory.
+// update-desktop-database is optional: when missing, yai skips the refresh
+// with a warning instead of failing the install/repair/remove flow.
+void refresh_desktop_database(const fs::path& dir);
 void download_app(int argc, char** argv);
 void install_app(int argc, char** argv);
 RepairResult repair_installed_package(const std::string& id);

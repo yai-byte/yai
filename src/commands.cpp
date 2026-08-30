@@ -75,3 +75,16 @@ void print_mode_line(const std::string& mode) {
 void print_fuse_fallback_line() {
     std::cout << tr("FUSE problem detected; yai selected a fallback mode.\n");
 }
+
+void refresh_desktop_database(const fs::path& dir) {
+    if (!executable_available("update-desktop-database")) {
+        std::cerr << tr("yai: warning: update-desktop-database is not available; desktop entries may not appear immediately\n");
+        return;
+    }
+    const int rc = run_process({"update-desktop-database", dir.string()});
+    if (rc != 0) {
+        std::cerr << tr_format(
+            "yai: warning: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n",
+            {{"{code}", std::to_string(rc)}});
+    }
+}
