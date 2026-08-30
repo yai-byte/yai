@@ -47,6 +47,29 @@ char json_simple_escape(char ch) {
     return ch;
 }
 
+// Encodes a Unicode code point as UTF-8 bytes. Surrogate halves from
+// \uXXXX escapes are each emitted as their own 3-byte CESU-8 sequence;
+// combining them into a single 4-byte UTF-8 sequence would require
+// tracking surrogate pairs across calls, which is unnecessary for yai's
+// text fields (names, summaries, homepages).
+void append_utf8(std::string& out, unsigned codepoint) {
+    if (codepoint <= 0x7F) {
+        out.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        out.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+}
+
 std::string json_unescape_string(const std::string& value) {
     std::string out;
     for (std::size_t i = 0; i < value.size(); ++i) {
@@ -57,11 +80,49 @@ std::string json_unescape_string(const std::string& value) {
         const char next = value[++i];
         if (next == '"' || next == '\\' || next == '/') {
             out.push_back(next);
+        } else if (next == 'u' && i + 4 < value.size()) {
+            // \uXXXX → UTF-8. Four hex digits follow; on success advance past
+            // them, on malformed input keep the literal backslash-u.
+            const std::string hex = value.substr(i + 1, 4);
+            if (std::all_of(hex.begin(), hex.end(), [](unsigned char c) {
+                    return std::isxdigit(c) != 0;
+                })) {
+                unsigned codepoint = 0;
+                std::istringstream ss(hex);
+                ss >> std::hex >> codepoint;
+                append_utf8(out, codepoint);
+                i += 4;
+            } else {
+                out.push_back('\\');
+                out.push_back('u');
+            }
         } else {
             out.push_back(json_simple_escape(next));
         }
     }
     return out;
+}
+
+// Finds the first occurrence of needle that is NOT inside a JSON string
+// literal. Naive text.find() would match punctuation inside string values
+// (e.g. a summary containing the text "id": "x"), producing wrong key hits.
+std::size_t json_find_key_outside_strings(const std::string& text, const std::string& needle, std::size_t from = 0) {
+    JsonStringScanState string_state;
+    for (std::size_t pos = from; pos + needle.size() <= text.size(); ) {
+        // Advance string state up to pos so we know whether pos is inside a string.
+        // We scan character-by-character; advance_json_string_state handles quotes.
+        const char ch = text[pos];
+        if (advance_json_string_state(string_state, ch)) {
+            ++pos;
+            continue;
+        }
+        // pos is outside a string — check for the needle here.
+        if (text.compare(pos, needle.size(), needle) == 0) {
+            return pos;
+        }
+        ++pos;
+    }
+    return std::string::npos;
 }
 
 std::optional<std::string> json_string_after(const std::string& text, std::size_t key_pos) {
@@ -101,7 +162,7 @@ std::optional<std::string> json_string_after(const std::string& text, std::size_
 
 std::optional<std::string> json_find_string(const std::string& text, const std::string& key) {
     const std::string needle = "\"" + key + "\"";
-    const std::size_t key_pos = text.find(needle);
+    const std::size_t key_pos = json_find_key_outside_strings(text, needle);
     if (key_pos == std::string::npos) {
         return std::nullopt;
     }
@@ -112,7 +173,7 @@ std::vector<std::string> json_find_all_strings(const std::string& text, const st
     std::vector<std::string> values;
     const std::string needle = "\"" + key + "\"";
     std::size_t pos = 0;
-    while ((pos = text.find(needle, pos)) != std::string::npos) {
+    while ((pos = json_find_key_outside_strings(text, needle, pos)) != std::string::npos) {
         std::optional<std::string> value = json_string_after(text, pos);
         if (value.has_value()) {
             values.push_back(*value);
@@ -127,7 +188,7 @@ std::optional<std::size_t> json_value_start_after_key(const std::string& text, c
     // inputs do not require JSONPath, duplicate-key policy, or scoped object
     // traversal beyond passing an already extracted object string.
     const std::string needle = "\"" + key + "\"";
-    const std::size_t key_pos = text.find(needle);
+    const std::size_t key_pos = json_find_key_outside_strings(text, needle);
     if (key_pos == std::string::npos) {
         return std::nullopt;
     }
