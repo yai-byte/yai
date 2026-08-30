@@ -1,5 +1,6 @@
 # yai — AppImage Package Manager
 
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](#building)
 [![Smoke tests](https://img.shields.io/badge/tests-22%20%2F%2022-brightgreen)](#testing)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#building)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#supported-architectures)
@@ -367,7 +368,7 @@ yai installs into the **current user's** home directory. There are no global wri
 | `.local/share/yai/repos/repos.conf`                             | List of configured repos                        |
 | `.local/share/yai/repos/<name>.json`                            | Per-repo cached index                           |
 | `.local/share/yai/repos/index.json`                             | Merged index                                    |
-| `.config/yai/mirror.conf`                                       | Persisted mirror policy                         |
+| `.config/yai/network.conf`                                      | Persisted mirror policy                         |
 | `.config/yai/github_blocklist.conf`                             | Exact `owner/repo` lines to block with 451      |
 
 Install metadata (`metadata.json`) is always JSON — the legacy `metadata.conf` format is no

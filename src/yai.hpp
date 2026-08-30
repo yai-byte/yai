@@ -236,6 +236,10 @@ enum class Language {
 };
 
 
+// Semantic version of the yai binary, used by --version / -v and as the
+// canonical source for any user-facing version string. Bump this on releases.
+constexpr const char* kYaiVersion = "0.1.0";
+
 extern const char* APPIMAGE_FEED_URL;
 
 std::optional<std::string> env_string(const char* name);
@@ -478,6 +482,7 @@ void write_network_config(const NetworkConfig& config);
 std::string china_network_disclaimer();
 InstallPaths paths_for(const std::string& id);
 void print_usage();
+void print_version();
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option);
 void parse_arch_option(InstallOptions& options, const std::string& value);
 void parse_download_strategy_option(InstallOptions& options, const std::string& value);
@@ -786,6 +791,10 @@ void write_metadata(
     const std::string& mode);
 void print_mode_line(const std::string& mode);
 void print_fuse_fallback_line();
+// Refreshes the freedesktop.org application database for a directory.
+// update-desktop-database is optional: when missing, yai skips the refresh
+// with a warning instead of failing the install/repair/remove flow.
+void refresh_desktop_database(const fs::path& dir);
 void download_app(int argc, char** argv);
 void install_app(int argc, char** argv);
 RepairResult repair_installed_package(const std::string& id);

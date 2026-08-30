@@ -1972,3 +1972,13 @@ msgid ""
 "... (truncated)"
 msgstr ""
 "...（已截断）"
+
+msgid ""
+"yai: warning: update-desktop-database is not available; desktop entries may not appear immediately\n"
+msgstr ""
+"yai：警告：update-desktop-database 不可用；桌面项可能不会立即出现\n"
+
+msgid ""
+"yai: warning: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n"
+msgstr ""
+"yai：警告：update-desktop-database 失败（退出码 {code}）；桌面项可能不会立即出现\n"

@@ -65,6 +65,10 @@ void print_usage() {
     std::cout << tr("  YAI_INDEX_REGION=cn|global  Override Gitee/GitHub selection\n");
 }
 
+void print_version() {
+    std::cout << "yai " << kYaiVersion << "\n";
+}
+
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option) {
     if (++index >= argc) {
         throw std::runtime_error(option + tr(" requires a value"));
@@ -372,7 +376,7 @@ DownloadToolCommand build_downloader_command(
             "--silent",
             "--show-error",
             "--user-agent",
-            "yai/1.0 (+https://github.com/AppImage/yai)",
+            "yai/1.0 (+https://github.com/yai-byte/yai-repo)",
             "--retry",
             "3",
             "--continue-at",
@@ -392,7 +396,7 @@ DownloadToolCommand build_downloader_command(
             "--tries=3",
             "--continue",
             "--user-agent",
-            "yai/1.0 (+https://github.com/AppImage/yai)",
+            "yai/1.0 (+https://github.com/yai-byte/yai-repo)",
             "--output-document",
             part.string(),
             url,
@@ -423,7 +427,7 @@ DownloadToolCommand build_downloader_command(
             "--rpc-listen-all=false",
             "--rpc-allow-origin-all=true",
             "--rpc-listen-port=" + std::to_string(port),
-            "--user-agent=yai/1.0 (+https://github.com/AppImage/yai)",
+            "--user-agent=yai/1.0 (+https://github.com/yai-byte/yai-repo)",
             "--dir",
             part.parent_path().string(),
             "--out",
@@ -459,7 +463,7 @@ void prefetch_download_headers(const std::string& url, const fs::path& headers) 
         "--show-error",
         "--head",
         "--user-agent",
-        "yai/1.0 (+https://github.com/AppImage/yai)",
+        "yai/1.0 (+https://github.com/yai-byte/yai-repo)",
         "--max-time",
         "10",
         "--dump-header",
@@ -585,7 +589,7 @@ std::vector<std::string> fetch_text_curl_args(
         "--silent",
         "--show-error",
         "--user-agent",
-        "yai/1.0 (+https://github.com/AppImage/yai)",
+        "yai/1.0 (+https://github.com/yai-byte/yai-repo)",
         "--max-time",
         std::to_string(curl_max_time_seconds(timeout_ms)),
     };

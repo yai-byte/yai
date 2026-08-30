@@ -164,7 +164,7 @@ void install_app(int argc, char** argv) {
 
     write_metadata(paths, source, repair.mode);
 
-    run_process({"update-desktop-database", paths.desktop.parent_path().string()});
+    refresh_desktop_database(paths.desktop.parent_path());
 
     std::cout << tr("Installed ") << source.id << "\n";
     if (!source.github_owner.empty() && !source.github_repo.empty()) {
@@ -227,7 +227,7 @@ RepairResult repair_installed_package(const std::string& id) {
     write_wrapper(paths, repair.mode);
     write_desktop_entry(paths, source.name);
     write_metadata(paths, source, repair.mode);
-    run_process({"update-desktop-database", paths.desktop.parent_path().string()});
+    refresh_desktop_database(paths.desktop.parent_path());
     return repair;
 }
 

@@ -1975,3 +1975,13 @@ msgid ""
 "... (truncated)"
 msgstr ""
 "... (truncated)"
+
+msgid ""
+"yai: warning: update-desktop-database is not available; desktop entries may not appear immediately\n"
+msgstr ""
+"yai: warning: update-desktop-database is not available; desktop entries may not appear immediately\n"
+
+msgid ""
+"yai: warning: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n"
+msgstr ""
+"yai: warning: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n"

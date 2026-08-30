@@ -118,7 +118,7 @@ void remove_installed_id(const std::string& id) {
 
     remove_all_required(paths.app_dir, tr("removing installed package directory"));
 
-    run_process({"update-desktop-database", paths.desktop.parent_path().string()});
+    refresh_desktop_database(paths.desktop.parent_path());
     std::cout << tr("Removed ") << id << "\n";
 }
 

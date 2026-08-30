@@ -1,5 +1,6 @@
 # yai — AppImage 包管理器
 
+[![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-0.1.0-blue)](#%E7%BC%96%E8%AF%91)
 [![Smoke tests](https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-22%20%2F%2022-brightgreen)](#%E6%B5%8B%E8%AF%95)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#%E7%BC%96%E8%AF%91)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#%E6%94%AF%E6%8C%81%E6%9E%B6%E6%9E%84)
@@ -359,7 +360,7 @@ yai 只会写到**当前用户**的 HOME 目录下，不写全局路径、不加
 | `.local/share/yai/repos/repos.conf`                             | 已注册仓库列表                      |
 | `.local/share/yai/repos/<name>.json`                            | 各仓库的缓存索引                     |
 | `.local/share/yai/repos/index.json`                             | 合并后的最终索引                     |
-| `.config/yai/mirror.conf`                                       | 持久化的镜像策略                     |
+| `.config/yai/network.conf`                                      | 持久化的镜像策略                     |
 | `.config/yai/github_blocklist.conf`                             | 每行一个 `owner/repo`，命中以 451 拒绝 |
 
 安装元数据**固定使用 JSON** (`metadata.json`)；老版本遗留的 `metadata.conf`
