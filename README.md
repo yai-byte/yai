@@ -1,5 +1,6 @@
 # yai — AppImage Package Manager
 
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](#building)
 [![Smoke tests](https://img.shields.io/badge/tests-22%20%2F%2022-brightgreen)](#testing)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#building)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#supported-architectures)

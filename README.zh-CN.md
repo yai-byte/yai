@@ -1,5 +1,6 @@
 # yai — AppImage 包管理器
 
+[![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-0.1.0-blue)](#%E7%BC%96%E8%AF%91)
 [![Smoke tests](https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-22%20%2F%2022-brightgreen)](#%E6%B5%8B%E8%AF%95)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#%E7%BC%96%E8%AF%91)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#%E6%94%AF%E6%8C%81%E6%9E%B6%E6%9E%84)
