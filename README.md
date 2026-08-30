@@ -505,11 +505,15 @@ Smoke tests as of this release (all 22 passing):
 
 ***
 
-## License
+## Authorship & License
 
-yai is developed by the yai-byte authors and distributed under the terms of the project's
-`LICENSE` file. Parts of the JSON scanner and CLI template follow prior art from MIT-licensed
-single-file AppImage tools; see individual source headers for exact attribution.
+This project was designed by the human author. The implementation was assisted by AI tools
+under the author's guidance and supervision. All functional design, architecture decisions,
+and all features were manually tested by the human author.
+
+yai is distributed under the terms of the project's `LICENSE` file. Parts of the JSON scanner
+and CLI template follow prior art from MIT-licensed single-file AppImage tools; see individual
+source headers for exact attribution.
 
 **AppImage** is a trademark of Simon Peter. yai is an independent client and is not
 endorsed by the AppImage project.

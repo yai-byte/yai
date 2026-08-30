@@ -499,11 +499,13 @@ for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 
 ***
 
-## 许可证
+## 作者声明 & 许可证
 
-yai 由 yai-byte 作者们共同开发，按仓库根目录下 `LICENSE` 文件中的条款分发。
-部分 JSON 扫描器与 CLI 模板参考自 MIT 许可证的单文件 AppImage 工具，具体归属
-请单独查看各源文件头部的声明。
+本项目由人类作者设计。在作者的指导和监督下，借助人工智能工具完成了实施。
+所有功能设计、架构决策以及所有特性均由人类作者手动测试。
+
+yai 按仓库根目录下 `LICENSE` 文件中的条款分发。部分 JSON 扫描器与 CLI 模板
+参考自 MIT 许可证的单文件 AppImage 工具，具体归属请单独查看各源文件头部的声明。
 
 **AppImage** 是 Simon Peter 的商标；yai 是独立客户端，与 AppImage 官方项目
 之间不存在背书关系。
