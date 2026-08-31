@@ -187,12 +187,17 @@ UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) 
                             "upgradable",
                             tr("index: ") + *url};
                     }
-                    return UpdatePreviewResult{
+                    // Identical URL proves nothing about the bytes behind it.
+                    // Keep probing HTTP validators instead of reporting
+                    // "current": an upstream same-URL rewrite whose length
+                    // happens to match must still reach the upgrade path, so
+                    // equal Content-Length alone can never mean unchanged.
+                    return preview_from_url_freshness(
                         id,
                         current_version,
                         current_version,
-                        "current",
-                        tr("already up to date")};
+                        *url,
+                        metadata);
                 }
                 break;
             }

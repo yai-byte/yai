@@ -2,12 +2,61 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdio>
+#include <ctime>
 #include <fstream>
 
 namespace {
 
 fs::path file_url_path(const std::string& url) {
     return fs::path(url.substr(7));
+}
+
+// Renders a file mtime the same way curl reports Last-Modified for file://
+// responses: IMF-fixdate, GMT, second precision. The weekday and month names
+// are hard-coded because strftime's %a/%b follow the process locale, and a
+// localized string would never match the value curl stored at install time.
+std::string http_date_from_file_time(const fs::path& path) {
+    std::error_code ec;
+    const fs::file_time_type mtime = fs::last_write_time(path, ec);
+    if (ec) {
+        return "";
+    }
+
+    // C++17 has no portable file_clock::to_sys(); rebase through "now".
+    const auto system_time = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        mtime - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(system_time);
+
+    std::tm parts{};
+    if (gmtime_r(&seconds, &parts) == nullptr) {
+        return "";
+    }
+
+    static const char* const day_names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char* const month_names[] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    if (parts.tm_wday < 0 || parts.tm_wday > 6 || parts.tm_mon < 0 || parts.tm_mon > 11) {
+        return "";
+    }
+
+    char buffer[64];
+    const int written = std::snprintf(
+        buffer,
+        sizeof(buffer),
+        "%s, %02d %s %04d %02d:%02d:%02d GMT",
+        day_names[parts.tm_wday],
+        parts.tm_mday,
+        month_names[parts.tm_mon],
+        parts.tm_year + 1900,
+        parts.tm_hour,
+        parts.tm_min,
+        parts.tm_sec);
+    if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(buffer)) {
+        return "";
+    }
+    return buffer;
 }
 
 fs::path unique_temp_headers_path() {
@@ -72,30 +121,25 @@ UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpVal
     const bool has_lm_pair = !stored.last_modified.empty() && !remote.last_modified.empty();
     const bool has_cl_pair = !stored.content_length.empty() && !remote.content_length.empty();
 
-    int comparable_pairs = 0;
-
-    if (has_etag_pair) {
-        ++comparable_pairs;
-        if (stored.etag != remote.etag) {
-            return UrlFreshness::Changed;
-        }
+    // A differing validator always means the bytes differ. Content-Length is
+    // checked independently of the strong validators: Last-Modified has
+    // one-second resolution, so two writes inside the same second share it
+    // while still differing in size.
+    if (has_etag_pair && stored.etag != remote.etag) {
+        return UrlFreshness::Changed;
+    }
+    if (has_lm_pair && stored.last_modified != remote.last_modified) {
+        return UrlFreshness::Changed;
+    }
+    if (has_cl_pair && stored.content_length != remote.content_length) {
+        return UrlFreshness::Changed;
     }
 
-    if (has_lm_pair) {
-        ++comparable_pairs;
-        if (stored.last_modified != remote.last_modified) {
-            return UrlFreshness::Changed;
-        }
-    }
-
-    if (!has_etag_pair && !has_lm_pair && has_cl_pair) {
-        ++comparable_pairs;
-        if (stored.content_length != remote.content_length) {
-            return UrlFreshness::Changed;
-        }
-    }
-
-    if (comparable_pairs == 0) {
+    // Equal Content-Length alone never proves the bytes are unchanged: an
+    // in-place rewrite that keeps the size is invisible to a length check.
+    // Without a matching ETag or Last-Modified, fall through to Unknown so the
+    // upgrade path really compares the content instead of trusting the length.
+    if (!has_etag_pair && !has_lm_pair) {
         return UrlFreshness::Unknown;
     }
 
@@ -123,6 +167,10 @@ UrlFreshnessResult probe_url_freshness(const std::string& url, const HttpValidat
         }
         HttpValidators remote;
         remote.content_length = std::to_string(size);
+        // Without a last_modified validator, an equal-size rewrite would leave
+        // Content-Length as the only comparable pair and be misreported as
+        // Unchanged. The mtime makes same-length in-place rewrites visible.
+        remote.last_modified = http_date_from_file_time(path);
         return {compare_http_validators(stored, remote), "", remote};
     }
 

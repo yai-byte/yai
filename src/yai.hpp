@@ -273,6 +273,8 @@ bool has_glob_wildcards(const std::string& value);
 bool glob_match_case_insensitive(const std::string& pattern, const std::string& value);
 std::vector<std::string> resolve_installed_package_ids(const std::string& pattern);
 std::string resolve_installed_package_id(const std::string& pattern);
+std::vector<std::string> stale_app_dir_ids();
+std::vector<std::string> resolve_removable_package_ids(const std::string& pattern);
 bool confirm_multi_match(
     const std::string& prompt,
     const std::vector<std::string>& matches,

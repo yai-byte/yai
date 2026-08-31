@@ -370,9 +370,10 @@ yai installs into the **current user's** home directory. There are no global wri
 | `.config/yai/mirror.conf`                                       | Persisted mirror policy                         |
 | `.config/yai/github_blocklist.conf`                             | Exact `owner/repo` lines to block with 451      |
 
-Install metadata (`metadata.json`) is always JSON — the legacy `metadata.conf` format is no
-longer read. Running `yai repair <id>` cleans up any stray `metadata.conf` left by older
-versions.
+Install metadata (`metadata.json`) is always JSON — the legacy `metadata.conf` format is
+neither written nor read any more. A directory under `~/.local/share/yai/apps/<id>/` that has
+no `metadata.json` is therefore a **leftover**, not an installed package: `list` ignores it,
+`doctor` reports it as a warning, and `yai remove <id>` reclaims its disk space.
 
 ***
 
@@ -474,7 +475,7 @@ Smoke tests as of this release (all 22 passing):
 | `progress_smoke.sh`                                                                | Single-task download progress line format                    |
 | `batch_progress_smoke.sh`                                                          | Parallel batch footer + per-task prefixing                   |
 | `download_smoke.sh`                                                                | Direct / URL / owner/repo downloads without install side fx  |
-| `metadata_json_smoke.sh`                                                           | Install metadata JSON shape + repair legacy cleanup          |
+| `metadata_json_smoke.sh`                                                           | Install metadata JSON shape + leftover dirs w/o metadata.json |
 | `url_freshness_smoke.sh`                                                           | ETag / LM / CL validator matrix                              |
 | `url_update_smoke.sh`                                                              | Equal-length same-URL rewrite → Unknown path                 |
 | `fetch_text_timeout_smoke.sh`                                                      | Website crawl timeouts on hang-sites stay under 20 s         |

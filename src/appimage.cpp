@@ -2,23 +2,14 @@
 
 // AppImage metadata helpers: key/value reads, checksum, and metadata emission.
 
+// Install metadata is JSON only. The legacy key=value `metadata.conf` file is
+// no longer a supported format: it is never written, and any directory holding
+// one is treated as a leftover rather than as an installed package.
 std::optional<std::string> metadata_value(const fs::path& file, const std::string& key) {
-    if (file.extension() == ".json") {
-        if (!fs::exists(file)) {
-            return std::nullopt;
-        }
-        return json_find_string(read_text_file(file), key);
+    if (file.extension() != ".json" || !fs::exists(file)) {
+        return std::nullopt;
     }
-
-    std::ifstream in(file);
-    std::string line;
-    const std::string prefix = key + "=";
-    while (std::getline(in, line)) {
-        if (line.rfind(prefix, 0) == 0) {
-            return line.substr(prefix.size());
-        }
-    }
-    return std::nullopt;
+    return json_find_string(read_text_file(file), key);
 }
 
 fs::path readable_metadata_path(const InstallPaths& paths) {

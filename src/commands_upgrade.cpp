@@ -461,10 +461,6 @@ void upgrade_installed_target(const InstallOptions& options) {
                 const std::optional<std::string> url =
                     repo_package_download_url_for_arch(pkg, context.installed_arch);
                 if (url.has_value() && !url->empty()) {
-                    if (*url == context.source_url) {
-                        print_already_up_to_date(context);
-                        return;
-                    }
                     ResolvedSource source;
                     source.source_kind = context.source_kind;
                     source.id = context.id;
@@ -477,6 +473,16 @@ void upgrade_installed_target(const InstallOptions& options) {
                         source.github_owner = context.github_owner;
                         source.github_repo = context.github_repo;
                         source.github_asset = basename_from_url(*url);
+                    }
+                    if (*url == context.source_url) {
+                        // Identical URL proves nothing about the bytes behind
+                        // it, so a same-URL upstream rewrite must still be
+                        // picked up. upgrade_via_url_freshness probes the HTTP
+                        // validators and then compares sha256, so a
+                        // byte-identical candidate still reports "up to date"
+                        // instead of committing a no-op upgrade.
+                        upgrade_via_url_freshness(context, source);
+                        return;
                     }
                     download_probe_and_commit_update(context, source);
                     return;

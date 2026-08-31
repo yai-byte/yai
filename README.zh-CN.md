@@ -362,8 +362,10 @@ yai 只会写到**当前用户**的 HOME 目录下，不写全局路径、不加
 | `.config/yai/mirror.conf`                                       | 持久化的镜像策略                     |
 | `.config/yai/github_blocklist.conf`                             | 每行一个 `owner/repo`，命中以 451 拒绝 |
 
-安装元数据**固定使用 JSON** (`metadata.json`)；老版本遗留的 `metadata.conf`
-格式已经不再读取。执行 `yai repair <id>` 会把遗落的旧 `metadata.conf` 一并清理掉。
+安装元数据**固定使用 JSON** (`metadata.json`)；老版本的 `metadata.conf` 格式既不再写入、
+也不再读取。因此 `~/.local/share/yai/apps/<id>/` 下没有 `metadata.json` 的目录属于
+**残留**，不算已安装：`list` 会忽略它，`doctor` 会把它报为警告，`yai remove <id>` 可回收
+其占用的磁盘空间。
 
 ***
 
@@ -464,7 +466,7 @@ for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 | `progress_smoke.sh`                         | 单任务下载进度行格式                                     |
 | `batch_progress_smoke.sh`                   | 并行批次粘性 footer + 任务前缀日志                         |
 | `download_smoke.sh`                         | 直链 / URL / owner/repo 下载，不含安装副作用               |
-| `metadata_json_smoke.sh`                    | 安装元数据 JSON 形状 + repair 清理旧 metadata.conf       |
+| `metadata_json_smoke.sh`                    | 安装元数据 JSON 形状 + 无 metadata.json 的残留目录处理   |
 | `url_freshness_smoke.sh`                    | ETag / LM / CL 校验器矩阵                           |
 | `url_update_smoke.sh`                       | 同 URL 同大小重写 → Unknown 保守路径                     |
 | `fetch_text_timeout_smoke.sh`               | 挂住的网站在超时策略下安装耗时稳定 < 20s                        |

@@ -64,6 +64,18 @@ int main() {
     remote_changed.etag = "\"xyz\"";
     require(compare_http_validators(stored, remote_changed) == UrlFreshness::Changed, "etag changed");
 
+    // A differing Content-Length still wins when Last-Modified matches: mtime
+    // resolution is one second, so two writes inside the same second share it.
+    HttpValidators lm_match_cl_diff{"", "Sat, 01 Jan 2026 00:00:00 GMT", "41"};
+    require(compare_http_validators(stored, lm_match_cl_diff) == UrlFreshness::Changed,
+            "content-length differs while last-modified matches");
+
+    // Equal Content-Length with no strong validator must stay Unknown: an
+    // equal-size rewrite is invisible to a length check.
+    HttpValidators cl_only{"", "", "42"};
+    require(compare_http_validators(cl_only, cl_only) == UrlFreshness::Unknown,
+            "equal content-length alone stays unknown");
+
     HttpValidators empty{};
     require(compare_http_validators(empty, empty) == UrlFreshness::Unknown, "unknown");
     require(compare_http_validators(stored, empty) == UrlFreshness::Unknown, "remote empty");
@@ -76,11 +88,19 @@ int main() {
         out.write("abcd", 4);
     }
 
+    // A file:// probe reports size and mtime. Storing the size alone must stay
+    // Unknown instead of claiming the bytes are unchanged.
     HttpValidators stored_size_4;
     stored_size_4.content_length = "4";
-    UrlFreshnessResult unchanged = probe_url_freshness("file://PROBE_FILE_PATH", stored_size_4);
+    UrlFreshnessResult size_only = probe_url_freshness("file://PROBE_FILE_PATH", stored_size_4);
+    require(size_only.status == UrlFreshness::Unknown, "file size alone stays unknown");
+    require(size_only.remote.content_length == "4", "file remote size");
+    require(!size_only.remote.last_modified.empty(), "file remote last-modified");
+
+    // Round-tripping the probe's own validators reproduces Unchanged.
+    HttpValidators stored_with_mtime = size_only.remote;
+    UrlFreshnessResult unchanged = probe_url_freshness("file://PROBE_FILE_PATH", stored_with_mtime);
     require(unchanged.status == UrlFreshness::Unchanged, "file unchanged");
-    require(unchanged.remote.content_length == "4", "file remote size");
 
     HttpValidators stored_size_5;
     stored_size_5.content_length = "5";

@@ -190,6 +190,14 @@ RepairResult repair_installed_package(const std::string& id) {
     // AppImage and regenerates only derived launch artifacts.
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
+        // Without metadata.json there is no install record to repair from, so
+        // the directory is a leftover rather than a broken install. Point the
+        // user at the one command that can reclaim it.
+        if (fs::exists(paths.app_dir)) {
+            throw std::runtime_error(tr_format(
+                "package is not installed: {id} (app directory exists without metadata.json; reclaim the space with: yai remove {id})",
+                {{"{id}", id}}));
+        }
         throw std::runtime_error(tr("package is not installed: ") + id);
     }
     if (!fs::exists(paths.appimage)) {

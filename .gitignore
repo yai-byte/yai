@@ -1,4 +1,5 @@
 yai
+libyai.a
 *.o
 *.AppImage
 .DS_Store

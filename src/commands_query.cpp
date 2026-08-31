@@ -109,7 +109,10 @@ void remove_if_exists(const fs::path& path) {
 
 void remove_installed_id(const std::string& id) {
     const InstallPaths paths = paths_for(id);
-    if (!metadata_exists(paths)) {
+    // A directory without metadata.json is a leftover rather than an installed
+    // package, but deleting it is the only way to reclaim its disk space, so
+    // it is accepted as long as the app directory itself exists.
+    if (!metadata_exists(paths) && !fs::exists(paths.app_dir)) {
         throw std::runtime_error(tr("package is not installed: ") + id);
     }
 
@@ -143,13 +146,16 @@ void remove_app(int argc, char** argv) {
     }
     if (looks_like_shell_expanded_remove_target(pattern)) {
         const std::string id = sanitize_id(pattern);
-        if (!metadata_exists(paths_for(id))) {
+        const InstallPaths paths = paths_for(id);
+        if (!metadata_exists(paths) && !fs::exists(paths.app_dir)) {
             throw std::runtime_error(tr(
                 "remove matches installed package ids only; quote wildcards like 'name*' so the shell does not expand them"));
         }
     }
 
-    const std::vector<std::string> ids = resolve_installed_package_ids(pattern);
+    // Stale directories match too: deleting them is the only way to reclaim
+    // the disk space they occupy.
+    const std::vector<std::string> ids = resolve_removable_package_ids(pattern);
     if (ids.size() > 1) {
         const std::string prompt = tr_format(
             "Remove {count} package(s)? [y/N] ",
