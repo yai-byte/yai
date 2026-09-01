@@ -362,10 +362,9 @@ yai 只会写到**当前用户**的 HOME 目录下，不写全局路径、不加
 | `.config/yai/mirror.conf`                                       | 持久化的镜像策略                     |
 | `.config/yai/github_blocklist.conf`                             | 每行一个 `owner/repo`，命中以 451 拒绝 |
 
-安装元数据**固定使用 JSON** (`metadata.json`)；老版本的 `metadata.conf` 格式既不再写入、
-也不再读取。因此 `~/.local/share/yai/apps/<id>/` 下没有 `metadata.json` 的目录属于
-**残留**，不算已安装：`list` 会忽略它，`doctor` 会把它报为警告，`yai remove <id>` 可回收
-其占用的磁盘空间。
+安装元数据**固定使用 JSON** (`metadata.json`)。因此 `~/.local/share/yai/apps/<id>/`
+下没有 `metadata.json` 的目录属于**残留**，不算已安装：`list` 会忽略它，`doctor` 会把它
+报为警告，`yai remove <id>` 可回收其占用的磁盘空间。
 
 ***
 

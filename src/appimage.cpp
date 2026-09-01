@@ -2,10 +2,10 @@
 
 // AppImage metadata helpers: key/value reads, checksum, and metadata emission.
 
-// Install metadata is JSON only. The legacy key=value `metadata.conf` file is
-// no longer a supported format: it is never written, and any directory holding
-// one is treated as a leftover rather than as an installed package.
-std::optional<std::string> metadata_value(const fs::path& file, const std::string& key) {
+// Install metadata is JSON only: it is read from `metadata.json` and never from
+// any other format. A directory under `~/.local/share/yai/apps/<id>/` without a
+// `metadata.json` is treated as a leftover rather than as an installed package.
+std::optional<std::string> metadata_json_value(const fs::path& file, const std::string& key) {
     if (file.extension() != ".json" || !fs::exists(file)) {
         return std::nullopt;
     }

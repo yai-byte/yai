@@ -61,9 +61,9 @@ int check_installed_apps() {
             continue;
         }
 
-        const std::string id = metadata_value(metadata, "id").value_or(entry.path().filename().string());
+        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
         const InstallPaths paths = paths_for(id);
-        const std::string mode = metadata_value(metadata, "install_mode").value_or("unknown");
+        const std::string mode = metadata_json_value(metadata, "install_mode").value_or("unknown");
         warnings += check_installed_app_files(id, paths, mode) > 0 ? 1 : 0;
     }
     return warnings;

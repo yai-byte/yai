@@ -33,7 +33,7 @@ std::vector<std::string> resolve_installed_package_ids(const std::string& patter
             if (!fs::exists(metadata)) {
                 continue;
             }
-            const std::string id = metadata_value(metadata, "id").value_or(dir_id);
+            const std::string id = metadata_json_value(metadata, "id").value_or(dir_id);
             if ((glob_match_case_insensitive(pattern, dir_id) ||
                  glob_match_case_insensitive(pattern, id)) &&
                 std::find(matches.begin(), matches.end(), id) == matches.end()) {
@@ -109,7 +109,7 @@ std::vector<std::string> resolve_removable_package_ids(const std::string& patter
             // be matched by its directory name.
             const std::string id =
                 fs::exists(readable_metadata_path(paths))
-                    ? metadata_value(readable_metadata_path(paths), "id").value_or(dir_id)
+                    ? metadata_json_value(readable_metadata_path(paths), "id").value_or(dir_id)
                     : dir_id;
             if ((glob_match_case_insensitive(pattern, dir_id) ||
                  glob_match_case_insensitive(pattern, id)) &&

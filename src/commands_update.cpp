@@ -77,7 +77,7 @@ std::vector<std::string> installed_package_ids() {
         if (!fs::exists(metadata)) {
             continue;
         }
-        const std::string id = metadata_value(metadata, "id").value_or(entry.path().filename().string());
+        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
         if (std::find(ids.begin(), ids.end(), id) == ids.end()) {
             ids.push_back(id);
         }
@@ -157,14 +157,14 @@ UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) 
     }
 
     const fs::path metadata = readable_metadata_path(paths);
-    const std::string source_kind = metadata_value(metadata, "source_kind").value_or("url");
-    const std::string current_version = metadata_value(metadata, "version").value_or("");
-    const std::string name = metadata_value(metadata, "name").value_or(id);
-    const std::string source_url = metadata_value(metadata, "source_url").value_or("");
-    const std::string download_url = metadata_value(metadata, "download_url").value_or("");
-    const std::string github_owner = metadata_value(metadata, "github_owner").value_or("");
-    const std::string github_repo = metadata_value(metadata, "github_repo").value_or("");
-    const std::string installed_arch = metadata_value(metadata, "arch").value_or(current_arch());
+    const std::string source_kind = metadata_json_value(metadata, "source_kind").value_or("url");
+    const std::string current_version = metadata_json_value(metadata, "version").value_or("");
+    const std::string name = metadata_json_value(metadata, "name").value_or(id);
+    const std::string source_url = metadata_json_value(metadata, "source_url").value_or("");
+    const std::string download_url = metadata_json_value(metadata, "download_url").value_or("");
+    const std::string github_owner = metadata_json_value(metadata, "github_owner").value_or("");
+    const std::string github_repo = metadata_json_value(metadata, "github_repo").value_or("");
+    const std::string installed_arch = metadata_json_value(metadata, "arch").value_or(current_arch());
 
     // Index-driven fast path: if the repo index has a download URL for this
     // package/arch, compare it against the installed source URL directly,

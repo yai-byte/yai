@@ -758,7 +758,7 @@ NetworkConfig prompt_github_release_proxy_for_this_download(NetworkConfig config
 InstallOptions apply_network_config_to_options(
     const InstallOptions& options,
     const ResolvedSource& source);
-std::optional<std::string> metadata_value(const fs::path& file, const std::string& key);
+std::optional<std::string> metadata_json_value(const fs::path& file, const std::string& key);
 fs::path readable_metadata_path(const InstallPaths& paths);
 bool metadata_exists(const InstallPaths& paths);
 std::string sha256_file(const fs::path& path);

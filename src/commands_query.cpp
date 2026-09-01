@@ -21,7 +21,7 @@ std::unordered_set<std::string> installed_package_id_set() {
         if (!fs::exists(metadata)) {
             continue;
         }
-        const std::string id = metadata_value(metadata, "id").value_or(entry.path().filename().string());
+        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
         ids.insert(id);
     }
     return ids;
@@ -186,9 +186,9 @@ void list_apps() {
         if (!fs::exists(metadata)) {
             continue;
         }
-        const std::string id = metadata_value(metadata, "id").value_or(entry.path().filename().string());
-        const std::string name = metadata_value(metadata, "name").value_or(id);
-        const std::string mode = metadata_value(metadata, "install_mode").value_or("unknown");
+        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
+        const std::string name = metadata_json_value(metadata, "name").value_or(id);
+        const std::string mode = metadata_json_value(metadata, "install_mode").value_or("unknown");
         std::cout << id << "\t" << name << "\t" << mode << "\n";
     }
 }

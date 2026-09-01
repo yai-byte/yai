@@ -370,10 +370,10 @@ yai installs into the **current user's** home directory. There are no global wri
 | `.config/yai/mirror.conf`                                       | Persisted mirror policy                         |
 | `.config/yai/github_blocklist.conf`                             | Exact `owner/repo` lines to block with 451      |
 
-Install metadata (`metadata.json`) is always JSON — the legacy `metadata.conf` format is
-neither written nor read any more. A directory under `~/.local/share/yai/apps/<id>/` that has
-no `metadata.json` is therefore a **leftover**, not an installed package: `list` ignores it,
-`doctor` reports it as a warning, and `yai remove <id>` reclaims its disk space.
+Install metadata (`metadata.json`) is always JSON. A directory under
+`~/.local/share/yai/apps/<id>/` that has no `metadata.json` is therefore a **leftover**, not an
+installed package: `list` ignores it, `doctor` reports it as a warning, and `yai remove <id>`
+reclaims its disk space.
 
 ***
 

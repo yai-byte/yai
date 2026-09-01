@@ -210,18 +210,18 @@ RepairResult repair_installed_package(const std::string& id) {
     const fs::path metadata = readable_metadata_path(paths);
     ResolvedSource source;
     source.id = id;
-    source.name = metadata_value(metadata, "name").value_or(id);
-    source.source_kind = metadata_value(metadata, "source_kind").value_or("url");
-    source.version = metadata_value(metadata, "version").value_or("");
-    source.source_url = metadata_value(metadata, "source_url").value_or("");
-    source.download_url = metadata_value(metadata, "download_url").value_or(source.source_url);
-    source.http_etag = metadata_value(metadata, "http_etag").value_or("");
-    source.http_last_modified = metadata_value(metadata, "http_last_modified").value_or("");
-    source.http_content_length = metadata_value(metadata, "http_content_length").value_or("");
-    source.github_owner = metadata_value(metadata, "github_owner").value_or("");
-    source.github_repo = metadata_value(metadata, "github_repo").value_or("");
-    source.github_asset = metadata_value(metadata, "github_asset").value_or("");
-    source.arch = metadata_value(metadata, "arch").value_or(current_arch());
+    source.name = metadata_json_value(metadata, "name").value_or(id);
+    source.source_kind = metadata_json_value(metadata, "source_kind").value_or("url");
+    source.version = metadata_json_value(metadata, "version").value_or("");
+    source.source_url = metadata_json_value(metadata, "source_url").value_or("");
+    source.download_url = metadata_json_value(metadata, "download_url").value_or(source.source_url);
+    source.http_etag = metadata_json_value(metadata, "http_etag").value_or("");
+    source.http_last_modified = metadata_json_value(metadata, "http_last_modified").value_or("");
+    source.http_content_length = metadata_json_value(metadata, "http_content_length").value_or("");
+    source.github_owner = metadata_json_value(metadata, "github_owner").value_or("");
+    source.github_repo = metadata_json_value(metadata, "github_repo").value_or("");
+    source.github_asset = metadata_json_value(metadata, "github_asset").value_or("");
+    source.arch = metadata_json_value(metadata, "arch").value_or(current_arch());
 
     const RepairResult repair = detect_run_mode(paths);
     if (repair.mode == "failed") {

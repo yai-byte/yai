@@ -515,15 +515,7 @@ std::string detect_index_region() {
             return value;
         }
     }
-    // 2. Cached region from region.conf
-    const fs::path cache = repos_dir_path() / "region.conf";
-    if (fs::exists(cache)) {
-        const std::string cached = trim(read_text_file(cache));
-        if (cached == "cn" || cached == "global") {
-            return cached;
-        }
-    }
-    // 3. Detect from timezone + locale
+    // 2. Detect from timezone + locale
     bool is_cn = false;
     // Check TZ env var
     const char* tz = std::getenv("TZ");

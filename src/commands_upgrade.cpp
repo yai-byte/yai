@@ -95,13 +95,13 @@ UpdateContext load_update_context(const InstallOptions& options) {
     }
 
     const fs::path metadata = readable_metadata_path(paths);
-    const std::string source_kind = metadata_value(metadata, "source_kind").value_or("url");
-    const std::string current_version = metadata_value(metadata, "version").value_or("");
-    const std::string name = metadata_value(metadata, "name").value_or(id);
-    const std::string source_url = metadata_value(metadata, "source_url").value_or("");
-    const std::string github_owner = metadata_value(metadata, "github_owner").value_or("");
-    const std::string github_repo = metadata_value(metadata, "github_repo").value_or("");
-    const std::string installed_arch = metadata_value(metadata, "arch").value_or(current_arch());
+    const std::string source_kind = metadata_json_value(metadata, "source_kind").value_or("url");
+    const std::string current_version = metadata_json_value(metadata, "version").value_or("");
+    const std::string name = metadata_json_value(metadata, "name").value_or(id);
+    const std::string source_url = metadata_json_value(metadata, "source_url").value_or("");
+    const std::string github_owner = metadata_json_value(metadata, "github_owner").value_or("");
+    const std::string github_repo = metadata_json_value(metadata, "github_repo").value_or("");
+    const std::string installed_arch = metadata_json_value(metadata, "arch").value_or(current_arch());
     if (source_kind != "github_release" &&
         source_kind != "repo_github_release" &&
         source_kind != "repo_direct_url" &&
@@ -362,7 +362,7 @@ ResolvedSource build_url_update_source(const UpdateContext& context) {
     source.version = context.current_version;
     source.arch = context.installed_arch;
     source.source_url = context.source_url;
-    source.download_url = metadata_value(metadata, "download_url").value_or(context.source_url);
+    source.download_url = metadata_json_value(metadata, "download_url").value_or(context.source_url);
     return source;
 }
 
@@ -370,18 +370,18 @@ ResolvedSource source_from_installed_metadata(const UpdateContext& context) {
     const fs::path metadata = readable_metadata_path(context.paths);
     ResolvedSource source;
     source.id = context.id;
-    source.name = metadata_value(metadata, "name").value_or(context.id);
-    source.source_kind = metadata_value(metadata, "source_kind").value_or(context.source_kind);
-    source.version = metadata_value(metadata, "version").value_or("");
-    source.source_url = metadata_value(metadata, "source_url").value_or("");
-    source.download_url = metadata_value(metadata, "download_url").value_or(source.source_url);
-    source.http_etag = metadata_value(metadata, "http_etag").value_or("");
-    source.http_last_modified = metadata_value(metadata, "http_last_modified").value_or("");
-    source.http_content_length = metadata_value(metadata, "http_content_length").value_or("");
-    source.github_owner = metadata_value(metadata, "github_owner").value_or("");
-    source.github_repo = metadata_value(metadata, "github_repo").value_or("");
-    source.github_asset = metadata_value(metadata, "github_asset").value_or("");
-    source.arch = metadata_value(metadata, "arch").value_or(context.installed_arch);
+    source.name = metadata_json_value(metadata, "name").value_or(context.id);
+    source.source_kind = metadata_json_value(metadata, "source_kind").value_or(context.source_kind);
+    source.version = metadata_json_value(metadata, "version").value_or("");
+    source.source_url = metadata_json_value(metadata, "source_url").value_or("");
+    source.download_url = metadata_json_value(metadata, "download_url").value_or(source.source_url);
+    source.http_etag = metadata_json_value(metadata, "http_etag").value_or("");
+    source.http_last_modified = metadata_json_value(metadata, "http_last_modified").value_or("");
+    source.http_content_length = metadata_json_value(metadata, "http_content_length").value_or("");
+    source.github_owner = metadata_json_value(metadata, "github_owner").value_or("");
+    source.github_repo = metadata_json_value(metadata, "github_repo").value_or("");
+    source.github_asset = metadata_json_value(metadata, "github_asset").value_or("");
+    source.arch = metadata_json_value(metadata, "arch").value_or(context.installed_arch);
     return source;
 }
 
@@ -392,7 +392,7 @@ void refresh_metadata_http_validators(const UpdateContext& context, const Resolv
     source.http_last_modified = downloaded.http_last_modified;
     source.http_content_length = downloaded.http_content_length;
     const fs::path metadata = readable_metadata_path(context.paths);
-    const std::string mode = metadata_value(metadata, "install_mode").value_or("direct");
+    const std::string mode = metadata_json_value(metadata, "install_mode").value_or("direct");
     write_metadata(context.paths, source, mode);
 }
 
@@ -423,7 +423,7 @@ void upgrade_via_url_freshness(const UpdateContext& context, ResolvedSource& sou
 
     const RepairResult repair = download_and_probe_update_candidate(source, effective_options, candidate_paths);
 
-    const std::string current_sha = metadata_value(metadata, "sha256").value_or("");
+    const std::string current_sha = metadata_json_value(metadata, "sha256").value_or("");
     const std::string candidate_sha = sha256_file(candidate_paths.appimage);
     if (!current_sha.empty() && !candidate_sha.empty() && candidate_sha == current_sha) {
         cleanup_update_candidate(candidate_paths);

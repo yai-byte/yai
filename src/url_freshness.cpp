@@ -148,9 +148,9 @@ UrlFreshness compare_http_validators(const HttpValidators& stored, const HttpVal
 
 HttpValidators validators_from_metadata(const fs::path& metadata) {
     HttpValidators v;
-    v.etag = metadata_value(metadata, "http_etag").value_or("");
-    v.last_modified = metadata_value(metadata, "http_last_modified").value_or("");
-    v.content_length = metadata_value(metadata, "http_content_length").value_or("");
+    v.etag = metadata_json_value(metadata, "http_etag").value_or("");
+    v.last_modified = metadata_json_value(metadata, "http_last_modified").value_or("");
+    v.content_length = metadata_json_value(metadata, "http_content_length").value_or("");
     return v;
 }
 
