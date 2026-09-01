@@ -276,7 +276,7 @@ std::vector<std::string> fetch_appimage_apps_list(int timeout_ms) {
     int page = 1;
 
     while (true) {
-        std::string url = std::string(kAppImageGithubRepoApiBase) +
+        std::string url = appimage_github_api_base() +
             "/contents/apps?per_page=100&page=" + std::to_string(page);
 
         std::string response;
@@ -316,7 +316,7 @@ std::vector<std::string> fetch_appimage_apps_list(int timeout_ms) {
 // raw.githubusercontent.com. Returns nullopt if both paths fail.
 std::optional<std::string> fetch_apps_markdown(const std::string& name, int timeout_ms) {
     try {
-        const std::string url = std::string(kAppImageGithubRepoApiBase) +
+        const std::string url = appimage_github_api_base() +
             "/contents/apps/" + url_encode(name) + ".md";
         const std::string response = fetch_text(url, timeout_ms);
         const std::string content_b64 = json_find_string(response, "content").value_or("");
@@ -331,7 +331,7 @@ std::optional<std::string> fetch_apps_markdown(const std::string& name, int time
         // Fall through to raw.githubusercontent.com
     }
     try {
-        const std::string raw_url = std::string(kAppImageGithubRawBase) +
+        const std::string raw_url = appimage_github_raw_base() +
             "/apps/" + url_encode(name) + ".md";
         std::string raw_content = fetch_text(raw_url, timeout_ms);
         if (!raw_content.empty()) return raw_content;
@@ -446,7 +446,7 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
     std::string content;
     try {
         // First try raw.githubusercontent.com
-        std::string url = std::string(kAppImageGithubRawBase) +
+        std::string url = appimage_github_raw_base() +
             "/data/" + url_encode(name);
         content = fetch_text(url, timeout_ms);
     } catch (const std::exception&) {
@@ -454,8 +454,7 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
         // the GitHub API which returns base64-encoded content.
         try {
             std::string api_url =
-                "https://api.github.com/repos/AppImage/appimage.github.io/contents/data/" +
-                url_encode(name);
+                appimage_github_api_base() + "/contents/data/" + url_encode(name);
             std::string api_json = fetch_text(api_url, timeout_ms);
             auto json_content = json_find_string(api_json, "content");
             if (json_content.has_value()) {

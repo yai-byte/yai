@@ -63,6 +63,14 @@ public:
 
 private:
     void render(const std::string& state) {
+        // Per-page progress is a live status line for someone watching a
+        // terminal. With stderr redirected it would become one log line per
+        // crawled page and bury the summary, so it is suppressed there: the
+        // "search for" and "selected" lines are still emitted, and the counters
+        // they report are unaffected.
+        if (!interactive_) {
+            return;
+        }
         std::ostringstream line;
         line << tr_format(
             "yai: {state} website pages: checked {checked}, queued {queued}, candidates {candidates} - {url}",
@@ -74,15 +82,11 @@ private:
                 {"{url}", latest_url_},
             });
         std::string text = truncate_status_text(line.str(), 160);
-        if (interactive_) {
-            if (text.size() < last_width_) {
-                text.append(last_width_ - text.size(), ' ');
-            }
-            last_width_ = text.size();
-            std::cerr << '\r' << text << std::flush;
-        } else {
-            std::cerr << text << "\n";
+        if (text.size() < last_width_) {
+            text.append(last_width_ - text.size(), ' ');
         }
+        last_width_ = text.size();
+        std::cerr << '\r' << text << std::flush;
     }
 
     std::string state_text(const std::string& state) const {

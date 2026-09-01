@@ -506,6 +506,10 @@ constexpr const char* kRepoIndexUrlGitee =
 constexpr int kRepoIndexFreshnessDefaultDays = 7;
 constexpr int kFetchRepoIndexTimeoutMs = 30000;
 
+std::string trimmed_env_url(const char* env_name, const std::string& default_value);
+std::string appimage_github_api_base();
+std::string appimage_github_raw_base();
+
 constexpr const char* kAppImageGithubRepoApiBase =
     "https://api.github.com/repos/AppImage/appimage.github.io";
 constexpr const char* kAppImageGithubRawBase =
@@ -705,6 +709,7 @@ bool is_appimage_download_url(const std::string& url);
 bool vector_contains(const std::vector<std::string>& values, const std::string& value);
 bool package_name_matches_url(const RepoPackage& package, const std::string& url);
 std::vector<std::string> official_download_hint_urls(const RepoPackage& package);
+bool speculative_host_hints_enabled();
 void add_allowed_host(std::vector<std::string>& hosts, const std::string& url);
 std::vector<std::string> allowed_website_hosts(
     const RepoPackage& package,

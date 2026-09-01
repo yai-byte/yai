@@ -2,15 +2,29 @@
 
 // GitHub release resolution, blocklists, and mirror-aware download strategy.
 
-std::string github_api_base() {
-    const char* env = std::getenv("YAI_GITHUB_API_BASE");
-    std::string base = env == nullptr || std::string(env).empty()
-        ? "https://api.github.com"
-        : std::string(env);
+std::string trimmed_env_url(const char* env_name, const std::string& default_value) {
+    const char* env = std::getenv(env_name);
+    std::string base =
+        env == nullptr || std::string(env).empty() ? default_value : std::string(env);
     while (!base.empty() && base.back() == '/') {
         base.pop_back();
     }
     return base;
+}
+
+std::string github_api_base() {
+    return trimmed_env_url("YAI_GITHUB_API_BASE", "https://api.github.com");
+}
+
+// The AppImageHub catalog lives in a fixed upstream repository. Both bases are
+// overridable so the test suite can point them at local files instead of
+// reaching the real network.
+std::string appimage_github_api_base() {
+    return trimmed_env_url("YAI_APPIMAGE_GITHUB_API_BASE", kAppImageGithubRepoApiBase);
+}
+
+std::string appimage_github_raw_base() {
+    return trimmed_env_url("YAI_APPIMAGE_GITHUB_RAW_BASE", kAppImageGithubRawBase);
 }
 
 bool github_repo_matches_local_blocklist(const std::string& repo_target) {

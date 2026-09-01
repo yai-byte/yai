@@ -8,6 +8,10 @@
 std::string repo_index_json_from_package_objects(const std::vector<std::string>& packages);
 
 fs::path repo_index_path() {
+    // YAI_REPO_INDEX is the local index file when given as a plain path (no URL
+    // scheme). When it is a URL, the remote source is fetched only by `yai
+    // update` (fetch_remote_repo_index_text) and synced into the local index;
+    // local read/write must never resolve to the remote URL.
     const char* env = std::getenv("YAI_REPO_INDEX");
     if (env != nullptr && std::string(env).empty() == false && !has_url_scheme(env)) {
         return fs::path(env);
@@ -56,13 +60,13 @@ std::string repo_index_json_from_package_objects(const std::vector<std::string>&
 }
 
 std::string load_repo_index_text() {
+    // When YAI_REPO_INDEX is a local file path, that IS the combined index
+    // (both read and written by repo add/search/info). When it is a URL the
+    // remote source is fetched only by `yai update`; reading it here would hit
+    // the network, so fall back to the local index path in that case.
     const char* env = std::getenv("YAI_REPO_INDEX");
-    if (env != nullptr && std::string(env).empty() == false) {
-        const std::string location = env;
-        if (has_url_scheme(location)) {
-            return fetch_text(location);
-        }
-        return read_text_file(location);
+    if (env != nullptr && std::string(env).empty() == false && !has_url_scheme(env)) {
+        return read_text_file(env);
     }
     return read_text_file(repo_index_path());
 }
@@ -452,7 +456,7 @@ void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries)
     }
 
     ensure_directory(repos_dir_path());
-    write_text_file_atomic(repos_dir_path() / "index.json", repo_index_json_from_package_objects(packages));
+    write_text_file_atomic(repo_index_path(), repo_index_json_from_package_objects(packages));
 }
 
 std::vector<RepoPackage> find_repo_packages(const std::string& id) {

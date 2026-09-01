@@ -450,8 +450,14 @@ void upgrade_installed_target(const InstallOptions& options) {
     // URLs are written back to the index/overlay for future speed.
     const UpdateContext context = load_update_context(options);
 
-    // Index-driven fast path for repo packages.
-    if (context.source_kind.rfind("repo_", 0) == 0 && !context.source_url.empty()) {
+    // Index-driven fast path for repo packages. NOTE: repo_website_page must
+    // never take this branch — the stored index URL is only the catalog/landing
+    // page, so trusting it would skip the re-crawl that discovers the real
+    // (possibly changed) AppImage download. It always falls through to the
+    // dedicated re-resolve branch below.
+    if (context.source_kind.rfind("repo_", 0) == 0 &&
+        context.source_kind != "repo_website_page" &&
+        !context.source_url.empty()) {
         try {
             const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
             for (const RepoPackage& pkg : packages) {

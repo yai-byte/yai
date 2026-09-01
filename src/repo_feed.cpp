@@ -165,7 +165,10 @@ std::optional<std::string> appimage_feed_homepage(const std::string& item_text) 
 }
 
 std::string appimage_catalog_page_url(const std::string& name) {
-    return "https://appimage.github.io/" + url_encode(name) + "/";
+    // Overridable so the test suite can point the catalog at a local directory
+    // instead of dialling out to the real AppImageHub site.
+    return trimmed_env_url("YAI_APPIMAGE_CATALOG_BASE", "https://appimage.github.io") + "/" +
+           url_encode(name) + "/";
 }
 
 std::string strip_unexpanded_url_placeholder(std::string url) {

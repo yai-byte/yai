@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-01T10:51:59Z",
+  "packages": [
+{
+      "id": "feed-app",
+      "name": "Feed App",
+      "summary": "Imported from AppImage feed.",
+      "homepage": "https://example.com/feedapp",
+      "license": "MIT",
+      "source": {
+        "type": "github_release",
+        "owner": "acme",
+        "repo": "feedapp",
+        "asset_pattern": ".*\\.AppImage$"
+      }
+    },
+{
+      "id": "direct-feed-app",
+      "name": "Direct Feed App",
+      "summary": "Imported from a direct AppImage download link",
+      "homepage": "file:///home/fsx/yai/tests/fixtures/empty-appimage-catalog/Direct%20Feed%20App/",
+      "license": "MIT",
+      "source": {
+        "type": "direct_url",
+        "url": "file:///tmp/tmp.AgRonyTHBw/original/DirectFeed.AppImage"
+      }
+    },
+{
+      "id": "no-github-app",
+      "name": "No GitHub App",
+      "summary": "Imported from an official website page",
+      "homepage": "file:///tmp/tmp.AgRonyTHBw/website.html",
+      "license": "Unknown",
+      "source": {
+        "type": "website_page",
+        "url": "file:///tmp/tmp.AgRonyTHBw/website.html",
+        "reason": "AppImage feed entry has no GitHub or direct AppImage download link; yai will search the website for an AppImage"
+      }
+    },
+{
+      "id": "musescore",
+      "name": "MuseScore",
+      "summary": "Imported from an AppImage catalog page",
+      "homepage": "file:///tmp/tmp.AgRonyTHBw/appimage.github.io/MuseScore/index.html",
+      "license": "Unknown",
+      "source": {
+        "type": "website_page",
+        "url": "file:///tmp/tmp.AgRonyTHBw/appimage.github.io/MuseScore/index.html",
+        "reason": "AppImage feed entry has no GitHub or direct AppImage download link; yai will search the website for an AppImage"
+      }
+    },
+{
+      "id": "no-source-app",
+      "name": "No Source App",
+      "summary": "Listed without any source links",
+      "homepage": "file:///home/fsx/yai/tests/fixtures/empty-appimage-catalog/No%20Source%20App/",
+      "license": "Unknown",
+      "source": {
+        "type": "website_page",
+        "url": "file:///home/fsx/yai/tests/fixtures/empty-appimage-catalog/No%20Source%20App/",
+        "reason": "AppImage feed entry has no GitHub or direct AppImage download link; yai will search the website for an AppImage"
+      }
+    }
+  ]
+}

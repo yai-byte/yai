@@ -169,7 +169,12 @@ UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) 
     // Index-driven fast path: if the repo index has a download URL for this
     // package/arch, compare it against the installed source URL directly,
     // skipping live GitHub/website crawling.
-    if (use_index && source_kind.rfind("repo_", 0) == 0) {
+    // Index fast path compares the stored download URL against the installed
+    // one. website_page sources have no real download URL (only a catalog/home
+    // page), so trusting the index entry would skip the re-crawl that discovers
+    // the actual AppImage -- always fall through to the live resolve below.
+    if (use_index && source_kind.rfind("repo_", 0) == 0 &&
+        source_kind != "repo_website_page" && source_kind != "website_page") {
         try {
             const std::vector<RepoPackage> packages = load_repo_packages_with_overlay();
             for (const RepoPackage& pkg : packages) {

@@ -52,14 +52,16 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 fi
 
-HOME="$TMP_HOME" "$ROOT/yai" update url-updatable > "$TMP_HOME/url_current.out"
+HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+"$ROOT/yai" update url-updatable > "$TMP_HOME/url_current.out"
 grep -q $'url-updatable\t' "$TMP_HOME/url_current.out"
 grep -q $'\tcurrent\t' "$TMP_HOME/url_current.out"
 grep -q 'already up to date' "$TMP_HOME/url_current.out"
 
 printf '\n# appended for freshness\n' >> "$ASSET"
 
-HOME="$TMP_HOME" "$ROOT/yai" update url-updatable > "$TMP_HOME/url_changed.out"
+HOME="$TMP_HOME" YAI_REPO_INDEX="$INDEX" \
+"$ROOT/yai" update url-updatable > "$TMP_HOME/url_changed.out"
 grep -q $'\tupgradable\t' "$TMP_HOME/url_changed.out"
 if grep -q 'remote content changed' "$TMP_HOME/url_changed.out"; then
   :

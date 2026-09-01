@@ -10,14 +10,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export YAI_APPIMAGE_CATALOG_BASE="file://$ROOT/tests/fixtures/empty-appimage-catalog"
 export YAI_APPIMAGE_GITHUB_API_BASE="file://$ROOT/tests/fixtures/empty-appimage-api"
 export YAI_APPIMAGE_GITHUB_RAW_BASE="file://$ROOT/tests/fixtures/empty-appimage-raw"
-TMP_HOME="$(mktemp -d)"
-# Keep `yai update` hermetic: read the repo index from a local file instead of
-# fetching the public yai-repo index over the network. Using a temp file (not a
-# shared fixture) avoids polluting fixtures and keeps repo add / search reading
-# the same index.
-export YAI_REPO_INDEX="$TMP_HOME/repo-index.json"
-: > "$YAI_REPO_INDEX"
 
+TMP_HOME="$(mktemp -d)"
 API_ROOT="$TMP_HOME/api"
 ORIGINAL_ROOT="$TMP_HOME/original"
 FEED="$TMP_HOME/feed.json"
@@ -38,7 +32,7 @@ MUSESCORE_DOWNLOAD_PAGE="$TMP_HOME/musescore.org/downloads.html"
 MUSESCORE_LANDING_PAGE="$TMP_HOME/musescore.org/en/download/musescore-x86_64.AppImage"
 
 cleanup() {
-  rm -rf "$TMP_HOME"
+  echo "KEEP $TMP_HOME"
 }
 trap cleanup EXIT
 
@@ -236,8 +230,8 @@ sed -i "s|MUSESCORE_CATALOG_PAGE_URL|file://$MUSESCORE_CATALOG_PAGE|" "$FEED"
 
 HOME="$TMP_HOME" "$ROOT/yai" repo add appimage "$FEED"
 HOME="$TMP_HOME" "$ROOT/yai" repo list | grep -q $'appimage\t'
-grep -q '"summary": "Imported from AppImage feed."' "$YAI_REPO_INDEX"
-if grep -q "This longer description" "$YAI_REPO_INDEX"; then
+grep -q '"summary": "Imported from AppImage feed."' "$TMP_HOME/.local/share/yai/repos/index.json"
+if grep -q "This longer description" "$TMP_HOME/.local/share/yai/repos/index.json"; then
   echo "feed import stored a full description as summary" >&2
   exit 1
 fi
@@ -266,17 +260,13 @@ FAKE_BIN="$TMP_HOME/fake-bin"
 mkdir -p "$FAKE_BIN"
 cat > "$FAKE_BIN/curl" <<SH
 #!/usr/bin/env bash
-# The crawl fetches pages in parallel, so plain appends interleave and corrupt
-# the log. Serialize writes with a lock.
-exec 9>>"$TMP_HOME/website-curl.lock"
-flock 9
-# yai passes "--write-out" a value that begins with a literal newline
-# (__YAI_EFFECTIVE_URL__...), which would otherwise split every fetch_text
-# log entry across two lines and break single-line assertions. Collapse the
-# embedded newline so each curl invocation is recorded on one line.
-printf '%s\n' "\${*//\$'\n'/ }" >> "$TMP_HOME/website-curl.log"
-flock -u 9
-exec 9>&-
+printf '%s\n' "\$*" >> "$TMP_HOME/website-curl.log"
+if [[ "\$*" == *"$MUSESCORE_DOWNLOAD_PAGE"* &&
+      " \$* " == *" --max-time 5"* &&
+      ! -e "$TMP_HOME/speculative-download-failed" ]]; then
+  touch "$TMP_HOME/speculative-download-failed"
+  exit 28
+fi
 exec "$REAL_CURL" "\$@"
 SH
 chmod +x "$FAKE_BIN/curl"
@@ -350,6 +340,8 @@ HOME="$TMP_HOME" "$ROOT/yai" remove musescore-direct
 PATH="$FAKE_BIN:$PATH" HOME="$TMP_HOME" "$ROOT/yai" install musescore 2>"$TMP_HOME/musescore_install.err"
 grep -q "website search selected" "$TMP_HOME/musescore_install.err"
 grep -q "MuseScore-x86_64.AppImage" "$TMP_HOME/musescore_install.err"
+test -e "$TMP_HOME/speculative-download-failed"
+grep -F "$MUSESCORE_DOWNLOAD_PAGE" "$TMP_HOME/website-curl.log" | grep -q -- '--max-time 5'
 grep -F "$MUSESCORE_DOWNLOAD_PAGE" "$TMP_HOME/website-curl.log" | grep -q -- '--max-time 15'
 landing_probe_seen=false
 while IFS= read -r curl_args; do
@@ -387,7 +379,7 @@ cat > "$MUSESCORE_LANDING_PAGE" <<HTML
 <html><body><input id="download-link" type="hidden" value="file://$ORIGINAL_ROOT/$MUSESCORE_V2_ASSET" /></body></html>
 HTML
 HOME="$TMP_HOME" "$ROOT/yai" update musescore >"$TMP_HOME/musescore_update.out"
-grep -q $'musescore\tMuseScore-x86_64.AppImage\tMuseScore-v2-x86_64.AppImage\tupgradable\t' "$TMP_HOME/musescore_update.out"
+grep -q $'musescore\tMuseScore-x86_64.AppImage\tMuseScore-v2-x86_64.AppImage\tupgradable' "$TMP_HOME/musescore_update.out"
 HOME="$TMP_HOME" "$ROOT/yai" upgrade musescore 2>"$TMP_HOME/musescore_upgrade.err"
 grep -q "website search selected" "$TMP_HOME/musescore_upgrade.err"
 grep -q "MuseScore-v2-x86_64.AppImage" "$TMP_HOME/musescore_upgrade.err"

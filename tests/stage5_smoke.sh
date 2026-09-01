@@ -7,6 +7,10 @@ TMP_HOME="$(mktemp -d)"
 API_ROOT="$TMP_HOME/api"
 ORIGINAL_ROOT="$TMP_HOME/original"
 INDEX="$TMP_HOME/index.json"
+# Empty index forces `update` to fall back to live resolve (GitHub fixtures via
+# YAI_APPIMAGE_GITHUB_API_BASE) instead of fetching the public gitee index.
+: > "$TMP_HOME/empty-index.json"
+export YAI_REPO_INDEX="$TMP_HOME/empty-index.json"
 LATEST="$API_ROOT/repos/acme/updatable/releases/latest"
 
 cleanup() {

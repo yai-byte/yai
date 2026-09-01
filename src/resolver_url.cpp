@@ -675,17 +675,29 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
         }
     }
 
-    // Also add AppImageHub patterns that may exist for the project
-    if (!id.empty()) {
+    // Guessed third-party catalog pages. These are a shot in the dark: the
+    // package id rarely equals the upstream GitLab project path, so most of
+    // these requests 404 on somebody else's server. They also widen
+    // allowed_website_hosts, which lets the crawl follow links onto hosts the
+    // package never declared. Off by default; YAI_SPECULATIVE_HOST_HINTS=1
+    // restores the old behaviour.
+    if (!id.empty() && speculative_host_hints_enabled()) {
         urls.push_back("https://appimage.github.io/" + url_encode(package.name) + "/");
         urls.push_back("https://appimage.github.io/" + url_encode(package.name) + "/releases");
-        // Add GitLab releases page URLs for projects that may be on GitLab
-        // This covers the common pattern where projects host AppImages on GitLab
         urls.push_back("https://gitlab.com/" + id + "/" + id + "/-/releases");
         urls.push_back("https://gitlab.com/" + id + "/" + id + "/-/releases?sort=created_desc");
     }
 
     return urls;
+}
+
+bool speculative_host_hints_enabled() {
+    const char* env = std::getenv("YAI_SPECULATIVE_HOST_HINTS");
+    if (env == nullptr) {
+        return false;
+    }
+    const std::string value = to_lower(env);
+    return value == "1" || value == "true" || value == "yes" || value == "on";
 }
 
 void add_allowed_host(std::vector<std::string>& hosts, const std::string& url) {

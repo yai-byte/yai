@@ -1,0 +1,3 @@
+Places a directory under git so the AppImageHub raw base can be pointed at a
+local path. Fetching <dir>/apps/<name>.md fails with a file error, which is the
+same code path a missing network produces, but without leaving the machine.

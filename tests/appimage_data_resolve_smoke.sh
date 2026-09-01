@@ -139,6 +139,12 @@ for ((i=0; i<\${#args[@]}; i++)); do
       url="API_DATA_GH" ;;
     *api.github.com/repos/AppImage/appimage.github.io/contents/apps/apps-direct*)
       url="API_APPS_DIRECT" ;;
+    # apps-direct-pkg is probed in data/ first, where it has no entry. Answer
+    # 404 so the lookup fails here instead of reaching the network.
+    *raw.githubusercontent.com/AppImage/appimage.github.io/master/data/apps-direct*)
+      url="DATA_APPS_DIRECT" ;;
+    *api.github.com/repos/AppImage/appimage.github.io/contents/data/apps-direct*)
+      url="API_DATA_APPS_DIRECT" ;;
     *api.github.com/repos/acme/data-gh-pkg/releases/latest*)
       url="GH_RELEASE" ;;
   esac
@@ -161,6 +167,8 @@ case "\$url" in
                      exit 0 ;;
   API_APPS_DIRECT)  printf '%s' "\$API_APPS_DIRECT_BODY"
                      exit 0 ;;
+  DATA_APPS_DIRECT)     exit 22 ;;
+  API_DATA_APPS_DIRECT) exit 22 ;;
   GH_RELEASE)       printf '%s' "\$GH_RELEASE_BODY"
                      exit 0 ;;
 esac
