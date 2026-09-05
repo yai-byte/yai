@@ -924,7 +924,7 @@ NetworkConfig prompt_china_network_config() {
              {"{description}", tr(providers[i].description)}});
     }
     std::cout << tr_format(
-        "  {number}. custom - enter an Xget domain or template\n",
+        "  {number}. custom - enter a domain or template\n",
         {{"{number}", std::to_string(providers.size() + 1)}});
     std::cout << tr_format(
         "Choice [1-{max}]: ",
@@ -939,7 +939,7 @@ NetworkConfig prompt_china_network_config() {
         config.download_strategy = "mirror_first";
         config.mirror_template = provider.mirror_template;
     } else if (choice == static_cast<int>(providers.size() + 1)) {
-        std::cout << tr("Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): ");
+        std::cout << tr("Enter a domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): ");
         std::string custom;
         std::getline(std::cin, custom);
         config.provider = "custom";

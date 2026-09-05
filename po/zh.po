@@ -149,9 +149,9 @@ msgstr ""
 "  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n"
 
 msgid ""
-"  yai mirror custom <xget-domain-or-template>\n"
+"  yai mirror custom <domain-or-template>\n"
 msgstr ""
-"  yai mirror custom <xget-域名-或-模板>\n"
+"  yai mirror custom <域名-或-模板>\n"
 
 msgid ""
 "  yai mirror off\n"
@@ -1019,9 +1019,9 @@ msgstr ""
 "已启用 GitHub Release 代理："
 
 msgid ""
-"mirror custom requires an Xget domain or template"
+"mirror custom requires a domain or template"
 msgstr ""
-"mirror custom 需要 Xget 域名或模板"
+"mirror custom 需要 域名或模板"
 
 msgid ""
 "Enabled custom GitHub Release proxy template: "
@@ -1584,9 +1584,9 @@ msgstr ""
 "请选择代理：\n"
 
 msgid ""
-"Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
+"Enter a domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
 msgstr ""
-"输入 Xget 域名或镜像模板（支持 {raw_url}、{raw_url_noscheme}、{url}、{owner}、{repo}、{tag}、{asset}）: "
+"输入 域名或镜像模板（支持 {raw_url}、{raw_url_noscheme}、{url}、{owner}、{repo}、{tag}、{asset}）: "
 
 msgid ""
 "Use proxy {provider} for this GitHub Release download? [Y/n] "
@@ -1954,9 +1954,9 @@ msgstr ""
 
 
 msgid ""
-"  {number}. custom - enter an Xget domain or template\n"
+"  {number}. custom - enter a domain or template\n"
 msgstr ""
-"  {number}. 自定义 - 输入 Xget 域名或模板\n"
+"  {number}. 自定义 - 输入 域名或模板\n"
 
 
 msgid ""
@@ -1999,12 +1999,6 @@ msgid ""
 "Source: {type} {owner}/{repo}\n"
 msgstr ""
 "来源：{type} {owner}/{repo}\n"
-
-
-msgid ""
-"WARN {id}: app directory has no metadata.json; it is a leftover, reclaim the space with: yai remove {id}\n"
-msgstr ""
-"WARN {id}：应用目录缺少 metadata.json，属于残留目录，可执行 yai remove {id} 回收空间\n"
 
 
 msgid ""

@@ -247,7 +247,7 @@ void mirror_use_app(int argc, char** argv) {
 
 void mirror_custom_app(int argc, char** argv) {
     if (argc != 4) {
-        throw std::runtime_error(tr("mirror custom requires an Xget domain or template"));
+        throw std::runtime_error(tr("mirror custom requires a domain or template"));
     }
 
     NetworkConfig config;

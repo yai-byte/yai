@@ -147,6 +147,7 @@ Every install target supports these shared flags:
 --mirror-template  <URL template>
 --downloader  auto|curl|wget|wget2|aria2c
 --jobs  <1..32>
+--recrawl             force re-discovering the download URL instead of trusting a cached index URL
 --id  <id>    --name  <display name>   (single-target installs only)
 ```
 

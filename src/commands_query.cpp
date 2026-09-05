@@ -147,15 +147,13 @@ void remove_app(int argc, char** argv) {
     if (looks_like_shell_expanded_remove_target(pattern)) {
         const std::string id = sanitize_id(pattern);
         const InstallPaths paths = paths_for(id);
-        if (!metadata_exists(paths) && !fs::exists(paths.app_dir)) {
+        if (!metadata_exists(paths)) {
             throw std::runtime_error(tr(
                 "remove matches installed package ids only; quote wildcards like 'name*' so the shell does not expand them"));
         }
     }
 
-    // Stale directories match too: deleting them is the only way to reclaim
-    // the disk space they occupy.
-    const std::vector<std::string> ids = resolve_removable_package_ids(pattern);
+    const std::vector<std::string> ids = resolve_installed_package_ids(pattern);
     if (ids.size() > 1) {
         const std::string prompt = tr_format(
             "Remove {count} package(s)? [y/N] ",

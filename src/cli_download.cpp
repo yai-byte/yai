@@ -27,7 +27,7 @@ void print_usage() {
         << tr("                   Recommended: 2-4 for slow networks, 8-16 for fast networks.\n")
         << tr("  yai mirror list\n")
         << tr("  yai mirror use <ghfast|chengc|fastgit|yylx|llkk>\n")
-        << tr("  yai mirror custom <xget-domain-or-template>\n")
+        << tr("  yai mirror custom <domain-or-template>\n")
         << tr("  yai mirror off\n")
         << tr("  yai download <package|url|owner/repo> [...]\n")
         << tr("              [--arch auto|x86_64|aarch64|x86|armv7|riscv64|ppc64le|s390x|loongarch64]\n")

@@ -189,10 +189,6 @@ Language current_language() {
     return Language::English;
 }
 
-bool use_chinese() {
-    return current_language() == Language::Chinese;
-}
-
 std::string tr(const std::string& msgid) {
     const auto& catalog = translation_catalog(current_language());
     const auto translated = catalog.find(msgid);

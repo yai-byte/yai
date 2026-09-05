@@ -144,6 +144,7 @@ install -m 0755 yai ~/.local/bin/yai
 --mirror-template  <URL 模板>
 --downloader  auto|curl|wget|wget2|aria2c
 --jobs  <1..32>
+--recrawl             强制重新抓取下载 URL，忽略已缓存的索引 URL
 --id  <id>    --name  <显示名>   仅适用于单目标 install
 ```
 

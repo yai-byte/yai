@@ -241,7 +241,6 @@ extern const char* APPIMAGE_FEED_URL;
 std::optional<std::string> env_string(const char* name);
 std::string ascii_lower(std::string value);
 Language current_language();
-bool use_chinese();
 std::string tr(const std::string& msgid);
 std::string tr_format(
     const std::string& msgid,
@@ -272,9 +271,6 @@ bool looks_like_local_appimage_target(const std::string& value);
 bool has_glob_wildcards(const std::string& value);
 bool glob_match_case_insensitive(const std::string& pattern, const std::string& value);
 std::vector<std::string> resolve_installed_package_ids(const std::string& pattern);
-std::string resolve_installed_package_id(const std::string& pattern);
-std::vector<std::string> stale_app_dir_ids();
-std::vector<std::string> resolve_removable_package_ids(const std::string& pattern);
 bool confirm_multi_match(
     const std::string& prompt,
     const std::vector<std::string>& matches,
@@ -824,7 +820,6 @@ void mirror_use_app(int argc, char** argv);
 void mirror_custom_app(int argc, char** argv);
 void mirror_off_app(int argc);
 void mirror_app(int argc, char** argv);
-void doctor_app_files(int& warnings);
 void doctor_app(int argc);
 
 // Signal / interrupt handling
