@@ -254,8 +254,9 @@ void write_activated_update(
     write_metadata(paths, source, repair.mode);
     const int desktop_db_rc = run_process({"update-desktop-database", paths.desktop.parent_path().string()});
     if (desktop_db_rc != 0) {
-        std::cerr << "yai: update-desktop-database failed (exit " << desktop_db_rc
-                  << "); desktop entries may not appear immediately\n";
+        std::cerr << tr_format(
+            "yai: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n",
+            {{"{code}", std::to_string(desktop_db_rc)}});
     }
 }
 

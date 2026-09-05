@@ -929,21 +929,6 @@ msgstr ""
 "，或 all"
 
 msgid ""
-"skip "
-msgstr ""
-"跳过 "
-
-msgid ""
-"ok "
-msgstr ""
-"成功 "
-
-msgid ""
-"fail "
-msgstr ""
-"失败 "
-
-msgid ""
 "resolved: {resolved} skipped: {skipped} failed: {failed}\n"
 msgstr ""
 "已解析：{resolved} 已跳过：{skipped} 失败：{failed}\n"
@@ -1599,16 +1584,6 @@ msgstr ""
 "请选择代理：\n"
 
 msgid ""
-". custom - enter an Xget domain or template\n"
-msgstr ""
-". custom - 自填 Xget 域名或模板\n"
-
-msgid ""
-"Choice [1-"
-msgstr ""
-"选择 [1-"
-
-msgid ""
 "Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
 msgstr ""
 "输入 Xget 域名或镜像模板（支持 {raw_url}、{raw_url_noscheme}、{url}、{owner}、{repo}、{tag}、{asset}）: "
@@ -1649,11 +1624,6 @@ msgstr ""
 "' — GitHub API 错误："
 
 msgid ""
-"' — no download link found. data/ and apps/ fallbacks also failed."
-msgstr ""
-"' — 未找到下载链接。data/ 和 apps/ 回退方案均已失败。"
-
-msgid ""
 "(https://github.com/settings/tokens) to increase the limit from 60 to 5000 requests/hour, "
 msgstr ""
 "（https://github.com/settings/tokens）将请求限制从 60 次/小时提升至 5000 次/小时，"
@@ -1672,11 +1642,6 @@ msgid ""
 ". The repository may be private, restricted, or blocked. "
 msgstr ""
 ". 该仓库可能是私有的、受限的或被封锁的。 "
-
-msgid ""
-". Trying AppImageHub catalog fallback...\n"
-msgstr ""
-". 正在尝试 AppImageHub 目录回退方案...\n"
 
 msgid ""
 ". Your YAI_GITHUB_TOKEN may be invalid or expired. "
@@ -1774,11 +1739,6 @@ msgstr ""
 "多匹配模式需要列表解析器"
 
 msgid ""
-"no installable AppImage source found for '"
-msgstr ""
-"未找到可安装的 AppImage 来源："
-
-msgid ""
 "or wait for the rate limit window to reset."
 msgstr ""
 "或等待速率限制窗口重置。"
@@ -1814,16 +1774,6 @@ msgstr ""
 "yai：在 AppImageHub 上找到 GitHub 仓库："
 
 msgid ""
-"yai: found direct download URL in apps/"
-msgstr ""
-"yai：在 apps/ 中找到直接下载 URL"
-
-msgid ""
-"yai: found direct download URL in data/"
-msgstr ""
-"yai：在 data/ 中找到直接下载 URL"
-
-msgid ""
 "yai: found direct download URL on AppImageHub\n"
 msgstr ""
 "yai：在 AppImageHub 上找到直接下载 URL\n"
@@ -1847,11 +1797,6 @@ msgid ""
 "yai: warning: failed to fetch AppImage GitHub apps/ list: "
 msgstr ""
 "yai：警告：获取 AppImage GitHub apps/ 列表失败："
-
-msgid ""
-"yai: website search failed; fetching AppImageHub catalog page for "
-msgstr ""
-"yai：网站搜索失败；正在获取 AppImageHub 目录页面以查找 "
 
 msgid ""
 "\nIndex strategy: yai update fetches a centrally resolved index.json by default.\n"
@@ -1982,3 +1927,460 @@ msgid ""
 "WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n"
 msgstr ""
 "WARN 空闲抑制器（systemd-inhibit）不可用；长时间下载可能被电源管理挂起\n"
+
+
+msgid ""
+"  added {count} new packages from apps/\n"
+msgstr ""
+"  从 apps/ 新增了 {count} 个软件包\n"
+
+
+msgid ""
+"  enriched {count} packages with metadata (arch, version, description)\n"
+msgstr ""
+"  已为 {count} 个软件包补充元数据（架构、版本、描述）\n"
+
+
+msgid ""
+"  repo index ready ({count} packages total)\n"
+msgstr ""
+"  软件源索引已就绪（共 {count} 个软件包）\n"
+
+
+msgid ""
+"  {count} apps failed to parse\n"
+msgstr ""
+"  有 {count} 个应用解析失败\n"
+
+
+msgid ""
+"  {number}. custom - enter an Xget domain or template\n"
+msgstr ""
+"  {number}. 自定义 - 输入 Xget 域名或模板\n"
+
+
+msgid ""
+"  {number}. {name} - {description}\n"
+msgstr ""
+"  {number}. {name} - {description}\n"
+
+
+msgid ""
+". Trying parallel fallbacks...\n"
+msgstr ""
+"。正在尝试并行回退方案...\n"
+
+
+msgid ""
+"Choice [1-{max}]: "
+msgstr ""
+"请选择 [1-{max}]: "
+
+
+msgid ""
+"Copied to: "
+msgstr ""
+"已复制到："
+
+
+msgid ""
+"Copying local AppImage..."
+msgstr ""
+"正在复制本地 AppImage..."
+
+
+msgid ""
+"Operation interrupted by user"
+msgstr ""
+"操作已被用户中断"
+
+
+msgid ""
+"Source: {type} {owner}/{repo}\n"
+msgstr ""
+"来源：{type} {owner}/{repo}\n"
+
+
+msgid ""
+"WARN {id}: app directory has no metadata.json; it is a leftover, reclaim the space with: yai remove {id}\n"
+msgstr ""
+"WARN {id}：应用目录缺少 metadata.json，属于残留目录，可执行 yai remove {id} 回收空间\n"
+
+
+msgid ""
+"all fallback resolvers failed for: "
+msgstr ""
+"所有回退解析器均失败："
+
+
+msgid ""
+"batch interrupted"
+msgstr ""
+"批处理已中断"
+
+
+msgid ""
+"data/ URL not accessible for "
+msgstr ""
+"data/ 中的 URL 无法访问："
+
+
+msgid ""
+"fail {id} {arch}: {error}"
+msgstr ""
+"失败 {id} {arch}：{error}"
+
+
+msgid ""
+"failed to move file into place: "
+msgstr ""
+"无法将文件移动到位："
+
+
+msgid ""
+"no AppImage found on GitLab for "
+msgstr ""
+"在 GitLab 上未找到 AppImage："
+
+
+msgid ""
+"ok {id} {arch} {url}"
+msgstr ""
+"成功 {id} {arch} {url}"
+
+
+msgid ""
+"package is not installed: {id} (app directory exists without metadata.json; reclaim the space with: yai remove {id})"
+msgstr ""
+"软件包未安装：{id}（应用目录存在但缺少 metadata.json，可执行 yai remove {id} 回收空间）"
+
+
+msgid ""
+"repo resolve interrupted"
+msgstr ""
+"repo resolve 已中断"
+
+
+msgid ""
+"skip {id} {arch}"
+msgstr ""
+"跳过 {id} {arch}"
+
+
+msgid ""
+"unknown error"
+msgstr ""
+"未知错误"
+
+
+msgid ""
+"unknown update option: "
+msgstr ""
+"未知的 update 选项："
+
+
+msgid ""
+"yai:   found AppImage in description: {url} (score={score})\n"
+msgstr ""
+"yai：  在描述中找到 AppImage：{url}（评分={score}）\n"
+
+
+msgid ""
+"yai:   found AppImage link: {url} (score={score}, name={name})\n"
+msgstr ""
+"yai：  找到 AppImage 链接：{url}（评分={score}，名称={name}）\n"
+
+
+msgid ""
+"yai: GitLab API found no AppImages, falling back to HTML crawl\n"
+msgstr ""
+"yai：GitLab API 未找到 AppImage，回退为 HTML 抓取\n"
+
+
+msgid ""
+"yai: GitLab API query failed: "
+msgstr ""
+"yai：GitLab API 查询失败："
+
+
+msgid ""
+"yai: GitLab API returned empty response\n"
+msgstr ""
+"yai：GitLab API 返回空响应\n"
+
+
+msgid ""
+"yai: GitLab API returned no releases\n"
+msgstr ""
+"yai：GitLab API 未返回任何发行版\n"
+
+
+msgid ""
+"yai: GitLab API returned {count} releases\n"
+msgstr ""
+"yai：GitLab API 返回了 {count} 个发行版\n"
+
+
+msgid ""
+"yai: GitLab project default branch: "
+msgstr ""
+"yai：GitLab 项目默认分支："
+
+
+msgid ""
+"yai: GitLab resolved AppImage: {url} (score={score})\n"
+msgstr ""
+"yai：GitLab 已解析出 AppImage：{url}（评分={score}）\n"
+
+
+msgid ""
+"yai: artifact is not a zip, returning as direct download: "
+msgstr ""
+"yai：产物不是 zip，作为直接下载返回："
+
+
+msgid ""
+"yai: attempting GitLab CI artifact resolution...\n"
+msgstr ""
+"yai：正在尝试解析 GitLab CI 产物...\n"
+
+
+msgid ""
+"yai: checking GitLab release: {name} (tag: {tag})\n"
+msgstr ""
+"yai：正在检查 GitLab 发行版：{name}（标签：{tag}）\n"
+
+
+msgid ""
+"yai: could not download CI artifact from any AppImage job for "
+msgstr ""
+"yai：无法从任何 AppImage 任务下载 CI 产物："
+
+
+msgid ""
+"yai: could not find AppImage CI job in latest pipeline for "
+msgstr ""
+"yai：在最新流水线中未找到 AppImage CI 任务："
+
+
+msgid ""
+"yai: data/ URL is not accessible, skipping: "
+msgstr ""
+"yai：data/ 中的 URL 无法访问，已跳过："
+
+
+msgid ""
+"yai: download failed for job {job}: {error}\n"
+msgstr ""
+"yai：任务 {job} 下载失败：{error}\n"
+
+
+msgid ""
+"yai: downloaded artifact from job {job} ({size} bytes)\n"
+msgstr ""
+"yai：已从任务 {job} 下载产物（{size} 字节）\n"
+
+
+msgid ""
+"yai: downloaded artifact is missing or empty: "
+msgstr ""
+"yai：下载的产物缺失或为空："
+
+
+msgid ""
+"yai: downloading artifact from job {job}: {url}\n"
+msgstr ""
+"yai：正在从任务 {job} 下载产物：{url}\n"
+
+
+msgid ""
+"yai: extracted AppImage: "
+msgstr ""
+"yai：已提取 AppImage："
+
+
+msgid ""
+"yai: failed to clean up temp file {path}: {error}\n"
+msgstr ""
+"yai：清理临时文件失败 {path}：{error}\n"
+
+
+msgid ""
+"yai: failed to create temp directory: {path} ({error})\n"
+msgstr ""
+"yai：创建临时目录失败：{path}（{error}）\n"
+
+
+msgid ""
+"yai: failed to fetch jobs from "
+msgstr ""
+"yai：获取任务列表失败："
+
+
+msgid ""
+"yai: failed to fetch pipelines from "
+msgstr ""
+"yai：获取流水线列表失败："
+
+
+msgid ""
+"yai: failed to remove orphan file {path}: {error}\n"
+msgstr ""
+"yai：删除残留文件失败 {path}：{error}\n"
+
+
+msgid ""
+"yai: fetching AppImageHub catalog for "
+msgstr ""
+"yai：正在获取 AppImageHub 目录："
+
+
+msgid ""
+"yai: found AppImage CI job: {name} (id={id})\n"
+msgstr ""
+"yai：找到 AppImage CI 任务：{name}（id={id}）\n"
+
+
+msgid ""
+"yai: found GitLab project in data/: "
+msgstr ""
+"yai：在 data/ 中找到 GitLab 项目："
+
+
+msgid ""
+"yai: found direct download URL in apps/ for {name}\n"
+msgstr ""
+"yai：在 apps/ 中找到 {name} 的直接下载 URL\n"
+
+
+msgid ""
+"yai: found direct download URL in data/ for {name}\n"
+msgstr ""
+"yai：在 data/ 中找到 {name} 的直接下载 URL\n"
+
+
+msgid ""
+"yai: found high-confidence AppImage on GitLab: "
+msgstr ""
+"yai：在 GitLab 上找到高可信度 AppImage："
+
+
+msgid ""
+"yai: found working download URL from CI artifact resolution\n"
+msgstr ""
+"yai：通过 CI 产物解析找到可用下载 URL\n"
+
+
+msgid ""
+"yai: found working download URL from CI artifact resolution (local file)\n"
+msgstr ""
+"yai：通过 CI 产物解析找到可用下载 URL（本地文件）\n"
+
+
+msgid ""
+"yai: integrating {count} AppImage GitHub app entries into index...\n"
+msgstr ""
+"yai：正在将 {count} 个 AppImage GitHub 应用条目合并进索引...\n"
+
+
+msgid ""
+"yai: jobs API returned empty response\n"
+msgstr ""
+"yai：jobs API 返回空响应\n"
+
+
+msgid ""
+"yai: latest successful pipeline: "
+msgstr ""
+"yai：最近一次成功的流水线："
+
+
+msgid ""
+"yai: local file does not exist: "
+msgstr ""
+"yai：本地文件不存在："
+
+
+msgid ""
+"yai: no AppImage found in GitLab releases\n"
+msgstr ""
+"yai：GitLab 发行版中未找到 AppImage\n"
+
+
+msgid ""
+"yai: no AppImage found in zip, returning zip path: "
+msgstr ""
+"yai：zip 中未找到 AppImage，返回 zip 路径："
+
+
+msgid ""
+"yai: no successful pipelines found\n"
+msgstr ""
+"yai：未找到成功的流水线\n"
+
+
+msgid ""
+"yai: operation interrupted by user\n"
+msgstr ""
+"yai：操作已被用户中断\n"
+
+
+msgid ""
+"yai: pipelines API returned empty response\n"
+msgstr ""
+"yai：pipelines API 返回空响应\n"
+
+
+msgid ""
+"yai: querying GitLab API: "
+msgstr ""
+"yai：正在查询 GitLab API："
+
+
+msgid ""
+"yai: repo resolve interrupted; {count} package(s) saved\n"
+msgstr ""
+"yai：repo resolve 已中断；已保存 {count} 个软件包\n"
+
+
+msgid ""
+"yai: resolved GitLab CI artifact: "
+msgstr ""
+"yai：已解析 GitLab CI 产物："
+
+
+msgid ""
+"yai: resolving GitLab CI artifact: job={job}, file={file}, project={project}\n"
+msgstr ""
+"yai：正在解析 GitLab CI 产物：任务={job}，文件={file}，项目={project}\n"
+
+
+msgid ""
+"yai: trying parallel fallbacks for unavailable package: "
+msgstr ""
+"yai：正在为不可用软件包尝试并行回退方案："
+
+
+msgid ""
+"yai: unzip failed for job {job}: {error}\n"
+msgstr ""
+"yai：任务 {job} 解压失败：{error}\n"
+
+
+msgid ""
+"yai: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n"
+msgstr ""
+"yai：update-desktop-database 执行失败（退出码 {code}）；桌面条目可能不会立即显示\n"
+
+
+msgid ""
+"yai: website search failed; trying parallel fallbacks for "
+msgstr ""
+"yai：网站搜索失败；正在尝试并行回退方案："
+
+
+msgid ""
+"yai: {failed} of {total} batch task(s) did not complete\n"
+msgstr ""
+"yai：{total} 个批处理任务中有 {failed} 个未完成\n"
+

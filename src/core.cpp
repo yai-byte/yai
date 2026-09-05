@@ -435,8 +435,9 @@ void write_text_file_atomic(const fs::path& path, const std::string& content) {
         std::error_code remove_ec;
         fs::remove(temp_path, remove_ec);
         if (remove_ec) {
-            std::cerr << "yai: failed to clean up temp file " << temp_path
-                      << ": " << remove_ec.message() << "\n";
+            std::cerr << tr_format("yai: failed to clean up temp file {path}: {error}\n",
+                                   {{"{path}", temp_path.string()},
+                                    {"{error}", remove_ec.message()}});
         }
         throw std::runtime_error(tr("failed to move file into place: ") + ec.message());
     }
@@ -667,8 +668,9 @@ void cleanup_orphan_downloads() {
             std::error_code ec;
             fs::remove(entry.path(), ec);
             if (ec) {
-                std::cerr << "yai: failed to remove orphan file " << entry.path()
-                          << ": " << ec.message() << "\n";
+                std::cerr << tr_format("yai: failed to remove orphan file {path}: {error}\n",
+                                       {{"{path}", entry.path().string()},
+                                        {"{error}", ec.message()}});
             }
         }
     } catch (const std::exception&) {

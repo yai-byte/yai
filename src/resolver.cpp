@@ -337,6 +337,153 @@ void throw_unavailable_repo_source(const RepoPackage& package) {
 
 ResolvedSource repo_github_release_source(const InstallOptions& options, const RepoPackage& package);
 
+// Single source of truth for the AppImageHub data/ fallback used by both the
+// website-page resolver and the "unavailable" package path. When `rich` is
+// true (website-page path) we also attempt GitLab CI artifact resolution for
+// CI URLs and honor the data/ `gitlab_project` entry; when false ("unavailable"
+// path) a directly-inaccessible data/ URL is a hard error and gitlab_project is
+// ignored, preserving each caller's historical behavior.
+ResolvedSource resolve_appimage_data_fallback(const InstallOptions& options,
+                                               const RepoPackage& package,
+                                               const std::string& arch,
+                                               bool rich) {
+    std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
+    auto data_entry = lookup_appimage_data_entry(package.name);
+    if (!data_entry.has_value()) {
+        throw std::runtime_error(tr("no data/ entry for ") + package.name);
+    }
+
+    if (!data_entry->direct_url.empty()) {
+        if (!is_url_accessible(data_entry->direct_url)) {
+            std::cerr << tr("yai: data/ URL is not accessible, skipping: ")
+                      << data_entry->direct_url << "\n";
+            if (rich) {
+                // Try to resolve GitLab CI artifact if it's a CI URL
+                if (looks_like_gitlab_url(data_entry->direct_url) &&
+                    data_entry->direct_url.find("/-/jobs/") != std::string::npos) {
+                    std::cerr << tr("yai: attempting GitLab CI artifact resolution...\n");
+                    std::string resolved_url = resolve_gitlab_ci_artifact(data_entry->direct_url);
+                    if (!resolved_url.empty()) {
+                        std::cerr << tr("yai: resolved GitLab CI artifact: ") << resolved_url << "\n";
+
+                        // Check if the resolved URL is a local file path
+                        bool is_local_path = (resolved_url.find("http://") != 0 &&
+                                              resolved_url.find("https://") != 0);
+
+                        if (is_local_path) {
+                            // It's a local file path (e.g., extracted from a zip)
+                            // Check if the file exists directly (not using is_url_accessible which expects URLs)
+                            if (fs::exists(resolved_url)) {
+                                std::cerr << tr("yai: found working download URL from CI artifact resolution (local file)\n");
+                                ResolvedSource source;
+                                source.source_kind = "local_path";
+                                source.id = repo_source_id(options, package);
+                                source.name = repo_source_name(options, package);
+                                source.version = basename_from_url(resolved_url);
+                                source.source_url = resolved_url;
+                                source.download_url = resolved_url;
+                                return with_install_arch(source, options);
+                            } else {
+                                std::cerr << tr("yai: local file does not exist: ") << resolved_url << "\n";
+                            }
+                        } else {
+                            // It's a URL
+                            if (is_url_accessible(resolved_url)) {
+                                std::cerr << tr("yai: found working download URL from CI artifact resolution\n");
+                                data_entry->direct_url = resolved_url;
+                            }
+                        }
+                    }
+                }
+                if (!is_url_accessible(data_entry->direct_url)) {
+                    // Still not accessible, fall through to try other resolution methods
+                } else {
+                    std::cerr << tr("yai: found working download URL from CI artifact resolution\n");
+                    return make_repo_website_source(options, package, data_entry->direct_url);
+                }
+            } else {
+                throw std::runtime_error(tr("data/ URL not accessible for ") + package.name);
+            }
+        } else {
+            if (rich) {
+                std::cerr << tr_format("yai: found direct download URL in data/ for {name}\n",
+                                       {{"{name}", package.name}});
+                return make_repo_website_source(options, package, data_entry->direct_url);
+            }
+            std::cerr << tr_format("yai: found direct download URL in data/ for {name}\n",
+                                   {{"{name}", package.name}});
+            ResolvedSource source;
+            source.source_kind = "repo_github_release";
+            source.id = repo_source_id(options, package);
+            source.name = repo_source_name(options, package);
+            source.version = basename_from_url(data_entry->direct_url);
+            source.source_url = data_entry->direct_url;
+            source.download_url = data_entry->direct_url;
+            return with_install_arch(source, options);
+        }
+    }
+
+    if (!data_entry->github_repo.empty()) {
+        std::cerr << tr("yai: found GitHub repo in data/: ")
+                  << data_entry->github_repo << "\n";
+        RepoPackage github_package = package;
+        const std::size_t slash = data_entry->github_repo.find('/');
+        if (slash != std::string::npos) {
+            github_package.source_owner = data_entry->github_repo.substr(0, slash);
+            github_package.source_repo = data_entry->github_repo.substr(slash + 1);
+            github_package.source_type = "github_release";
+            github_package.asset_pattern = ".*\\.AppImage$";
+            return repo_github_release_source(options, github_package);
+        }
+    }
+
+    if (rich && !data_entry->gitlab_project.empty()) {
+        std::cerr << tr("yai: found GitLab project in data/: ")
+                  << data_entry->gitlab_project << "\n";
+        // Extract the GitLab host and project path
+        std::string gitlab_base = "https://gitlab.com";
+        std::string project_path = data_entry->gitlab_project;
+        const std::string& pp = data_entry->gitlab_project;
+        std::size_t first_slash = pp.find('/');
+        if (first_slash != std::string::npos && first_slash > 0 && pp.find('.') != std::string::npos && first_slash < pp.find('/')) {
+            // Looks like host/group/project (e.g. gitlab.gnome.org/GNOME/inkscape)
+            gitlab_base = "https://" + pp.substr(0, first_slash);
+            project_path = pp.substr(first_slash + 1);
+        } else if (pp.find('/') != std::string::npos && pp.find('.') == std::string::npos) {
+            // Standard group/project path
+            project_path = pp;
+        }
+
+        // Use GitLab API to find AppImage downloads (reliable, unlike HTML scraping)
+        std::string download_url = resolve_gitlab_appimage_download(gitlab_base, project_path, arch);
+
+        // If GitLab API didn't find AppImages, try crawling the releases page as fallback
+        if (download_url.empty()) {
+            std::cerr << tr("yai: GitLab API found no AppImages, falling back to HTML crawl\n");
+            const std::string releases_url = gitlab_base + "/" + project_path + "/-/releases";
+            RepoPackage gitlab_package = package;
+            gitlab_package.source_url = releases_url;
+            gitlab_package.homepage = releases_url;
+            gitlab_package.source_type = "website_page";
+            download_url = resolve_website_appimage_download(gitlab_package, arch);
+        }
+
+        if (download_url.empty()) {
+            throw std::runtime_error(tr("no AppImage found on GitLab for ") + package.name);
+        }
+        ResolvedSource source;
+        source.source_kind = "repo_website_page";
+        source.id = repo_source_id(options, package);
+        source.name = repo_source_name(options, package);
+        source.version = basename_from_url(download_url);
+        source.source_url = gitlab_base + "/" + project_path + "/-/releases";
+        source.download_url = download_url;
+        return with_install_arch(source, options);
+    }
+
+    throw std::runtime_error(tr("data/ entry has no usable source for ") + package.name);
+}
+
 ResolvedSource repo_website_page_source(const InstallOptions& options, const RepoPackage& package) {
     const std::string arch = install_arch_for_options(options);
 
@@ -387,125 +534,7 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
         };
 
         auto make_data_fallback = [&]() -> ResolvedSource {
-            std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
-            auto data_entry = lookup_appimage_data_entry(package.name);
-            if (!data_entry.has_value()) {
-                throw std::runtime_error(tr("no data/ entry for ") + package.name);
-            }
-
-            if (!data_entry->direct_url.empty()) {
-                if (!is_url_accessible(data_entry->direct_url)) {
-                    std::cerr << tr("yai: data/ URL is not accessible, skipping: ")
-                              << data_entry->direct_url << "\n";
-                    // Try to resolve GitLab CI artifact if it's a CI URL
-                    if (looks_like_gitlab_url(data_entry->direct_url) &&
-                        data_entry->direct_url.find("/-/jobs/") != std::string::npos) {
-                        std::cerr << tr("yai: attempting GitLab CI artifact resolution...\n");
-                        std::string resolved_url = resolve_gitlab_ci_artifact(data_entry->direct_url);
-                        if (!resolved_url.empty()) {
-                            std::cerr << tr("yai: resolved GitLab CI artifact: ") << resolved_url << "\n";
-
-                            // Check if the resolved URL is a local file path
-                            bool is_local_path = (resolved_url.find("http://") != 0 &&
-                                                  resolved_url.find("https://") != 0);
-
-                            if (is_local_path) {
-                                // It's a local file path (e.g., extracted from a zip)
-                                // Check if the file exists directly (not using is_url_accessible which expects URLs)
-                                if (fs::exists(resolved_url)) {
-                                    std::cerr << tr("yai: found working download URL from CI artifact resolution (local file)\n");
-                                    ResolvedSource source;
-                                    source.source_kind = "local_path";
-                                    source.id = repo_source_id(options, package);
-                                    source.name = repo_source_name(options, package);
-                                    source.version = basename_from_url(resolved_url);
-                                    source.source_url = resolved_url;
-                                    source.download_url = resolved_url;
-                                    return with_install_arch(source, options);
-                                } else {
-                                    std::cerr << tr("yai: local file does not exist: ") << resolved_url << "\n";
-                                }
-                            } else {
-                                // It's a URL
-                                if (is_url_accessible(resolved_url)) {
-                                    std::cerr << tr("yai: found working download URL from CI artifact resolution\n");
-                                    data_entry->direct_url = resolved_url;
-                                }
-                            }
-                        }
-                    }
-                    if (!is_url_accessible(data_entry->direct_url)) {
-                        // Still not accessible, fall through to try other resolution methods
-                    } else {
-                        std::cerr << tr("yai: found working download URL from CI artifact resolution\n");
-                        return make_repo_website_source(options, package, data_entry->direct_url);
-                    }
-                } else {
-                    std::cerr << tr("yai: found direct download URL in data/")
-                              << " for " << package.name << "\n";
-                    return make_repo_website_source(options, package, data_entry->direct_url);
-                }
-            }
-
-            if (!data_entry->github_repo.empty()) {
-                std::cerr << tr("yai: found GitHub repo in data/: ")
-                          << data_entry->github_repo << "\n";
-                RepoPackage github_package = package;
-                const std::size_t slash = data_entry->github_repo.find('/');
-                if (slash != std::string::npos) {
-                    github_package.source_owner = data_entry->github_repo.substr(0, slash);
-                    github_package.source_repo = data_entry->github_repo.substr(slash + 1);
-                    github_package.source_type = "github_release";
-                    github_package.asset_pattern = ".*\\.AppImage$";
-                    return repo_github_release_source(options, github_package);
-                }
-            }
-
-            if (!data_entry->gitlab_project.empty()) {
-                std::cerr << tr("yai: found GitLab project in data/: ")
-                          << data_entry->gitlab_project << "\n";
-                // Extract the GitLab host and project path
-                std::string gitlab_base = "https://gitlab.com";
-                std::string project_path = data_entry->gitlab_project;
-                const std::string& pp = data_entry->gitlab_project;
-                std::size_t first_slash = pp.find('/');
-                if (first_slash != std::string::npos && first_slash > 0 && pp.find('.') != std::string::npos && first_slash < pp.find('/')) {
-                    // Looks like host/group/project (e.g. gitlab.gnome.org/GNOME/inkscape)
-                    gitlab_base = "https://" + pp.substr(0, first_slash);
-                    project_path = pp.substr(first_slash + 1);
-                } else if (pp.find('/') != std::string::npos && pp.find('.') == std::string::npos) {
-                    // Standard group/project path
-                    project_path = pp;
-                }
-
-                // Use GitLab API to find AppImage downloads (reliable, unlike HTML scraping)
-                std::string download_url = resolve_gitlab_appimage_download(gitlab_base, project_path, arch);
-
-                // If GitLab API didn't find AppImages, try crawling the releases page as fallback
-                if (download_url.empty()) {
-                    std::cerr << tr("yai: GitLab API found no AppImages, falling back to HTML crawl\n");
-                    const std::string releases_url = gitlab_base + "/" + project_path + "/-/releases";
-                    RepoPackage gitlab_package = package;
-                    gitlab_package.source_url = releases_url;
-                    gitlab_package.homepage = releases_url;
-                    gitlab_package.source_type = "website_page";
-                    download_url = resolve_website_appimage_download(gitlab_package, arch);
-                }
-
-                if (download_url.empty()) {
-                    throw std::runtime_error(tr("no AppImage found on GitLab for ") + package.name);
-                }
-                ResolvedSource source;
-                source.source_kind = "repo_website_page";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(download_url);
-                source.source_url = gitlab_base + "/" + project_path + "/-/releases";
-                source.download_url = download_url;
-                return with_install_arch(source, options);
-            }
-
-            throw std::runtime_error(tr("data/ entry has no usable source for ") + package.name);
+            return resolve_appimage_data_fallback(options, package, arch, /*rich=*/true);
         };
 
         auto make_apps_fallback = [&]() -> ResolvedSource {
@@ -530,8 +559,8 @@ ResolvedSource repo_website_page_source(const InstallOptions& options, const Rep
             }
 
             if (!apps_entry->direct_url.empty()) {
-                std::cerr << tr("yai: found direct download URL in apps/")
-                          << " for " << package.name << "\n";
+                std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
+                                       {{"{name}", package.name}});
                 return make_repo_website_source(options, package, apps_entry->direct_url);
             }
 
@@ -627,45 +656,7 @@ ResolvedSource resolve_repo_package_install_source_impl(
                   << package.name << "\n";
 
         auto make_data_fallback = [&]() -> ResolvedSource {
-            std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
-            auto data_entry = lookup_appimage_data_entry(package.name);
-            if (!data_entry.has_value()) {
-                throw std::runtime_error(tr("no data/ entry for ") + package.name);
-            }
-
-            if (!data_entry->direct_url.empty()) {
-                if (!is_url_accessible(data_entry->direct_url)) {
-                    std::cerr << tr("yai: data/ URL is not accessible, skipping: ")
-                              << data_entry->direct_url << "\n";
-                    throw std::runtime_error(tr("data/ URL not accessible for ") + package.name);
-                }
-                std::cerr << tr("yai: found direct download URL in data/")
-                          << " for " << package.name << "\n";
-                ResolvedSource source;
-                source.source_kind = "repo_github_release";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(data_entry->direct_url);
-                source.source_url = data_entry->direct_url;
-                source.download_url = data_entry->direct_url;
-                return with_install_arch(source, options);
-            }
-
-            if (!data_entry->github_repo.empty()) {
-                std::cerr << tr("yai: found GitHub repo in data/: ")
-                          << data_entry->github_repo << "\n";
-                RepoPackage github_package = package;
-                const std::size_t slash = data_entry->github_repo.find('/');
-                if (slash != std::string::npos) {
-                    github_package.source_owner = data_entry->github_repo.substr(0, slash);
-                    github_package.source_repo = data_entry->github_repo.substr(slash + 1);
-                    github_package.source_type = "github_release";
-                    github_package.asset_pattern = ".*\\.AppImage$";
-                    return repo_github_release_source(options, github_package);
-                }
-            }
-
-            throw std::runtime_error(tr("data/ entry has no usable source for ") + package.name);
+            return resolve_appimage_data_fallback(options, package, arch, /*rich=*/false);
         };
 
         auto make_apps_fallback = [&]() -> ResolvedSource {
@@ -690,8 +681,8 @@ ResolvedSource resolve_repo_package_install_source_impl(
             }
 
             if (!apps_entry->direct_url.empty()) {
-                std::cerr << tr("yai: found direct download URL in apps/")
-                          << " for " << package.name << "\n";
+                std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
+                                       {{"{name}", package.name}});
                 ResolvedSource source;
                 source.source_kind = "repo_github_release";
                 source.id = repo_source_id(options, package);
@@ -779,8 +770,8 @@ ResolvedSource resolve_repo_package_install_source_impl(
             }
 
             if (!data_entry->direct_url.empty()) {
-                std::cerr << tr("yai: found direct download URL in data/")
-                          << " for " << package.name << "\n";
+                std::cerr << tr_format("yai: found direct download URL in data/ for {name}\n",
+                                       {{"{name}", package.name}});
                 ResolvedSource source;
                 source.source_kind = "repo_github_release";
                 source.id = repo_source_id(options, package);
@@ -830,8 +821,8 @@ ResolvedSource resolve_repo_package_install_source_impl(
             }
 
             if (!apps_entry->direct_url.empty()) {
-                std::cerr << tr("yai: found direct download URL in apps/")
-                          << " for " << package.name << "\n";
+                std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
+                                       {{"{name}", package.name}});
                 ResolvedSource source;
                 source.source_kind = "repo_github_release";
                 source.id = repo_source_id(options, package);

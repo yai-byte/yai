@@ -27,29 +27,30 @@ std::string resolve_gitlab_appimage_download(
     std::string encoded_path = url_encode(project_path);
     std::string api_url = gitlab_base + "/api/v4/projects/" + encoded_path + "/releases?per_page=10";
 
-    std::cerr << "yai: querying GitLab API: " << api_url << "\n";
+    std::cerr << tr("yai: querying GitLab API: ") << api_url << "\n";
 
     std::string api_response;
     try {
         api_response = fetch_text(api_url, 15000);
     } catch (const std::exception& e) {
-        std::cerr << "yai: GitLab API query failed: " << e.what() << "\n";
+        std::cerr << tr("yai: GitLab API query failed: ") << e.what() << "\n";
         return "";
     }
 
     if (api_response.empty()) {
-        std::cerr << "yai: GitLab API returned empty response\n";
+        std::cerr << tr("yai: GitLab API returned empty response\n");
         return "";
     }
 
     // Parse the JSON array of releases
     auto releases = json_top_level_objects(api_response);
     if (releases.empty()) {
-        std::cerr << "yai: GitLab API returned no releases\n";
+        std::cerr << tr("yai: GitLab API returned no releases\n");
         return "";
     }
 
-    std::cerr << "yai: GitLab API returned " << releases.size() << " releases\n";
+    std::cerr << tr_format("yai: GitLab API returned {count} releases\n",
+                           {{"{count}", std::to_string(releases.size())}});
 
     std::string best_url;
     int best_score = -1;
@@ -57,8 +58,8 @@ std::string resolve_gitlab_appimage_download(
     for (const auto& release_json : releases) {
         std::string release_name = json_find_string(release_json, "name").value_or("");
         std::string tag_name = json_find_string(release_json, "tag_name").value_or("");
-        std::cerr << "yai: checking GitLab release: " << release_name
-                  << " (tag: " << tag_name << ")\n";
+        std::cerr << tr_format("yai: checking GitLab release: {name} (tag: {tag})\n",
+                               {{"{name}", release_name}, {"{tag}", tag_name}});
 
         // Collect candidate URLs from the release:
         // 1. assets.links[].url / direct_asset_url
@@ -79,8 +80,11 @@ std::string resolve_gitlab_appimage_download(
                 // Check if this looks like an AppImage download
                 if (is_appimage_download_url(candidate_url)) {
                     int score = appimage_asset_score(basename_from_url(candidate_url), effective_arch);
-                    std::cerr << "yai:   found AppImage link: " << candidate_url
-                              << " (score=" << score << ", name=" << name << ")\n";
+                    std::cerr << tr_format(
+                        "yai:   found AppImage link: {url} (score={score}, name={name})\n",
+                        {{"{url}", candidate_url},
+                         {"{score}", std::to_string(score)},
+                         {"{name}", name}});
                     if (score > best_score) {
                         best_score = score;
                         best_url = candidate_url;
@@ -110,8 +114,9 @@ std::string resolve_gitlab_appimage_download(
                 std::string url = description.substr(paren_start, paren_end - paren_start);
                 if (is_appimage_download_url(url)) {
                     int score = appimage_asset_score(basename_from_url(url), effective_arch);
-                    std::cerr << "yai:   found AppImage in description: " << url
-                              << " (score=" << score << ")\n";
+                    std::cerr << tr_format(
+                        "yai:   found AppImage in description: {url} (score={score})\n",
+                        {{"{url}", url}, {"{score}", std::to_string(score)}});
                     if (score > best_score) {
                         best_score = score;
                         best_url = url;
@@ -123,15 +128,16 @@ std::string resolve_gitlab_appimage_download(
 
         // If we found a good candidate, we can stop checking older releases
         if (best_score >= 100) {
-            std::cerr << "yai: found high-confidence AppImage on GitLab: " << best_url << "\n";
+            std::cerr << tr("yai: found high-confidence AppImage on GitLab: ") << best_url << "\n";
             break;
         }
     }
 
     if (!best_url.empty()) {
-        std::cerr << "yai: GitLab resolved AppImage: " << best_url << " (score=" << best_score << ")\n";
+        std::cerr << tr_format("yai: GitLab resolved AppImage: {url} (score={score})\n",
+                               {{"{url}", best_url}, {"{score}", std::to_string(best_score)}});
     } else {
-        std::cerr << "yai: no AppImage found in GitLab releases\n";
+        std::cerr << tr("yai: no AppImage found in GitLab releases\n");
     }
 
     return best_url;
@@ -221,7 +227,7 @@ std::string fetch_gitlab_default_branch(const std::string& base, const std::stri
 
     std::string default_branch = json_find_string(project_json, "default_branch").value_or("main");
     if (default_branch.empty()) default_branch = "main";
-    std::cerr << "yai: GitLab project default branch: " << default_branch << "\n";
+    std::cerr << tr("yai: GitLab project default branch: ") << default_branch << "\n";
     return default_branch;
 }
 
@@ -235,17 +241,17 @@ std::string fetch_gitlab_latest_pipeline_id(
     try {
         pipelines_json = fetch_text(pipelines_api, 10000);
     } catch (...) {
-        std::cerr << "yai: failed to fetch pipelines from " << pipelines_api << "\n";
+        std::cerr << tr("yai: failed to fetch pipelines from ") << pipelines_api << "\n";
         return "";
     }
     if (pipelines_json.empty()) {
-        std::cerr << "yai: pipelines API returned empty response\n";
+        std::cerr << tr("yai: pipelines API returned empty response\n");
         return "";
     }
 
     const auto pipelines = json_top_level_objects(pipelines_json);
     if (pipelines.empty()) {
-        std::cerr << "yai: no successful pipelines found\n";
+        std::cerr << tr("yai: no successful pipelines found\n");
         return "";
     }
 
@@ -254,7 +260,7 @@ std::string fetch_gitlab_latest_pipeline_id(
         // GitLab API returns IDs as numbers; json_find_string only accepts quoted strings.
         pipeline_id = json_find_number_as_string(pipelines[0], "id").value_or("");
     }
-    std::cerr << "yai: latest successful pipeline: " << pipeline_id << "\n";
+    std::cerr << tr("yai: latest successful pipeline: ") << pipeline_id << "\n";
     return pipeline_id;
 }
 
@@ -274,11 +280,11 @@ std::vector<GitLabJob> fetch_gitlab_appimage_jobs(
     try {
         jobs_json = fetch_text(jobs_api, 10000);
     } catch (...) {
-        std::cerr << "yai: failed to fetch jobs from " << jobs_api << "\n";
+        std::cerr << tr("yai: failed to fetch jobs from ") << jobs_api << "\n";
         return result;
     }
     if (jobs_json.empty()) {
-        std::cerr << "yai: jobs API returned empty response\n";
+        std::cerr << tr("yai: jobs API returned empty response\n");
         return result;
     }
 
@@ -299,7 +305,8 @@ std::vector<GitLabJob> fetch_gitlab_appimage_jobs(
         if (job_id.empty()) {
             continue;
         }
-        std::cerr << "yai: found AppImage CI job: " << job_name << " (id=" << job_id << ")\n";
+        std::cerr << tr_format("yai: found AppImage CI job: {name} (id={id})\n",
+                               {{"{name}", job_name}, {"{id}", job_id}});
         result.push_back(GitLabJob{job_id, job_name});
     }
     return result;
@@ -342,7 +349,8 @@ std::string download_and_extract_gitlab_artifact(
     const std::string& base, const std::string& project_path, const GitLabJob& job) {
     const std::string download_url = base + "/" + project_path +
         "/-/jobs/" + job.id + "/artifacts/download?job=" + url_encode(job.name);
-    std::cerr << "yai: downloading artifact from job " << job.name << ": " << download_url << "\n";
+    std::cerr << tr_format("yai: downloading artifact from job {job}: {url}\n",
+                           {{"{job}", job.name}, {"{url}", download_url}});
 
     const fs::path temp_dir = fs::path("/tmp") / ("yai_gitlab_artifact_" + job.id);
     const fs::path artifact_path = temp_dir / "artifact.zip";
@@ -350,15 +358,16 @@ std::string download_and_extract_gitlab_artifact(
     std::error_code ec;
     fs::create_directories(temp_dir, ec);
     if (ec) {
-        std::cerr << "yai: failed to create temp directory: " << temp_dir
-                  << " (" << ec.message() << ")\n";
+        std::cerr << tr_format("yai: failed to create temp directory: {path} ({error})\n",
+                               {{"{path}", temp_dir.string()}, {"{error}", ec.message()}});
         return "";
     }
 
     try {
         download_file(download_url, artifact_path, /*downloader=*/"");
     } catch (const std::exception& ex) {
-        std::cerr << "yai: download failed for job " << job.name << ": " << ex.what() << "\n";
+        std::cerr << tr_format("yai: download failed for job {job}: {error}\n",
+                               {{"{job}", job.name}, {"{error}", ex.what()}});
         return "";
     }
 
@@ -366,15 +375,16 @@ std::string download_and_extract_gitlab_artifact(
     std::error_code size_ec;
     const auto file_size = fs::file_size(artifact_path, size_ec);
     if (size_ec || file_size == 0) {
-        std::cerr << "yai: downloaded artifact is missing or empty: " << artifact_path << "\n";
+        std::cerr << tr("yai: downloaded artifact is missing or empty: ") << artifact_path << "\n";
         return "";
     }
-    std::cerr << "yai: downloaded artifact from job " << job.name
-              << " (" << file_size << " bytes)\n";
+    std::cerr << tr_format("yai: downloaded artifact from job {job} ({size} bytes)\n",
+                           {{"{job}", job.name}, {"{size}", std::to_string(file_size)}});
 
     // If the artifact isn't a ZIP, it's likely a direct AppImage.
     if (!file_has_zip_magic(artifact_path)) {
-        std::cerr << "yai: artifact is not a zip, returning as direct download: " << artifact_path << "\n";
+        std::cerr << tr("yai: artifact is not a zip, returning as direct download: ")
+                  << artifact_path << "\n";
         return artifact_path.string();
     }
 
@@ -382,19 +392,21 @@ std::string download_and_extract_gitlab_artifact(
     const ProcessResult unzip_result = run_process_capture(
         {"unzip", "-o", artifact_path.string(), "-d", temp_dir.string()});
     if (unzip_result.exit_code != 0) {
-        std::cerr << "yai: unzip failed for job " << job.name << ": " << unzip_result.output << "\n";
+        std::cerr << tr_format("yai: unzip failed for job {job}: {error}\n",
+                               {{"{job}", job.name}, {"{error}", unzip_result.output}});
         return "";
     }
 
     // Locate the extracted AppImage.
     const fs::path appimage_path = find_appimage_under(temp_dir);
     if (!appimage_path.empty()) {
-        std::cerr << "yai: extracted AppImage: " << appimage_path << "\n";
+        std::cerr << tr("yai: extracted AppImage: ") << appimage_path << "\n";
         return appimage_path.string();
     }
 
     // No AppImage inside the zip; return the zip path as a fallback.
-    std::cerr << "yai: no AppImage found in zip, returning zip path: " << artifact_path << "\n";
+    std::cerr << tr("yai: no AppImage found in zip, returning zip path: ")
+              << artifact_path << "\n";
     return artifact_path.string();
 }
 
@@ -411,8 +423,9 @@ std::string resolve_gitlab_ci_artifact(const std::string& ci_url) {
     }
     const GitLabCiUrl& url = *parsed;
 
-    std::cerr << "yai: resolving GitLab CI artifact: job=" << url.job_id
-              << ", file=" << url.filename << ", project=" << url.project_path << "\n";
+    std::cerr << tr_format(
+        "yai: resolving GitLab CI artifact: job={job}, file={file}, project={project}\n",
+        {{"{job}", url.job_id}, {"{file}", url.filename}, {"{project}", url.project_path}});
 
     const std::string encoded_path = url_encode(url.project_path);
 
@@ -428,7 +441,7 @@ std::string resolve_gitlab_ci_artifact(const std::string& ci_url) {
 
     const std::vector<GitLabJob> jobs = fetch_gitlab_appimage_jobs(url.base, encoded_path, pipeline_id);
     if (jobs.empty()) {
-        std::cerr << "yai: could not find AppImage CI job in latest pipeline for "
+        std::cerr << tr("yai: could not find AppImage CI job in latest pipeline for ")
                   << url.project_path << "\n";
         return "";
     }
@@ -440,7 +453,7 @@ std::string resolve_gitlab_ci_artifact(const std::string& ci_url) {
         }
     }
 
-    std::cerr << "yai: could not download CI artifact from any AppImage job for "
+    std::cerr << tr("yai: could not download CI artifact from any AppImage job for ")
               << url.project_path << "\n";
     return "";
 }

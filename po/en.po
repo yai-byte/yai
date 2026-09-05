@@ -932,21 +932,6 @@ msgstr ""
 ", or all"
 
 msgid ""
-"skip "
-msgstr ""
-"skip "
-
-msgid ""
-"ok "
-msgstr ""
-"ok "
-
-msgid ""
-"fail "
-msgstr ""
-"fail "
-
-msgid ""
 "resolved: {resolved} skipped: {skipped} failed: {failed}\n"
 msgstr ""
 "resolved: {resolved} skipped: {skipped} failed: {failed}\n"
@@ -1602,16 +1587,6 @@ msgstr ""
 "Choose a proxy provider:\n"
 
 msgid ""
-". custom - enter an Xget domain or template\n"
-msgstr ""
-". custom - enter an Xget domain or template\n"
-
-msgid ""
-"Choice [1-"
-msgstr ""
-"Choice [1-"
-
-msgid ""
 "Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
 msgstr ""
 "Enter an Xget domain or mirror template (supports {raw_url}, {raw_url_noscheme}, {url}, {owner}, {repo}, {tag}, {asset}): "
@@ -1652,11 +1627,6 @@ msgstr ""
 "' — GitHub API error: "
 
 msgid ""
-"' — no download link found. data/ and apps/ fallbacks also failed."
-msgstr ""
-"' — no download link found. data/ and apps/ fallbacks also failed."
-
-msgid ""
 "(https://github.com/settings/tokens) to increase the limit from 60 to 5000 requests/hour, "
 msgstr ""
 "(https://github.com/settings/tokens) to increase the limit from 60 to 5000 requests/hour, "
@@ -1675,11 +1645,6 @@ msgid ""
 ". The repository may be private, restricted, or blocked. "
 msgstr ""
 ". The repository may be private, restricted, or blocked. "
-
-msgid ""
-". Trying AppImageHub catalog fallback...\n"
-msgstr ""
-". Trying AppImageHub catalog fallback...\n"
 
 msgid ""
 ". Your YAI_GITHUB_TOKEN may be invalid or expired. "
@@ -1777,11 +1742,6 @@ msgstr ""
 "multi-match pattern requires list resolver"
 
 msgid ""
-"no installable AppImage source found for '"
-msgstr ""
-"no installable AppImage source found for '"
-
-msgid ""
 "or wait for the rate limit window to reset."
 msgstr ""
 "or wait for the rate limit window to reset."
@@ -1817,16 +1777,6 @@ msgstr ""
 "yai: found GitHub repo on AppImageHub: "
 
 msgid ""
-"yai: found direct download URL in apps/"
-msgstr ""
-"yai: found direct download URL in apps/"
-
-msgid ""
-"yai: found direct download URL in data/"
-msgstr ""
-"yai: found direct download URL in data/"
-
-msgid ""
 "yai: found direct download URL on AppImageHub\n"
 msgstr ""
 "yai: found direct download URL on AppImageHub\n"
@@ -1850,11 +1800,6 @@ msgid ""
 "yai: warning: failed to fetch AppImage GitHub apps/ list: "
 msgstr ""
 "yai: warning: failed to fetch AppImage GitHub apps/ list: "
-
-msgid ""
-"yai: website search failed; fetching AppImageHub catalog page for "
-msgstr ""
-"yai: website search failed; fetching AppImageHub catalog page for "
 
 msgid ""
 "\nIndex strategy: yai update fetches a centrally resolved index.json by default.\n"
@@ -1985,3 +1930,460 @@ msgid ""
 "WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n"
 msgstr ""
 "WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n"
+
+
+msgid ""
+"  added {count} new packages from apps/\n"
+msgstr ""
+"  added {count} new packages from apps/\n"
+
+
+msgid ""
+"  enriched {count} packages with metadata (arch, version, description)\n"
+msgstr ""
+"  enriched {count} packages with metadata (arch, version, description)\n"
+
+
+msgid ""
+"  repo index ready ({count} packages total)\n"
+msgstr ""
+"  repo index ready ({count} packages total)\n"
+
+
+msgid ""
+"  {count} apps failed to parse\n"
+msgstr ""
+"  {count} apps failed to parse\n"
+
+
+msgid ""
+"  {number}. custom - enter an Xget domain or template\n"
+msgstr ""
+"  {number}. custom - enter an Xget domain or template\n"
+
+
+msgid ""
+"  {number}. {name} - {description}\n"
+msgstr ""
+"  {number}. {name} - {description}\n"
+
+
+msgid ""
+". Trying parallel fallbacks...\n"
+msgstr ""
+". Trying parallel fallbacks...\n"
+
+
+msgid ""
+"Choice [1-{max}]: "
+msgstr ""
+"Choice [1-{max}]: "
+
+
+msgid ""
+"Copied to: "
+msgstr ""
+"Copied to: "
+
+
+msgid ""
+"Copying local AppImage..."
+msgstr ""
+"Copying local AppImage..."
+
+
+msgid ""
+"Operation interrupted by user"
+msgstr ""
+"Operation interrupted by user"
+
+
+msgid ""
+"Source: {type} {owner}/{repo}\n"
+msgstr ""
+"Source: {type} {owner}/{repo}\n"
+
+
+msgid ""
+"WARN {id}: app directory has no metadata.json; it is a leftover, reclaim the space with: yai remove {id}\n"
+msgstr ""
+"WARN {id}: app directory has no metadata.json; it is a leftover, reclaim the space with: yai remove {id}\n"
+
+
+msgid ""
+"all fallback resolvers failed for: "
+msgstr ""
+"all fallback resolvers failed for: "
+
+
+msgid ""
+"batch interrupted"
+msgstr ""
+"batch interrupted"
+
+
+msgid ""
+"data/ URL not accessible for "
+msgstr ""
+"data/ URL not accessible for "
+
+
+msgid ""
+"fail {id} {arch}: {error}"
+msgstr ""
+"fail {id} {arch}: {error}"
+
+
+msgid ""
+"failed to move file into place: "
+msgstr ""
+"failed to move file into place: "
+
+
+msgid ""
+"no AppImage found on GitLab for "
+msgstr ""
+"no AppImage found on GitLab for "
+
+
+msgid ""
+"ok {id} {arch} {url}"
+msgstr ""
+"ok {id} {arch} {url}"
+
+
+msgid ""
+"package is not installed: {id} (app directory exists without metadata.json; reclaim the space with: yai remove {id})"
+msgstr ""
+"package is not installed: {id} (app directory exists without metadata.json; reclaim the space with: yai remove {id})"
+
+
+msgid ""
+"repo resolve interrupted"
+msgstr ""
+"repo resolve interrupted"
+
+
+msgid ""
+"skip {id} {arch}"
+msgstr ""
+"skip {id} {arch}"
+
+
+msgid ""
+"unknown error"
+msgstr ""
+"unknown error"
+
+
+msgid ""
+"unknown update option: "
+msgstr ""
+"unknown update option: "
+
+
+msgid ""
+"yai:   found AppImage in description: {url} (score={score})\n"
+msgstr ""
+"yai:   found AppImage in description: {url} (score={score})\n"
+
+
+msgid ""
+"yai:   found AppImage link: {url} (score={score}, name={name})\n"
+msgstr ""
+"yai:   found AppImage link: {url} (score={score}, name={name})\n"
+
+
+msgid ""
+"yai: GitLab API found no AppImages, falling back to HTML crawl\n"
+msgstr ""
+"yai: GitLab API found no AppImages, falling back to HTML crawl\n"
+
+
+msgid ""
+"yai: GitLab API query failed: "
+msgstr ""
+"yai: GitLab API query failed: "
+
+
+msgid ""
+"yai: GitLab API returned empty response\n"
+msgstr ""
+"yai: GitLab API returned empty response\n"
+
+
+msgid ""
+"yai: GitLab API returned no releases\n"
+msgstr ""
+"yai: GitLab API returned no releases\n"
+
+
+msgid ""
+"yai: GitLab API returned {count} releases\n"
+msgstr ""
+"yai: GitLab API returned {count} releases\n"
+
+
+msgid ""
+"yai: GitLab project default branch: "
+msgstr ""
+"yai: GitLab project default branch: "
+
+
+msgid ""
+"yai: GitLab resolved AppImage: {url} (score={score})\n"
+msgstr ""
+"yai: GitLab resolved AppImage: {url} (score={score})\n"
+
+
+msgid ""
+"yai: artifact is not a zip, returning as direct download: "
+msgstr ""
+"yai: artifact is not a zip, returning as direct download: "
+
+
+msgid ""
+"yai: attempting GitLab CI artifact resolution...\n"
+msgstr ""
+"yai: attempting GitLab CI artifact resolution...\n"
+
+
+msgid ""
+"yai: checking GitLab release: {name} (tag: {tag})\n"
+msgstr ""
+"yai: checking GitLab release: {name} (tag: {tag})\n"
+
+
+msgid ""
+"yai: could not download CI artifact from any AppImage job for "
+msgstr ""
+"yai: could not download CI artifact from any AppImage job for "
+
+
+msgid ""
+"yai: could not find AppImage CI job in latest pipeline for "
+msgstr ""
+"yai: could not find AppImage CI job in latest pipeline for "
+
+
+msgid ""
+"yai: data/ URL is not accessible, skipping: "
+msgstr ""
+"yai: data/ URL is not accessible, skipping: "
+
+
+msgid ""
+"yai: download failed for job {job}: {error}\n"
+msgstr ""
+"yai: download failed for job {job}: {error}\n"
+
+
+msgid ""
+"yai: downloaded artifact from job {job} ({size} bytes)\n"
+msgstr ""
+"yai: downloaded artifact from job {job} ({size} bytes)\n"
+
+
+msgid ""
+"yai: downloaded artifact is missing or empty: "
+msgstr ""
+"yai: downloaded artifact is missing or empty: "
+
+
+msgid ""
+"yai: downloading artifact from job {job}: {url}\n"
+msgstr ""
+"yai: downloading artifact from job {job}: {url}\n"
+
+
+msgid ""
+"yai: extracted AppImage: "
+msgstr ""
+"yai: extracted AppImage: "
+
+
+msgid ""
+"yai: failed to clean up temp file {path}: {error}\n"
+msgstr ""
+"yai: failed to clean up temp file {path}: {error}\n"
+
+
+msgid ""
+"yai: failed to create temp directory: {path} ({error})\n"
+msgstr ""
+"yai: failed to create temp directory: {path} ({error})\n"
+
+
+msgid ""
+"yai: failed to fetch jobs from "
+msgstr ""
+"yai: failed to fetch jobs from "
+
+
+msgid ""
+"yai: failed to fetch pipelines from "
+msgstr ""
+"yai: failed to fetch pipelines from "
+
+
+msgid ""
+"yai: failed to remove orphan file {path}: {error}\n"
+msgstr ""
+"yai: failed to remove orphan file {path}: {error}\n"
+
+
+msgid ""
+"yai: fetching AppImageHub catalog for "
+msgstr ""
+"yai: fetching AppImageHub catalog for "
+
+
+msgid ""
+"yai: found AppImage CI job: {name} (id={id})\n"
+msgstr ""
+"yai: found AppImage CI job: {name} (id={id})\n"
+
+
+msgid ""
+"yai: found GitLab project in data/: "
+msgstr ""
+"yai: found GitLab project in data/: "
+
+
+msgid ""
+"yai: found direct download URL in apps/ for {name}\n"
+msgstr ""
+"yai: found direct download URL in apps/ for {name}\n"
+
+
+msgid ""
+"yai: found direct download URL in data/ for {name}\n"
+msgstr ""
+"yai: found direct download URL in data/ for {name}\n"
+
+
+msgid ""
+"yai: found high-confidence AppImage on GitLab: "
+msgstr ""
+"yai: found high-confidence AppImage on GitLab: "
+
+
+msgid ""
+"yai: found working download URL from CI artifact resolution\n"
+msgstr ""
+"yai: found working download URL from CI artifact resolution\n"
+
+
+msgid ""
+"yai: found working download URL from CI artifact resolution (local file)\n"
+msgstr ""
+"yai: found working download URL from CI artifact resolution (local file)\n"
+
+
+msgid ""
+"yai: integrating {count} AppImage GitHub app entries into index...\n"
+msgstr ""
+"yai: integrating {count} AppImage GitHub app entries into index...\n"
+
+
+msgid ""
+"yai: jobs API returned empty response\n"
+msgstr ""
+"yai: jobs API returned empty response\n"
+
+
+msgid ""
+"yai: latest successful pipeline: "
+msgstr ""
+"yai: latest successful pipeline: "
+
+
+msgid ""
+"yai: local file does not exist: "
+msgstr ""
+"yai: local file does not exist: "
+
+
+msgid ""
+"yai: no AppImage found in GitLab releases\n"
+msgstr ""
+"yai: no AppImage found in GitLab releases\n"
+
+
+msgid ""
+"yai: no AppImage found in zip, returning zip path: "
+msgstr ""
+"yai: no AppImage found in zip, returning zip path: "
+
+
+msgid ""
+"yai: no successful pipelines found\n"
+msgstr ""
+"yai: no successful pipelines found\n"
+
+
+msgid ""
+"yai: operation interrupted by user\n"
+msgstr ""
+"yai: operation interrupted by user\n"
+
+
+msgid ""
+"yai: pipelines API returned empty response\n"
+msgstr ""
+"yai: pipelines API returned empty response\n"
+
+
+msgid ""
+"yai: querying GitLab API: "
+msgstr ""
+"yai: querying GitLab API: "
+
+
+msgid ""
+"yai: repo resolve interrupted; {count} package(s) saved\n"
+msgstr ""
+"yai: repo resolve interrupted; {count} package(s) saved\n"
+
+
+msgid ""
+"yai: resolved GitLab CI artifact: "
+msgstr ""
+"yai: resolved GitLab CI artifact: "
+
+
+msgid ""
+"yai: resolving GitLab CI artifact: job={job}, file={file}, project={project}\n"
+msgstr ""
+"yai: resolving GitLab CI artifact: job={job}, file={file}, project={project}\n"
+
+
+msgid ""
+"yai: trying parallel fallbacks for unavailable package: "
+msgstr ""
+"yai: trying parallel fallbacks for unavailable package: "
+
+
+msgid ""
+"yai: unzip failed for job {job}: {error}\n"
+msgstr ""
+"yai: unzip failed for job {job}: {error}\n"
+
+
+msgid ""
+"yai: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n"
+msgstr ""
+"yai: update-desktop-database failed (exit {code}); desktop entries may not appear immediately\n"
+
+
+msgid ""
+"yai: website search failed; trying parallel fallbacks for "
+msgstr ""
+"yai: website search failed; trying parallel fallbacks for "
+
+
+msgid ""
+"yai: {failed} of {total} batch task(s) did not complete\n"
+msgstr ""
+"yai: {failed} of {total} batch task(s) did not complete\n"
+
