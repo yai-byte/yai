@@ -153,6 +153,18 @@ void remove_app(int argc, char** argv) {
         }
     }
 
+    // A directory without metadata.json is a leftover, not an installed package.
+    // remove_installed_id already knows how to reclaim it, so short-circuit
+    // before resolve_installed_package_ids would reject it as "not installed".
+    if (!has_glob_wildcards(pattern)) {
+        const std::string id = sanitize_id(pattern);
+        const InstallPaths paths = paths_for(id);
+        if (!metadata_exists(paths) && fs::exists(paths.app_dir)) {
+            remove_installed_id(id);
+            return;
+        }
+    }
+
     const std::vector<std::string> ids = resolve_installed_package_ids(pattern);
     if (ids.size() > 1) {
         const std::string prompt = tr_format(

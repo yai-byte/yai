@@ -256,6 +256,19 @@ void repair_app(int argc, char** argv) {
         throw std::runtime_error(tr("repair requires exactly one package id"));
     }
 
+    // A directory without metadata.json is a leftover, not an installed package.
+    // Report it with a clear reclaim instruction instead of letting the generic
+    // "not installed" error from resolve_installed_package_ids mask it.
+    if (!has_glob_wildcards(pattern)) {
+        const std::string id = sanitize_id(pattern);
+        const InstallPaths paths = paths_for(id);
+        if (!metadata_exists(paths) && fs::exists(paths.app_dir)) {
+            throw std::runtime_error(tr_format(
+                "package is not installed: {id} (app directory exists without metadata.json; reclaim the space with: yai remove {id})",
+                {{"{id}", id}}));
+        }
+    }
+
     const std::vector<std::string> ids = resolve_installed_package_ids(pattern);
     if (ids.size() > 1) {
         const std::string prompt = tr_format(

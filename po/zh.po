@@ -1069,6 +1069,11 @@ msgstr ""
 "警告 {id}：缺少解压后的 AppRun {path}\n"
 
 msgid ""
+"WARN {id}: leftover directory without metadata.json; reclaim the space with: yai remove {id}\n"
+msgstr ""
+"警告 {id}：无 metadata.json 的残留目录；回收空间请用：yai remove {id}\n"
+
+msgid ""
 "OK   {id}: files present, mode={mode}\n"
 msgstr ""
 "正常 {id}：文件齐全，模式={mode}\n"

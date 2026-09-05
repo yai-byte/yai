@@ -50,6 +50,13 @@ int check_installed_apps() {
         const InstallPaths entry_paths = paths_for(entry.path().filename().string());
         const fs::path metadata = readable_metadata_path(entry_paths);
         if (!fs::exists(metadata)) {
+            // A directory without metadata.json is a leftover, not a broken
+            // install. Surface it so the user can reclaim the disk space.
+            const std::string leftover_id = entry.path().filename().string();
+            std::cout << tr_format(
+                "WARN {id}: leftover directory without metadata.json; reclaim the space with: yai remove {id}\n",
+                {{"{id}", leftover_id}});
+            ++warnings;
             continue;
         }
 

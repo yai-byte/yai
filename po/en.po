@@ -1072,6 +1072,11 @@ msgstr ""
 "WARN {id}: missing extracted AppRun {path}\n"
 
 msgid ""
+"WARN {id}: leftover directory without metadata.json; reclaim the space with: yai remove {id}\n"
+msgstr ""
+"WARN {id}: leftover directory without metadata.json; reclaim the space with: yai remove {id}\n"
+
+msgid ""
 "OK   {id}: files present, mode={mode}\n"
 msgstr ""
 "OK   {id}: files present, mode={mode}\n"
