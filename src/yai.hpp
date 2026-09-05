@@ -510,7 +510,7 @@ constexpr const char* kAppImageGithubRepoApiBase =
     "https://api.github.com/repos/AppImage/appimage.github.io";
 constexpr const char* kAppImageGithubRawBase =
     "https://raw.githubusercontent.com/AppImage/appimage.github.io/master";
-constexpr int kFetchAppImageGithubListTimeoutMs = 15000;
+
 constexpr int kFetchAppImageGithubEntryTimeoutMs = 10000;
 constexpr int kFetchAppImageGithubResolveTimeoutMs = 15000;
 
@@ -608,8 +608,6 @@ AppImageCatalogSources fetch_appimage_catalog_sources(
     const std::string& name,
     int timeout_ms = 15000);
 
-std::vector<std::string> fetch_appimage_apps_list(
-    int timeout_ms = kFetchAppImageGithubListTimeoutMs);
 std::optional<AppImageAppsEntry> parse_appimage_apps_entry(
     const std::string& name,
     int timeout_ms = kFetchAppImageGithubEntryTimeoutMs);
@@ -622,9 +620,6 @@ std::optional<AppImageDataEntry> lookup_appimage_data_entry(
 std::optional<AppImageAppsEntry> lookup_appimage_apps_entry(
     const std::string& package_name,
     int timeout_ms = kFetchAppImageGithubResolveTimeoutMs);
-RepoPackage merge_apps_entry_into_package(
-    const AppImageAppsEntry& entry,
-    const RepoPackage& existing);
 std::string resolve_gitlab_appimage_download(
     const std::string& gitlab_base,
     const std::string& project_path,

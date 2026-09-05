@@ -270,46 +270,7 @@ std::string extract_gitlab_project(const std::string& url) {
     return "";
 }
 
-// Fetch list of apps/ directory entries from GitHub API with pagination
-std::vector<std::string> fetch_appimage_apps_list(int timeout_ms) {
-    std::vector<std::string> all_names;
-    int page = 1;
 
-    while (true) {
-        std::string url = appimage_github_api_base() +
-            "/contents/apps?per_page=100&page=" + std::to_string(page);
-
-        std::string response;
-        try {
-            response = fetch_text(url, timeout_ms);
-        } catch (const std::exception&) {
-            break;
-        }
-
-        if (response.empty()) break;
-
-        // Parse JSON array
-        auto items_json = json_top_level_objects(response);
-        if (items_json.empty()) break;
-
-        for (const auto& item_json : items_json) {
-            std::string name = json_find_string(item_json, "name").value_or("");
-            // Remove .md extension
-            if (name.size() > 3 && name.compare(name.size() - 3, 3, ".md") == 0) {
-                name = name.substr(0, name.size() - 3);
-            }
-            if (!name.empty()) {
-                all_names.push_back(name);
-            }
-        }
-
-        // Less than 100 items means we've reached the last page
-        if (items_json.size() < 100) break;
-        page++;
-    }
-
-    return all_names;
-}
 
 // Fetches the markdown content for an apps/<name>.md file.
 // Tries the GitHub API (base64 content) first, then falls back to
@@ -604,49 +565,4 @@ std::optional<AppImageAppsEntry> lookup_appimage_apps_entry(
     return lookup_appimage_entry(package_name, timeout_ms, parse_appimage_apps_entry);
 }
 
-// Merge an apps/ entry into an existing RepoPackage
-RepoPackage merge_apps_entry_into_package(
-    const AppImageAppsEntry& entry,
-    const RepoPackage& existing) {
-    RepoPackage merged = existing;
 
-    // Mark source origin as appimage_apps
-    merged.source_origin = "appimage_apps";
-
-    // Supplement metadata from apps/ (only if feed didn't provide it)
-    if (merged.summary.empty() && !entry.description.empty()) {
-        merged.summary = entry.description;
-    }
-    if (merged.license.empty() && !entry.license.empty()) {
-        merged.license = entry.license;
-    }
-    if (merged.homepage.empty() && !entry.homepage.empty()) {
-        merged.homepage = entry.homepage;
-    }
-
-    // Add arch and version from apps/
-    if (!entry.arch.empty()) {
-        merged.arch = entry.arch;
-    }
-    if (!entry.version.empty()) {
-        merged.version = entry.version;
-    }
-
-    // Supplement GitHub repo if feed didn't have it
-    if (merged.source_owner.empty() && merged.source_repo.empty() &&
-        !entry.github_repo.empty()) {
-        std::size_t slash = entry.github_repo.find('/');
-        if (slash != std::string::npos) {
-            merged.source_owner = entry.github_repo.substr(0, slash);
-            merged.source_repo = entry.github_repo.substr(slash + 1);
-            if (merged.source_type.empty() ||
-                merged.source_type == "website_page" ||
-                merged.source_type == "unavailable") {
-                merged.source_type = "github_release";
-                merged.asset_pattern = ".*\\.AppImage$";
-            }
-        }
-    }
-
-    return merged;
-}
