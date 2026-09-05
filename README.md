@@ -1,6 +1,6 @@
 # yai — AppImage Package Manager
 
-[![Smoke tests](https://img.shields.io/badge/tests-19%2F23%20passed%20%2B%204%20exempt-brightgreen)](#testing)
+[![Smoke tests](https://img.shields.io/badge/tests-20%2F24%20passed%20%2B%204%20exempt-brightgreen)](#testing)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#building)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#supported-architectures)
 [![Repo](https://img.shields.io/badge/Repo-GitHub-yai--byte%2Fyai--repo-blueviolet)](https://github.com/yai-byte/yai-repo)
@@ -544,7 +544,7 @@ for how a resolved `gitlab_project` entry is turned into a download.
 
 ## Testing
 
-`tests/` contains 23 hermetic shell smoke tests that exercise every user-facing command, the
+`tests/` contains 24 hermetic shell smoke tests that exercise every user-facing command, the
 website crawler, validator freshness, mirror policy, and JSON parser with `fake-bin` interposed
 `curl` wrappers so no real network access occurs during the suites.
 
@@ -554,7 +554,7 @@ make
 for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 ```
 
-Smoke tests as of this release: **19 passing, 0 failing, 4 exempt** (23 total). The 4 exempt
+Smoke tests as of this release: **20 passing, 0 failing, 4 exempt** (24 total). The 4 exempt
 cases are skipped by the network guard because they either probe the real `api.github.com`
 catalog or ship their own `curl` shim that would conflict with the guard — they are not failures.
 
@@ -586,6 +586,7 @@ Exempt (skipped) cases:
 | `appimage_feed_smoke.sh`                                                           | Catalog → official-site bridge + install/update/upgrade v2   |
 | `mirror_policy_smoke.sh`                                                           | Mirror templates + ghfast / fastgit proxy resolution         |
 | `wildcard_multi_smoke.sh`                                                          | Wildcard multi-match confirmation + zero-match failure       |
+| `po_sync_smoke.sh`                                                              | i18n catalog sync: every source `tr()` string present in `en.po` and mirrored in `zh.po` |
 | `stage1_smoke.sh` … `stage5_smoke.sh`                                              | End-to-end install/update/upgrade/rollback/repair flows      |
 | `lifecycle_smoke.sh`                                                               | `doctor` / `repair` / `rollback` end-to-end lifecycle        |
 | `stage4_smoke.sh` also covers ANSI color stripping in non-interactive log captures | <br />                                                       |

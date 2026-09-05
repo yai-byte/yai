@@ -42,6 +42,14 @@ void list_command(int, char**) {
     list_apps();
 }
 
+// Public beta version; bump on each release and surface it via `yai --version`.
+const char* const kYaiVersion = "0.1.0";
+
+// Thin adapter: prints the version string and exits cleanly.
+void version_command(int, char**) {
+    std::cout << "yai " << kYaiVersion << "\n";
+}
+
 // Thin adapter: prints top-level usage/help text.
 void help_command(int, char**) {
     print_usage();
@@ -356,6 +364,10 @@ const CommandEntry COMMANDS[] = {
 // COMMANDS and invokes the matching handler. Throws on unknown commands.
 void dispatch_command(int argc, char** argv) {
     const std::string command = argv[1];
+    if (command == "--version" || command == "-V" || command == "version") {
+        version_command(argc, argv);
+        return;
+    }
     const BatchCommand batch = parse_batch_command(argc, argv);
     if (batch.requested) {
         if (batch.cancelled) {

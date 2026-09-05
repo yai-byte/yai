@@ -1,6 +1,6 @@
 # yai — AppImage 包管理器
 
-[![Smoke tests](https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-19%2F23%20%E9%80%9A%E8%BF%87%20%2B%204%20%E8%B1%81%E5%85%8D-brightgreen)](#%E6%B5%8B%E8%AF%95)
+[![Smoke tests](https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-20%2F24%20%E9%80%9A%E8%BF%87%20%2B%204%20%E8%B1%81%E5%85%8D-brightgreen)](#%E6%B5%8B%E8%AF%95)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#%E7%BC%96%E8%AF%91)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#%E6%94%AF%E6%8C%81%E6%9E%B6%E6%9E%84)
 [![Repo](https://img.shields.io/badge/仓库-GitHub-yai--byte%2Fyai--repo-blueviolet)](https://github.com/yai-byte/yai-repo)
@@ -530,7 +530,7 @@ YAI_LANG=en yai update               # 写脚本时用英文获得稳定输出
 
 ## 测试
 
-`tests/` 目录里放着 23 个 hermetic（封闭可复现）的 shell 冒烟用例，覆盖所有
+`tests/` 目录里放着 24 个 hermetic（封闭可复现）的 shell 冒烟用例，覆盖所有
 用户态命令、网站爬虫、校验器新鲜度、镜像策略、JSON 解析器等。脚本都用
 `fake-bin` 里的假 `curl` 拦截网络请求，所以**跑套件时不会有任何真实外网访问**。
 
@@ -540,7 +540,7 @@ make
 for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 ```
 
-当前版本的 smoke 用例状态：**19 通过、0 失败、4 豁免跳过**（共 23 个）。这 4 个
+当前版本的 smoke 用例状态：**20 通过、0 失败、4 豁免跳过**（共 24 个）。这 4 个
 豁免用例是被 network guard 主动跳过的 —— 它们或者会探测真实的 `api.github.com`
 目录，或者自带 `curl` shim 从而与 guard 冲突，因此**不属于失败**。
 
@@ -573,6 +573,7 @@ for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 | `mirror_policy_smoke.sh`                    | 镜像模板 + ghfast / fastgit 代理解析                   |
 | `wildcard_multi_smoke.sh`                   | 通配符多匹配交互确认 + 零匹配失败                             |
 | `lifecycle_smoke.sh`                            | `doctor` / `repair` / `rollback` 端到端生命周期            |
+| `po_sync_smoke.sh`       | i18n 翻译目录同步校验：源码每个 `tr()` 字符串都存在于 `en.po` 并镜像到 `zh.po` |
 | `stage1_smoke.sh` … `stage5_smoke.sh`       | 端到端 install/update/upgrade/rollback/repair 主流程 |
 | `stage4_smoke.sh` 额外覆盖非交互日志捕获中的 ANSI 转义剥离处理 | <br />                                         |
 
