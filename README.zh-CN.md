@@ -1,6 +1,6 @@
 # yai — AppImage 包管理器
 
-[![Smoke tests](https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-22%20%2F%2022-brightgreen)](#%E6%B5%8B%E8%AF%95)
+[![Smoke tests](https://img.shields.io/badge/%E6%B5%8B%E8%AF%95-19%2F23%20%E9%80%9A%E8%BF%87%20%2B%204%20%E8%B1%81%E5%85%8D-brightgreen)](#%E6%B5%8B%E8%AF%95)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#%E7%BC%96%E8%AF%91)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#%E6%94%AF%E6%8C%81%E6%9E%B6%E6%9E%84)
 [![Repo](https://img.shields.io/badge/仓库-GitHub-yai--byte%2Fyai--repo-blueviolet)](https://github.com/yai-byte/yai-repo)
@@ -182,7 +182,10 @@ install -m 0755 yai ~/.local/bin/yai
   repo add <名字> [URL 或路径]      注册一个 JSON 索引或 AppImageHub Feed
   repo update [名字或模式]          拉取最新索引，重建合并 index.json
   repo remove <名字或模式>          移除仓库条目 + 其缓存（不会卸载应用）
-  repo resolve [--overwrite]        预先解析全量包下载 URL 并写入 overlay
+  repo resolve [--output <路径>] [--arch <架构|all>] [--type <类型>]
+               [--package <id>] [--overwrite] [--concurrency <n>] [--aggressive]
+               [--show <xyz>] [--summary|--no-summary]
+                                 预先解析包下载 URL 并写入 overlay
 
 镜像与网络
   mirror list                       列出所有内置 / 自定义 GitHub 代理策略
@@ -193,7 +196,9 @@ install -m 0755 yai ~/.local/bin/yai
 下载 / 安装生命周期
   download <目标>...                仅下载 AppImage 到当前目录，不安装
   install  <目标>...                下载、探测、包装脚本、元数据、desktop 一步到位
-  update   [id 或模式]              升级预览（不会真的下载 AppImage 主体）
+  update   [id 或模式] [--index-strategy auto|trust|live]
+           [--index-freshness <天数>] [--trust-index] [--live-resolve]
+                                 升级预览（不会真的下载 AppImage 主体）
   upgrade  <id|--all> [--yes]      实际下载、原子提交、写入回滚快照
   rollback <id>                     把 current.AppImage 切回上一个版本快照
   repair   <id>                     重新探测、原地重装 wrapper 与 desktop entry
@@ -238,9 +243,25 @@ install -m 0755 yai ~/.local/bin/yai
 | `url`                 | 探测 HTTP validator；歧义时报告 `需要下载验证`         |
 | `direct_url`（本地）      | 与记录在 metadata 中的 sha256 / 文件大小对比         |
 
+### 索引策略
+
+默认情况下 `yai update` 会先拉取集中解析好的 `index.json`，只有索引过期时才回退到实时
+解析。下面这些选项用来调节「速度」与「新鲜度」之间的取舍：
+
+| 选项                                | 含义                                                           |
+| --------------------------------- | ------------------------------------------------------------ |
+| `--index-strategy auto`           | 索引新鲜（在 `--index-freshness` 天数内）就用索引，否则实时解析（默认）              |
+| `--index-strategy trust`          | 始终信任远端索引，即使已过期                                              |
+| `--index-strategy live`           | 完全跳过索引，始终实时爬取 GitHub / 项目官网                                 |
+| `--index-freshness <天数>`          | `auto` 模式下的新鲜度窗口（必须为正整数）                                    |
+| `--trust-index`                   | 等价于 `--index-strategy trust`                                |
+| `--live-resolve`                  | 等价于 `--index-strategy live`                                 |
+| `YAI_REPO_INDEX=<url\|path>`       | 环境变量：覆盖索引来源                                                 |
+| `YAI_INDEX_REGION=cn\|global`      | 环境变量：覆盖 Gitee / GitHub 选择                                   |
+
 > **一致性保证**：仅凭 `Content-Length` 相同**永远不会**断言资源 `Unchanged`。
 > 缺少 ETag / Last-Modified 时一定落入 `Unknown` 保守分支，让升级路径真的去
-> 校验字节。这对应 `docs/superpowers/specs/` 中的"§13 校验器语义"设计笔记。
+> 校验字节。
 
 ***
 
@@ -267,6 +288,34 @@ yai 自带两个官方远端索引：GitHub 源
 `https://gitee.com/no11no16/yai-repo/raw/main/index.json`。每次启动时
 `detect_index_region()` 会用很短的超时同时探测两边，并自动挑更快的那一个，
 所以大陆用户不用手动改也能用得很顺。
+
+想跳过探测、直接锁定某一侧，可以把环境变量 `YAI_INDEX_REGION` 设为 `cn` 或 `global`；
+该变量的优先级**高于**自动探测结果。
+
+### `repo resolve` 选项
+
+`repo resolve` 会预先解析索引里各包的下载地址并写入 repo overlay 缓存，
+这样后续 install / update 就能走快路径，不必每次重新解析。
+
+| 选项                  | 含义                                                                    |
+| ------------------- | ----------------------------------------------------------------------- |
+| `--output <路径>`     | 把 overlay 写到 `<路径>`，而非默认的 overlay 位置                                 |
+| `--arch <架构\|all>`  | 只解析某个架构，或 `all` 解析全部已知架构                                          |
+| `--type <类型>`       | 只解析指定的 `source.type`（`github_release`、`website_page`、`direct_url`、`unavailable`） |
+| `--package <id>`    | 只解析指定包 id（可重复给出多个）                                                    |
+| `--overwrite`       | 已有缓存 URL 的包也强制重新解析                                                    |
+| `--concurrency <n>` | 并发线程数，取值 `1`–`32`（默认自动探测）                                             |
+| `--aggressive`      | 使用 2×CPU 核数（上限 16），适合快速网络                                             |
+| `--show <xyz>`      | 三位 `0`/`1`，依次控制是否显示 success / skip / fail 行                           |
+| `--summary`         | 打印结尾汇总（默认行为）                                                          |
+| `--no-summary`      | 不打印结尾汇总                                                               |
+
+补充说明：
+
+* 不给 `--type` 时，默认只解析 `github_release`、`website_page`、`direct_url`
+  三类；`unavailable` **不在**默认集合内，必须显式指定才会解析。
+* `--concurrency` 取值必须在 1 到 32 之间；`--show` 必须是恰好三位的 `0` 或 `1`。
+* 并发建议：慢网 2–4，快网 8–16。
 
 ***
 
@@ -305,6 +354,29 @@ yai 自带两个官方远端索引：GitHub 源
 * 发现阶段**绝不下载大体量文件**：疑似 AppImage 的链接一律用带
   `--max-filesize` 的 range 请求（首 512 KiB）校验一下头，避免把误判的
   200 MiB 大二进制拉回来撑爆带宽。
+
+### GitLab 托管的包 {#gitlab-hosted-sources}
+
+GitLab **不是** `source.type` 的取值 —— `source.type` 只接受 `github_release`、
+`direct_url`、`website_page`、`unavailable` 四种。GitLab 是通过下面三种方式参与的：
+
+1. **可信下载域。** 爬虫的主机边界接受 `gitlab.com/.../-/releases` 链接；自建实例则按
+   主机名中是否含 `gitlab.` 或 `.gitlab.` 识别（例如 `gitlab.gnome.org`、
+   `gitlab.inkscape.org`）。
+
+2. **`gitlab_project` 兜底字段。** 当 AppImageHub 的 `data/<name>` 条目指向 GitLab URL 时，
+   yai 会提取出 `gitlab_project`（自建实例为 `主机/组/项目`，gitlab.com 为 `组/项目`）。
+   解析时走 GitLab releases API（`/api/v4/projects/<编码路径>/releases`）—— 这一步是必须的，
+   因为 GitLab 的发布页由 JavaScript 渲染，纯 HTML 抓取拿不到下载链接。若 API 没返回
+   AppImage，则回退去爬 `/-/releases` 页面。
+
+3. **过期 CI 产物重解析。** GitLab CI 任务产物会过期（gitlab.com 通常是 30 天）。对于已
+   失效的 `/-/jobs/<id>/artifacts/raw/<file>` 链接，yai 会按「默认分支 → 最近一次成功的
+   pipeline → 名字里带 AppImage 的任务」这条链路重新定位，下载并解压该任务的产物包；
+   若产物不是 ZIP，就当作直接可用的 AppImage。
+
+GitLab 解析成功后的 `source_kind` 是 `repo_website_page`（走 API 或 `/-/releases` 页面）
+或 `local_path`（CI 产物解压出的本地文件），**永远不会是** `gitlab`。
 
 ***
 
@@ -362,7 +434,7 @@ yai 只会写到**当前用户**的 HOME 目录下，不写全局路径、不加
 | `.config/yai/network.conf`                                      | 持久化的镜像 / 下载策略               |
 | `.config/yai/github_blocklist.conf`                             | 每行一个 `owner/repo`，命中以 451 拒绝 |
 
-`network.conf` 字段优先级：`provider` 若指定了内置镜像商（如 `bfsu`），会采用该镜像商自带的
+`network.conf` 字段优先级：`provider` 若指定了内置镜像商（如 `ghfast`），会采用该镜像商自带的
 `mirror_template`，此时手写的 `mirror_template` 被忽略；只有 `provider=direct` 时才使用你自定义的
 `mirror_template`。`download_strategy` 可为 `direct`、`mirror_first`、`direct_first`；未知或不带镜像
 的策略会回退为 `direct`。
@@ -443,15 +515,21 @@ YAI_LANG=en yai update               # 写脚本时用英文获得稳定输出
 }
 ```
 
-支持的 `source.type`：`github_release`、`direct_url`、`website_page`。对
-`github_release` 还可以给 `asset_pattern` 正则，不给就按架构用内置的默认匹配；
+支持的 `source.type`：`github_release`、`direct_url`、`website_page`、`unavailable`。
+对 `github_release` 还可以给 `asset_pattern` 正则，不给就按架构用内置的默认匹配；
 对 `direct_url` 则直接填 `url` 字段，支持 `http(s)://` 与 `file://`。
+
+`unavailable` 表示「这个包被索引收录了，但本身没有可用的下载地址」—— 常见于只给了
+项目主页、没有 Release 也没有直链的 AppImageHub 条目。yai 不会立刻报错，而是把它当作
+兜底场景，在安装时去 AppImageHub 的 `data/<name>` 与 `apps/` 目录里反查；解析到
+`gitlab_project` 条目后如何拿到下载地址，见
+[GitLab 托管的包](#gitlab-hosted-sources)。
 
 ***
 
 ## 测试
 
-`tests/` 目录里放着 22 个 hermetic（封闭可复现）的 shell 冒烟用例，覆盖所有
+`tests/` 目录里放着 23 个 hermetic（封闭可复现）的 shell 冒烟用例，覆盖所有
 用户态命令、网站爬虫、校验器新鲜度、镜像策略、JSON 解析器等。脚本都用
 `fake-bin` 里的假 `curl` 拦截网络请求，所以**跑套件时不会有任何真实外网访问**。
 
@@ -461,7 +539,18 @@ make
 for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 ```
 
-当前版本的全部 22 条 smoke 用例（全部通过）：
+当前版本的 smoke 用例状态：**19 通过、0 失败、4 豁免跳过**（共 23 个）。这 4 个
+豁免用例是被 network guard 主动跳过的 —— 它们或者会探测真实的 `api.github.com`
+目录，或者自带 `curl` shim 从而与 guard 冲突，因此**不属于失败**。
+
+豁免（跳过）用例：
+
+| 用例文件                          | 豁免原因                                    |
+| ----------------------------- | --------------------------------------- |
+| `batch_progress_smoke.sh`     | 使用默认 `api.github.com` 目录探测               |
+| `fetch_text_timeout_smoke.sh` | 自带 curl shim（与 guard 冲突）                |
+| `repo_resolve_index_smoke.sh` | 使用默认 `api.github.com` 目录探测               |
+| `wildcard_multi_smoke.sh`     | 使用默认 `api.github.com` 目录探测               |
 
 | 用例文件                                        | 覆盖内容                                           |
 | ------------------------------------------- | ---------------------------------------------- |
@@ -482,6 +571,7 @@ for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 | `appimage_feed_smoke.sh`                    | 目录页 → 官方站桥接 + 装/更新/升级到 v2 全流程                  |
 | `mirror_policy_smoke.sh`                    | 镜像模板 + ghfast / fastgit 代理解析                   |
 | `wildcard_multi_smoke.sh`                   | 通配符多匹配交互确认 + 零匹配失败                             |
+| `lifecycle_smoke.sh`                            | `doctor` / `repair` / `rollback` 端到端生命周期            |
 | `stage1_smoke.sh` … `stage5_smoke.sh`       | 端到端 install/update/upgrade/rollback/repair 主流程 |
 | `stage4_smoke.sh` 额外覆盖非交互日志捕获中的 ANSI 转义剥离处理 | <br />                                         |
 

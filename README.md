@@ -1,6 +1,6 @@
 # yai — AppImage Package Manager
 
-[![Smoke tests](https://img.shields.io/badge/tests-22%20%2F%2022-brightgreen)](#testing)
+[![Smoke tests](https://img.shields.io/badge/tests-19%2F23%20passed%20%2B%204%20exempt-brightgreen)](#testing)
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#building)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#supported-architectures)
 [![Repo](https://img.shields.io/badge/Repo-GitHub-yai--byte%2Fyai--repo-blueviolet)](https://github.com/yai-byte/yai-repo)
@@ -185,7 +185,10 @@ Repository management
   repo add <name> [url-or-path]    register a JSON or AppImageHub-feed index
   repo update [name-or-pattern]    fetch latest index, rebuild combined index.json
   repo remove <name-or-pattern>    drop a repo and its cached file (no uninstall)
-  repo resolve [--overwrite]       pre-resolve and cache download URLs for every package
+  repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]
+               [--package <id>] [--overwrite] [--concurrency <n>] [--aggressive]
+               [--show <xyz>] [--summary|--no-summary]
+                         pre-resolve and cache download URLs for packages
 
 Mirror & network
   mirror list                      show all pre-defined and custom GitHub proxies
@@ -196,7 +199,9 @@ Mirror & network
 Download / install lifecycle
   download <target>...             fetch AppImage to cwd, do not install
   install  <target>...             download, probe, wrap, write metadata, drop desktop entry
-  update   [id-or-pattern]         preview upgrades (no network AppImage body transfer)
+  update   [id-or-pattern] [--index-strategy auto|trust|live]
+           [--index-freshness <days>] [--trust-index] [--live-resolve]
+                                   preview upgrades (no network AppImage body transfer)
   upgrade  <id|--all> [--yes]      actually download, commit, write rollback snapshot
   rollback <id>                    swap current.AppImage with the previous version snapshot
   repair   <id>                    re-run probe, re-install wrapper + desktop entry in place
@@ -242,10 +247,26 @@ installed package; with an id or pattern it previews every matching package.
 | `url`                 | Probes HTTP validators; on ambiguity → `download verification required` |
 | `direct_url` (local)  | File-size comparison with the recorded sha256                           |
 
+### Index strategy
+
+By default `yai update` fetches a centrally resolved `index.json` and only falls back to live
+resolution when that index is stale. These options control the trade-off between speed and
+freshness:
+
+| Option                                  | Meaning                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------- |
+| `--index-strategy auto`                 | Use the remote index if it is fresh (within `--index-freshness` days), otherwise live-resolve (default) |
+| `--index-strategy trust`                | Always trust the remote index, even when stale                                |
+| `--index-strategy live`                 | Skip the index entirely; always crawl GitHub / the project website live        |
+| `--index-freshness <days>`              | Freshness window in days for `auto` (must be a positive integer)               |
+| `--trust-index`                         | Shorthand for `--index-strategy trust`                                         |
+| `--live-resolve`                        | Shorthand for `--index-strategy live`                                          |
+| `YAI_REPO_INDEX=<url\|path>`            | Environment override for the index source                                     |
+| `YAI_INDEX_REGION=cn\|global`           | Environment override for Gitee / GitHub selection                             |
+
 > **Consistency guarantee.** Equal `Content-Length` alone never declares a resource as
 > `Unchanged` — the lack of ETag / Last-Modified always falls through to `Unknown` so the
-> upgrade path can verify the bytes. This matches the "§13 Validator Semantics" design note
-> in `docs/superpowers/specs/`.
+> upgrade path can verify the bytes.
 
 ***
 
@@ -271,6 +292,34 @@ yai ships with a default remote index at `https://github.com/yai-byte/yai-repo/r
 and a Gitee mirror at `https://gitee.com/no11no16/yai-repo/raw/main/index.json`. On start,
 `detect_index_region()` probes both endpoints with short timeouts and prefers the faster one so
 Mainland China users hit the Gitee mirror without manual configuration.
+
+To force one side instead of probing, set `YAI_INDEX_REGION` to `cn` or `global`. The
+environment variable takes priority over auto-detection.
+
+### `repo resolve` options
+
+`repo resolve` pre-resolves download URLs for index packages and writes them into the repo
+overlay cache, so later installs and updates can take the fast path.
+
+| Option              | Meaning                                                                    |
+| ------------------- | -------------------------------------------------------------------------- |
+| `--output <path>`   | Write the overlay to `<path>` instead of the default overlay location        |
+| `--arch <arch\|all>` | Restrict resolution to one architecture, or `all` for every known arch     |
+| `--type <type>`     | Restrict to a `source.type` (`github_release`, `website_page`, `direct_url`, `unavailable`) |
+| `--package <id>`    | Resolve only the named package id (may be repeated)                         |
+| `--overwrite`       | Re-resolve even packages that already have a cached URL                     |
+| `--concurrency <n>` | Worker count, `1`–`32` (auto-detected by default)                           |
+| `--aggressive`      | Use 2×CPU cores (capped at 16) — for fast networks                          |
+| `--show <xyz>`      | Three digits of `0`/`1` toggling success / skip / fail lines                |
+| `--summary`         | Print the closing summary (default)                                         |
+| `--no-summary`      | Suppress the closing summary                                                |
+
+Notes:
+
+* Without `--type`, the default set is `github_release`, `website_page`, `direct_url` —
+  `unavailable` is **not** resolved unless you ask for it explicitly.
+* `--concurrency` must be between 1 and 32; `--show` must be exactly three digits of `0` or `1`.
+* Recommended concurrency: 2–4 on slow networks, 8–16 on fast ones.
 
 ***
 
@@ -311,6 +360,32 @@ page count bounded.
 * Large downloads are **never** performed during HTML discovery; every AppImage-suspect URL is
   checked with a bounded `--max-filesize` range request (first 512 KiB) so misclassified links
   never pull a 200 MiB binary.
+
+### GitLab-hosted sources
+
+GitLab support is **not** a `source.type` value — `source.type` accepts only `github_release`,
+`direct_url`, `website_page`, and `unavailable`. Instead, GitLab participates in three distinct
+ways:
+
+1. **Trusted download domain.** The crawler's host boundary accepts `gitlab.com/.../-/releases`
+   links, and self-hosted instances are recognised by a `gitlab.` or `.gitlab.` substring in the
+   host (for example `gitlab.gnome.org`, `gitlab.inkscape.org`).
+
+2. **`gitlab_project` fallback field.** When an AppImageHub `data/<name>` entry points at a
+   GitLab URL, yai extracts a `gitlab_project` value (`host/group/project` for self-hosted
+   instances, or `group/project` for gitlab.com). Resolution then queries the GitLab releases
+   API (`/api/v4/projects/<encoded-path>/releases`) — this is necessary because GitLab release
+   pages are JavaScript-rendered, so plain HTML scraping cannot recover the download links. If
+   the API yields no AppImage, yai falls back to crawling the `/-/releases` page.
+
+3. **Expired CI artifact re-resolution.** GitLab CI job artifacts expire (typically after 30
+   days on gitlab.com). For an expired `/-/jobs/<id>/artifacts/raw/<file>` URL, yai walks the
+   project's default branch → latest successful pipeline → the AppImage-named job, then
+   downloads and unzips that job's artifact. If the artifact is not a ZIP it is treated as a
+   direct AppImage.
+
+A GitLab resolution produces a `source_kind` of `repo_website_page` (API or `/-/releases` page
+path) or `local_path` (extracted CI artifact) — never `gitlab`.
 
 ***
 
@@ -370,7 +445,7 @@ yai installs into the **current user's** home directory. There are no global wri
 | `.config/yai/network.conf`                                      | Persisted mirror / download policy              |
 | `.config/yai/github_blocklist.conf`                             | Exact `owner/repo` lines to block with 451      |
 
-`network.conf` field precedence: if `provider` names a built-in mirror (e.g. `bfsu`),
+`network.conf` field precedence: if `provider` names a built-in mirror (e.g. `ghfast`),
 its `mirror_template` is used and any hand-written `mirror_template` is ignored; only
 `provider=direct` lets your own `mirror_template` take effect. `download_strategy` may be
 `direct`, `mirror_first`, or `direct_first`; an unknown or mirror-less strategy falls back to
@@ -453,16 +528,22 @@ index schema. Minimal example:
 }
 ```
 
-Supported `source.type` values: `github_release`, `direct_url`, `website_page`. For
-`github_release` you may also provide an `asset_pattern`; otherwise yai uses the per-arch
-builtin defaults. For `direct_url` the field is `url` and may be any `http(s)://` or
-`file://` URL.
+Supported `source.type` values: `github_release`, `direct_url`, `website_page`,
+`unavailable`. For `github_release` you may also provide an `asset_pattern`; otherwise yai
+uses the per-arch builtin defaults. For `direct_url` the field is `url` and may be any
+`http(s)://` or `file://` URL.
+
+`unavailable` marks a package that is listed in an index but carries no usable download URL
+of its own — typically AppImageHub entries that only name a project site. Rather than failing
+immediately, yai treats it as a last-resort case and looks the package up in the AppImageHub
+`data/<name>` and `apps/` listings at install time. See [GitLab-hosted sources](#gitlab-hosted-sources)
+for how a resolved `gitlab_project` entry is turned into a download.
 
 ***
 
 ## Testing
 
-`tests/` contains 22 hermetic shell smoke tests that exercise every user-facing command, the
+`tests/` contains 23 hermetic shell smoke tests that exercise every user-facing command, the
 website crawler, validator freshness, mirror policy, and JSON parser with `fake-bin` interposed
 `curl` wrappers so no real network access occurs during the suites.
 
@@ -472,7 +553,18 @@ make
 for f in tests/*_smoke.sh; do bash "$f" || echo "FAIL: $f"; done
 ```
 
-Smoke tests as of this release (all 22 passing):
+Smoke tests as of this release: **19 passing, 0 failing, 4 exempt** (23 total). The 4 exempt
+cases are skipped by the network guard because they either probe the real `api.github.com`
+catalog or ship their own `curl` shim that would conflict with the guard — they are not failures.
+
+Exempt (skipped) cases:
+
+| File                          | Reason                                                        |
+| ----------------------------- | ------------------------------------------------------------- |
+| `batch_progress_smoke.sh`     | uses default `api.github.com` catalog probing                 |
+| `fetch_text_timeout_smoke.sh` | ships its own curl shim (conflicts with guard)                |
+| `repo_resolve_index_smoke.sh` | uses default `api.github.com` catalog probing                 |
+| `wildcard_multi_smoke.sh`     | uses default `api.github.com` catalog probing                 |
 
 | File                                                                               | Covers                                                       |
 | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -494,6 +586,7 @@ Smoke tests as of this release (all 22 passing):
 | `mirror_policy_smoke.sh`                                                           | Mirror templates + ghfast / fastgit proxy resolution         |
 | `wildcard_multi_smoke.sh`                                                          | Wildcard multi-match confirmation + zero-match failure       |
 | `stage1_smoke.sh` … `stage5_smoke.sh`                                              | End-to-end install/update/upgrade/rollback/repair flows      |
+| `lifecycle_smoke.sh`                                                               | `doctor` / `repair` / `rollback` end-to-end lifecycle        |
 | `stage4_smoke.sh` also covers ANSI color stripping in non-interactive log captures | <br />                                                       |
 
 ***
