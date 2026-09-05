@@ -367,8 +367,14 @@ yai installs into the **current user's** home directory. There are no global wri
 | `.local/share/yai/repos/repos.conf`                             | List of configured repos                        |
 | `.local/share/yai/repos/<name>.json`                            | Per-repo cached index                           |
 | `.local/share/yai/repos/index.json`                             | Merged index                                    |
-| `.config/yai/mirror.conf`                                       | Persisted mirror policy                         |
+| `.config/yai/network.conf`                                      | Persisted mirror / download policy              |
 | `.config/yai/github_blocklist.conf`                             | Exact `owner/repo` lines to block with 451      |
+
+`network.conf` field precedence: if `provider` names a built-in mirror (e.g. `bfsu`),
+its `mirror_template` is used and any hand-written `mirror_template` is ignored; only
+`provider=direct` lets your own `mirror_template` take effect. `download_strategy` may be
+`direct`, `mirror_first`, or `direct_first`; an unknown or mirror-less strategy falls back to
+`direct`.
 
 Install metadata (`metadata.json`) is always JSON. A directory under
 `~/.local/share/yai/apps/<id>/` that has no `metadata.json` is therefore a **leftover**, not an

@@ -1972,3 +1972,13 @@ msgid ""
 "... (truncated)"
 msgstr ""
 "...（已截断）"
+
+msgid ""
+"OK   idle inhibitor (systemd-inhibit) is available; downloads will not be suspended\n"
+msgstr ""
+"OK   空闲抑制器（systemd-inhibit）可用；下载不会被电源管理挂起\n"
+
+msgid ""
+"WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n"
+msgstr ""
+"WARN 空闲抑制器（systemd-inhibit）不可用；长时间下载可能被电源管理挂起\n"

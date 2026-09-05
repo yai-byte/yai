@@ -123,6 +123,15 @@ void print_doctor_summary(int warnings) {
     }
 }
 
+int check_idle_inhibitor() {
+    if (executable_available("systemd-inhibit")) {
+        std::cout << tr("OK   idle inhibitor (systemd-inhibit) is available; downloads will not be suspended\n");
+        return 0;
+    }
+    std::cout << tr("WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n");
+    return 1;
+}
+
 void doctor_app(int argc) {
     if (argc != 2) {
         throw std::runtime_error(tr("doctor does not accept arguments"));
@@ -140,6 +149,7 @@ void doctor_app(int argc) {
         "WARN update-desktop-database is not available; desktop cache refresh will be skipped\n",
         {0, 1});
     warnings += check_fuse_access();
+    warnings += check_idle_inhibitor();
     warnings += check_installed_apps();
     print_doctor_summary(warnings);
 }

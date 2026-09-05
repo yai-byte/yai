@@ -359,8 +359,13 @@ yai 只会写到**当前用户**的 HOME 目录下，不写全局路径、不加
 | `.local/share/yai/repos/repos.conf`                             | 已注册仓库列表                      |
 | `.local/share/yai/repos/<name>.json`                            | 各仓库的缓存索引                     |
 | `.local/share/yai/repos/index.json`                             | 合并后的最终索引                     |
-| `.config/yai/mirror.conf`                                       | 持久化的镜像策略                     |
+| `.config/yai/network.conf`                                      | 持久化的镜像 / 下载策略               |
 | `.config/yai/github_blocklist.conf`                             | 每行一个 `owner/repo`，命中以 451 拒绝 |
+
+`network.conf` 字段优先级：`provider` 若指定了内置镜像商（如 `bfsu`），会采用该镜像商自带的
+`mirror_template`，此时手写的 `mirror_template` 被忽略；只有 `provider=direct` 时才使用你自定义的
+`mirror_template`。`download_strategy` 可为 `direct`、`mirror_first`、`direct_first`；未知或不带镜像
+的策略会回退为 `direct`。
 
 安装元数据**固定使用 JSON** (`metadata.json`)。因此 `~/.local/share/yai/apps/<id>/`
 下没有 `metadata.json` 的目录属于**残留**，不算已安装：`list` 会忽略它，`doctor` 会把它

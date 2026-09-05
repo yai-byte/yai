@@ -1975,3 +1975,13 @@ msgid ""
 "... (truncated)"
 msgstr ""
 "... (truncated)"
+
+msgid ""
+"OK   idle inhibitor (systemd-inhibit) is available; downloads will not be suspended\n"
+msgstr ""
+"OK   idle inhibitor (systemd-inhibit) is available; downloads will not be suspended\n"
+
+msgid ""
+"WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n"
+msgstr ""
+"WARN idle inhibitor (systemd-inhibit) is not available; long downloads may be suspended by power management\n"

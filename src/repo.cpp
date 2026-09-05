@@ -556,15 +556,7 @@ std::string detect_index_region() {
             is_cn = true;
         }
     }
-    const std::string region = is_cn ? "cn" : "global";
-    // Cache result
-    try {
-        ensure_directory(repos_dir_path());
-        write_text_file_atomic(cache, region);
-    } catch (const std::exception&) {
-        // Best-effort cache write; must not fail detection.
-    }
-    return region;
+    return is_cn ? "cn" : "global";
 }
 
 std::string default_repo_index_url() {
