@@ -4,7 +4,7 @@
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#%E7%BC%96%E8%AF%91)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#%E6%94%AF%E6%8C%81%E6%9E%B6%E6%9E%84)
 [![Repo](https://img.shields.io/badge/仓库-GitHub-yai--byte%2Fyai--repo-blueviolet)](https://github.com/yai-byte/yai-repo)
-[![Mirror](https://img.shields.io/badge/%E9%95%9C%E5%83%8F-Gitee--no11no16%2Fyai--repo-c71d23)](https://gitee.com/no11no16/yai-repo)
+[![Index CDN](https://img.shields.io/badge/%E7%B4%A2%E5%BC%95CDN-jsDelivr-blue)](https://cdn.jsdelivr.net/gh/yai-byte/yai-repo@main/index.json)
 
 **yai** 是一个用标准 C++17 编写、依赖极少、单文件可执行的 **AppImage 包管理器**。
 它负责 AppImage 应用的安装、更新预览、升级、回滚、自修复，并能够从 GitHub Release、
@@ -60,11 +60,10 @@
 # 1. 编译出单个 yai 可执行文件
 make
 
-# 2. 添加官方软件索引（GitHub/Gitee 两源任选其一）
-./yai repo add appimage https://github.com/yai-byte/yai-repo/raw/main/index.json
-#  若 GitHub 访问较慢，可改用 Gitee 镜像：
-# ./yai repo add appimage https://gitee.com/no11no16/yai-repo/raw/main/index.json
-./yai repo update appimage
+# 2. 官方索引会自动拉取（全球走 GitHub raw，中国大陆走 jsDelivr CDN），无需手动配置。
+#    若想基于完整 AppImageHub 目录源在本地构建索引，可选择性执行：
+# ./yai repo add appimage
+# ./yai repo update appimage
 
 # 3. 浏览并安装
 ./yai search editor
@@ -258,7 +257,7 @@ install -m 0755 yai ~/.local/bin/yai
 | `--trust-index`                   | 等价于 `--index-strategy trust`                                |
 | `--live-resolve`                  | 等价于 `--index-strategy live`                                 |
 | `YAI_REPO_INDEX=<url\|path>`       | 环境变量：覆盖索引来源                                                 |
-| `YAI_INDEX_REGION=cn\|global`      | 环境变量：覆盖 Gitee / GitHub 选择                                   |
+| `YAI_INDEX_REGION=cn\|global`      | 环境变量：覆盖 jsDelivr / GitHub raw 选择                            |
 
 > **一致性保证**：仅凭 `Content-Length` 相同**永远不会**断言资源 `Unchanged`。
 > 缺少 ETag / Last-Modified 时一定落入 `Unknown` 保守分支，让升级路径真的去
@@ -284,13 +283,13 @@ update 真正使用的权威合并索引。
 
 ### 远端索引的地区自动探测
 
-yai 自带两个官方远端索引：GitHub 源
-`https://github.com/yai-byte/yai-repo/raw/main/index.json` 以及 Gitee 镜像
-`https://gitee.com/no11no16/yai-repo/raw/main/index.json`。每次启动时
-`detect_index_region()` 会用很短的超时同时探测两边，并自动挑更快的那一个，
-所以大陆用户不用手动改也能用得很顺。
+yai 自带一个官方远端索引：
+`https://raw.githubusercontent.com/yai-byte/yai-repo/main/index.json`，并由 jsDelivr CDN
+镜像至 `https://cdn.jsdelivr.net/gh/yai-byte/yai-repo@main/index.json`。每次启动时
+`detect_index_region()` 会检查系统语言与时区（`zh_CN` 语言或 `Asia/Shanghai` 系列时区即判定为
+中国大陆），自动把大陆用户导向 jsDelivr 镜像，无需手动配置。
 
-想跳过探测、直接锁定某一侧，可以把环境变量 `YAI_INDEX_REGION` 设为 `cn` 或 `global`；
+想跳过自动判定、直接锁定某一侧，可以把环境变量 `YAI_INDEX_REGION` 设为 `cn` 或 `global`；
 该变量的优先级**高于**自动探测结果。
 
 ### `repo resolve` 选项
@@ -522,7 +521,7 @@ YAI_LANG=en yai update               # 写脚本时用英文获得稳定输出
 
 `unavailable` 表示「这个包被索引收录了，但本身没有可用的下载地址」—— 常见于只给了
 项目主页、没有 Release 也没有直链的 AppImageHub 条目。yai 不会立刻报错，而是把它当作
-兜底场景，在安装时去 AppImageHub 的 `data/<name>` 与 `apps/` 目录里反查；解析到
+兜底场景，在安装时去 AppImageHub 的 `data/<name>` 条目里反查；解析到
 `gitlab_project` 条目后如何拿到下载地址，见
 [GitLab 托管的包](#gitlab-hosted-sources)。
 

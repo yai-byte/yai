@@ -4,7 +4,7 @@
 [![Language](https://img.shields.io/badge/C%2B%2B-17-blue)](#building)
 [![Platform](https://img.shields.io/badge/Linux-64bit%20%7C%2032bit%20%7C%20ARM%20%7C%20RISC--V%20%7C%20LoongArch-blue)](#supported-architectures)
 [![Repo](https://img.shields.io/badge/Repo-GitHub-yai--byte%2Fyai--repo-blueviolet)](https://github.com/yai-byte/yai-repo)
-[![Mirror](https://img.shields.io/badge/Mirror-Gitee--no11no16%2Fyai--repo-c71d23)](https://gitee.com/no11no16/yai-repo)
+[![Index CDN](https://img.shields.io/badge/Index_CDN-jsDelivr-blue)](https://cdn.jsdelivr.net/gh/yai-byte/yai-repo@main/index.json)
 
 **yai** is a fast, dependency-light, single-binary **AppImage package manager** written in standard C++17.
 It installs, updates, upgrades, rolls back, and repairs Linux AppImage applications, resolving their
@@ -62,11 +62,11 @@ project websites when a release page is missing.
 # 1. Build the single yai binary
 make
 
-# 2. Add the official yai software index (GitHub mirror on Gitee also available)
-./yai repo add appimage https://github.com/yai-byte/yai-repo/raw/main/index.json
-#  Or in regions with limited GitHub access:
-# ./yai repo add appimage https://gitee.com/no11no16/yai-repo/raw/main/index.json
-./yai repo update appimage
+# 2. The official yai index is fetched automatically (GitHub raw globally,
+#    jsDelivr CDN in Mainland China) — no manual setup needed. To instead build
+#    a local index from the full AppImageHub catalog feed, optionally run:
+# ./yai repo add appimage
+# ./yai repo update appimage
 
 # 3. Browse and install
 ./yai search editor
@@ -263,7 +263,7 @@ freshness:
 | `--trust-index`                         | Shorthand for `--index-strategy trust`                                         |
 | `--live-resolve`                        | Shorthand for `--index-strategy live`                                          |
 | `YAI_REPO_INDEX=<url\|path>`            | Environment override for the index source                                     |
-| `YAI_INDEX_REGION=cn\|global`           | Environment override for Gitee / GitHub selection                             |
+| `YAI_INDEX_REGION=cn\|global`           | Environment override for jsDelivr / GitHub raw selection                     |
 
 > **Consistency guarantee.** Equal `Content-Length` alone never declares a resource as
 > `Unchanged` — the lack of ETag / Last-Modified always falls through to `Unknown` so the
@@ -289,12 +289,14 @@ Repositories may also be supplied at runtime:
 
 ### Remote index region auto-detect
 
-yai ships with a default remote index at `https://github.com/yai-byte/yai-repo/raw/main/index.json`
-and a Gitee mirror at `https://gitee.com/no11no16/yai-repo/raw/main/index.json`. On start,
-`detect_index_region()` probes both endpoints with short timeouts and prefers the faster one so
-Mainland China users hit the Gitee mirror without manual configuration.
+yai ships with a default remote index at
+`https://raw.githubusercontent.com/yai-byte/yai-repo/main/index.json`, mirrored on the
+jsDelivr CDN at `https://cdn.jsdelivr.net/gh/yai-byte/yai-repo@main/index.json`. On start,
+`detect_index_region()` inspects the system locale and timezone (a `zh_CN` locale or an
+`Asia/Shanghai`-family timezone selects Mainland China) and routes Mainland China users to the
+jsDelivr mirror automatically — no manual configuration required.
 
-To force one side instead of probing, set `YAI_INDEX_REGION` to `cn` or `global`. The
+To force one side instead of auto-detecting, set `YAI_INDEX_REGION` to `cn` or `global`. The
 environment variable takes priority over auto-detection.
 
 ### `repo resolve` options
@@ -537,7 +539,7 @@ uses the per-arch builtin defaults. For `direct_url` the field is `url` and may 
 `unavailable` marks a package that is listed in an index but carries no usable download URL
 of its own — typically AppImageHub entries that only name a project site. Rather than failing
 immediately, yai treats it as a last-resort case and looks the package up in the AppImageHub
-`data/<name>` and `apps/` listings at install time. See [GitLab-hosted sources](#gitlab-hosted-sources)
+`data/<name>` listing at install time. See [GitLab-hosted sources](#gitlab-hosted-sources)
 for how a resolved `gitlab_project` entry is turned into a download.
 
 ***
