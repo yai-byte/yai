@@ -497,8 +497,11 @@ constexpr std::uintmax_t kFetchTextLandingMaxBytes = 512ull * 1024ull;
 // resolved index.json when YAI_REPO_INDEX is not set.
 constexpr const char* kRepoIndexUrlGithub =
     "https://raw.githubusercontent.com/yai-byte/yai-repo/main/index.json";
-constexpr const char* kRepoIndexUrlGitee =
-    "https://gitee.com/no11no16/yai-repo/raw/main/index.json";
+// CN users fetch the index via jsDelivr CDN, which mirrors the public GitHub
+// yai-repo repository. gitee raw is barred from public use as an external-link
+// CDN ("raw abuse"), so it cannot serve as the CN entry point.
+constexpr const char* kRepoIndexUrlCn =
+    "https://cdn.jsdelivr.net/gh/yai-byte/yai-repo@main/index.json";
 constexpr int kRepoIndexFreshnessDefaultDays = 7;
 constexpr int kFetchRepoIndexTimeoutMs = 30000;
 

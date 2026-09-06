@@ -560,7 +560,7 @@ std::string detect_index_region() {
 }
 
 std::string default_repo_index_url() {
-    return detect_index_region() == "cn" ? kRepoIndexUrlGitee : kRepoIndexUrlGithub;
+    return detect_index_region() == "cn" ? kRepoIndexUrlCn : kRepoIndexUrlGithub;
 }
 
 std::string fetch_remote_repo_index_text() {
