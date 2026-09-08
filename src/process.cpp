@@ -170,6 +170,16 @@ void kill_and_reap(pid_t pid) {
     reap_process_best_effort(pid);
 }
 
+// Tracks the active download/transfer child in the signal handler's global so a
+// Ctrl-C is forwarded to its process group. Cleared on scope exit on any path
+// (normal return, throw, or forced exit), so the handler never targets a stale
+// or already-reaped pid.
+class DownloadChildTracker {
+public:
+    explicit DownloadChildTracker(pid_t pid) { set_download_child(pid); }
+    ~DownloadChildTracker() { clear_download_child(); }
+};
+
 // Outcome of a single read_output_chunk call: Data (got bytes), End (EOF),
 // RetryLater (would block in non-blocking mode), or LimitExceeded (cap hit).
 enum class ReadOutputResult {
@@ -201,7 +211,17 @@ ReadOutputResult read_output_chunk(
     if (count == 0) {
         return ReadOutputResult::End;
     }
-    if (errno == EINTR || (nonblocking && (errno == EAGAIN || errno == EWOULDBLOCK))) {
+    if (errno == EINTR) {
+        // A blocking read interrupted by cancellation should stop draining so the
+        // caller can tear down the child instead of busy-spinning on EINTR. In
+        // nonblocking mode we keep retrying; the next poll loop iteration will
+        // observe the interrupt flag and act on it.
+        if (!nonblocking && was_interrupted()) {
+            return ReadOutputResult::End;
+        }
+        return ReadOutputResult::RetryLater;
+    }
+    if (nonblocking && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return ReadOutputResult::RetryLater;
     }
     close_fd_best_effort(fd);
@@ -386,8 +406,12 @@ int run_process(const std::vector<std::string>& args) {
         exec_child_process(args, std::nullopt, {});
     }
 
+    DownloadChildTracker tracker(pid);
     int status = 0;
     waitpid_required(pid, &status, 0, tr("process"));
+    if (was_interrupted()) {
+        throw std::runtime_error(tr("Operation interrupted by user"));
+    }
     if (WIFEXITED(status)) {
         return WEXITSTATUS(status);
     }
@@ -406,12 +430,16 @@ ProcessResult run_process_capture(
 
     int pipefd[2];
     const pid_t pid = start_captured_process(args, cwd, env, pipefd);
+    DownloadChildTracker tracker(pid);
     std::string output;
     append_blocking_output(pipefd[0], output);
     close_fd_required(pipefd[0], tr("captured process output"));
 
     int status = 0;
     waitpid_required(pid, &status, 0, tr("captured process"));
+    if (was_interrupted()) {
+        throw std::runtime_error(tr("Operation interrupted by user"));
+    }
     if (WIFEXITED(status)) {
         return ProcessResult{WEXITSTATUS(status), output};
     }
@@ -522,6 +550,11 @@ ProcessResult run_process_capture_timeout(
     // Nonblocking reads keep a GUI AppImage probe from hanging forever: collect
     // whatever output exists, poll waitpid, and only then enforce the timeout.
     while (true) {
+        if (was_interrupted()) {
+            close_fd_best_effort(pipefd[0]);
+            kill_and_reap(pid);
+            throw std::runtime_error(tr("Operation interrupted by user"));
+        }
         if (append_available_output(pipefd[0], output, pid, max_output_bytes)) {
             close_fd_best_effort(pipefd[0]);
             kill_and_reap(pid);
@@ -574,6 +607,9 @@ ProcessResult run_process_capture_download_progress(
 
     int pipefd[2];
     const pid_t pid = start_captured_process(args, std::nullopt, {}, pipefd);
+    // Track the child so a Ctrl-C is forwarded to its process group (it runs in
+    // its own group and would otherwise ignore the terminal's SIGINT).
+    DownloadChildTracker tracker(pid);
     try {
         set_nonblocking(pipefd[0]);
     } catch (const std::exception&) {
@@ -593,6 +629,13 @@ ProcessResult run_process_capture_download_progress(
     int status = 0;
     bool exited = false;
     while (!exited) {
+        // Honor a pending cancellation before spending another cycle on I/O: stop
+        // the transfer and unwind with an interrupt so the first Ctrl-C works.
+        if (was_interrupted()) {
+            clear_download_progress(last_width);
+            kill_and_reap(pid);
+            throw std::runtime_error(tr("Operation interrupted by user"));
+        }
         // curl output remains captured for errors. yai renders its own progress
         // from aria2 RPC when a port is set, otherwise from the growing .part file
         // and dumped headers, so stdout stays owned by the command result.
@@ -616,6 +659,13 @@ ProcessResult run_process_capture_download_progress(
         render_download_progress(part, headers, start, tick, last_width, progress_state, aria2_rpc_port);
         ++tick;
         usleep(200 * 1000);
+    }
+
+    // The child may have exited because we cancelled it (signal forwarded by the
+    // handler); surface that as an interrupt rather than a confusing failure.
+    if (was_interrupted()) {
+        clear_download_progress(last_width);
+        throw std::runtime_error(tr("Operation interrupted by user"));
     }
 
     append_available_output(pipefd[0], output, pid);
@@ -717,6 +767,9 @@ StreamingBatchResult run_batch_task_streaming(
             throw std::runtime_error(std::string(tr("setpgid failed: ")) + std::strerror(setpgid_errno));
         }
 
+        // Track the child so a Ctrl-C is forwarded to its process group.
+        DownloadChildTracker tracker(pid);
+
         close_fd_required(stdout_pipe[1], tr("batch stream stdout write"));
         stdout_pipe[1] = -1;
         close_fd_required(stderr_pipe[1], tr("batch stream stderr write"));
@@ -740,6 +793,9 @@ StreamingBatchResult run_batch_task_streaming(
         // Main polling loop: drain stdout/stderr/event pipes non-blocking,
         // check child exit via WNOHANG, apply timeout, dispatch lines to UI.
         while (stdout_open || stderr_open || event_open || !exited) {
+            if (was_interrupted()) {
+                throw std::runtime_error(tr("Operation interrupted by user"));
+            }
             if (!exited) {
                 const pid_t wait_result = waitpid_nointr(pid, &status, WNOHANG);
                 if (wait_result == pid) {

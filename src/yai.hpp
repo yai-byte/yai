@@ -825,6 +825,11 @@ void install_signal_handler();
 bool was_interrupted();
 void check_interrupt();
 void cleanup_orphan_downloads();
+// Marks/unmarks the PID of the active download/transfer child so the SIGINT
+// handler can forward cancellation to its process group. Used by the process
+// execution helpers in process.cpp.
+void set_download_child(pid_t pid);
+void clear_download_child();
 
 // Best-effort logind "idle" inhibitor: while an instance lives, asks logind
 // (via systemd-inhibit) to keep the system from auto-suspending. It is a no-op

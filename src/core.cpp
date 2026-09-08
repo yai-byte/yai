@@ -1,5 +1,8 @@
 #include "yai.hpp"
 
+#include <signal.h>
+#include <sys/types.h>
+
 // Shared path/string helpers, filesystem utilities, mirror/network config, and
 // install path derivation. Process execution, download progress UI, and i18n
 // live in process.cpp, download_progress.cpp, and i18n.cpp.
@@ -603,15 +606,34 @@ namespace {
 
 std::atomic<bool> g_interrupted{false};
 std::atomic<int> g_interrupt_count{0};
+// PID of the active download/transfer child (which runs in its own process
+// group). The SIGINT/SIGTERM handler forwards cancellation to it so the
+// transfer stops even when yai is blocked in a syscall that has not yet polled
+// the interrupt flag. -1 means no child is currently tracked.
+std::atomic<pid_t> g_download_child_pid{-1};
 
 // SIGINT/SIGTERM handler: sets the interrupted flag on the first signal so
-// long-running operations can wind down gracefully, and force-exits via
-// _Exit on the second so a stuck process can always be killed.
+// long-running operations can wind down gracefully, forwards the signal to the
+// active download child immediately (its own process group never receives the
+// terminal's Ctrl-C), and force-exits via _Exit on the second so a stuck
+// process can always be killed.
 void signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         const int count = g_interrupt_count.fetch_add(1) + 1;
         g_interrupted.store(true);
+        const pid_t child = g_download_child_pid.load();
+        if (child > 0) {
+            // Deliver to the whole process group (-pid) and the direct pid so
+            // curl/wget/aria2c (and any descendants) actually stop.
+            kill(-child, SIGTERM);
+            kill(child, SIGTERM);
+        }
         if (count >= 2) {
+            // Final safety net: ensure the child cannot outlive yai.
+            if (child > 0) {
+                kill(-child, SIGKILL);
+                kill(child, SIGKILL);
+            }
             std::_Exit(1);
         }
     }
@@ -620,7 +642,9 @@ void signal_handler(int signal) {
 } // namespace
 
 // Installs signal_handler for SIGINT and SIGTERM using sigaction with an
-// empty mask and no flags (so default SA_RESTART behavior applies).
+// empty mask and no flags. sa_flags=0 (no SA_RESTART) means blocking syscalls
+// such as read()/waitpid() return EINTR on the signal, so the poll loops below
+// observe the interrupt promptly instead of being silently restarted.
 void install_signal_handler() {
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -641,6 +665,14 @@ void check_interrupt() {
     if (g_interrupted.load()) {
         throw std::runtime_error(tr("Operation interrupted by user"));
     }
+}
+
+void set_download_child(pid_t pid) {
+    g_download_child_pid.store(pid > 0 ? pid : -1);
+}
+
+void clear_download_child() {
+    g_download_child_pid.store(-1);
 }
 
 void cleanup_orphan_downloads() {
