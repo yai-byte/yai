@@ -281,6 +281,7 @@ void repair_app(int argc, char** argv) {
     }
 
     for (const std::string& id : ids) {
+        require_current_user_can_manage(id, "repair");
         const RepairResult repair = repair_installed_package(id);
         std::cout << tr("Repaired ") << id << "\n";
         print_mode_line(repair.mode);
@@ -356,6 +357,7 @@ void rollback_app(int argc, char** argv) {
     }
 
     for (const std::string& id : ids) {
+        require_current_user_can_manage(id, "rollback");
         restore_previous_version(id);
         std::cout << tr("Rolled back ") << id << "\n";
     }

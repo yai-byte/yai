@@ -2155,6 +2155,21 @@ msgid ""
 msgstr ""
 "yai：无法从任何 AppImage 任务下载 CI 产物："
 
+msgid ""
+"package {id} is installed system-wide; manage it with sudo: sudo yai {command} {id}"
+msgstr ""
+"软件包 {id} 已安装于系统级；请用 sudo 管理：sudo yai {command} {id}"
+
+msgid ""
+"running as root; installing system-wide under /usr/local\n"
+msgstr ""
+"当前以 root 运行；将安装到系统目录 /usr/local\n"
+
+msgid ""
+"Run with sudo to install apps system-wide (under /usr/local).\n"
+msgstr ""
+"使用 sudo 可将应用安装到系统级目录（/usr/local）。\n"
+
 
 msgid ""
 "yai: could not find AppImage CI job in latest pipeline for "

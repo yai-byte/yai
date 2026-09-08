@@ -419,6 +419,24 @@ GitLab 解析成功后的 `source_kind` 是 `repo_website_page`（走 API 或 `/
 yai 只会写到**当前用户**的 HOME 目录下，不写全局路径、不加 `setuid`、
 不加载内核模块。
 
+**系统级安装（sudo）。** 当 yai 以 root 运行（有效 uid 为 0）或设置了
+`YAI_SYSTEM_MODE=1` 时，会切换到*系统模式*，把同样的产物写入标准 FHS 目录，
+让本机所有用户都能运行：
+
+| 系统路径                                         | 作用                        |
+| ------------------------------------------------ | --------------------------- |
+| `/usr/local/bin/<id>`                            | 包装脚本（所有用户可执行）          |
+| `/usr/local/share/applications/yai-<id>.desktop` | 桌面入口（机器级）               |
+| `/usr/local/share/yai/apps/<id>/...`             | AppImage、元数据、回滚快照等       |
+| `/usr/local/share/yai/repos/...`                 | 仓库索引（机器级）               |
+| `/etc/yai/...`                                   | 配置（network.conf 等）          |
+
+系统模式下，AppImage、wrapper、桌面入口的权限为 `0755`/`0644`（属主 root），
+所有用户都能读取和执行。普通用户仍可运行 `yai list`、`yai update`、`yai doctor`
+查看系统级安装，但对系统级应用执行 `install`/`upgrade`/`remove`/`rollback`/`repair`
+需要 `sudo`。`YAI_SYSTEM_MODE=1` 只改变路径选择（不会给非特权用户授予系统目录写入权），
+主要用于测试。
+
 | 路径（相对 `$HOME`）                                                  | 作用                           |
 | --------------------------------------------------------------- | ---------------------------- |
 | `.local/bin/<id>`                                               | 调用正确运行模式的 shell 包装脚本         |

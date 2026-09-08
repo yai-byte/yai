@@ -36,40 +36,57 @@ int check_installed_app_files(const std::string& id, const InstallPaths& paths, 
 }
 
 int check_installed_apps() {
-    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
-    if (!fs::exists(apps_dir)) {
-        std::cout << tr("OK   no installed yai apps found\n");
-        return 0;
-    }
+    const std::pair<fs::path, InstallScope> roots[] = {
+        {expand_home_path(".local/share/yai/apps"), InstallScope::User},
+        {fs::path("/usr/local/share/yai/apps"), InstallScope::System},
+    };
 
     int warnings = 0;
-    for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
-        if (!entry.is_directory()) {
+    for (const auto& [root, scope] : roots) {
+        std::error_code ec;
+        if (!fs::exists(root, ec)) {
             continue;
         }
-        const InstallPaths entry_paths = paths_for(entry.path().filename().string());
-        const fs::path metadata = readable_metadata_path(entry_paths);
-        if (!fs::exists(metadata)) {
-            // A directory without metadata.json is a leftover, not a broken
-            // install. Surface it so the user can reclaim the disk space.
-            const std::string leftover_id = entry.path().filename().string();
-            std::cout << tr_format(
-                "WARN {id}: leftover directory without metadata.json; reclaim the space with: yai remove {id}\n",
-                {{"{id}", leftover_id}});
-            ++warnings;
-            continue;
-        }
+        for (const auto& entry : fs::directory_iterator(root, ec)) {
+            if (!entry.is_directory()) {
+                continue;
+            }
+            const fs::path app_dir = entry.path();
+            const fs::path metadata = app_dir / "metadata.json";
+            if (!fs::exists(metadata)) {
+                // A directory without metadata.json is a leftover, not a broken
+                // install. Surface it so the user can reclaim the disk space.
+                const std::string leftover_id = app_dir.filename().string();
+                std::cout << tr_format(
+                    "WARN {id}: leftover directory without metadata.json; reclaim the space with: yai remove {id}\n",
+                    {{"{id}", leftover_id}});
+                ++warnings;
+                continue;
+            }
 
-        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
-        const InstallPaths paths = paths_for(id);
-        const std::string mode = metadata_json_value(metadata, "install_mode").value_or("unknown");
-        warnings += check_installed_app_files(id, paths, mode) > 0 ? 1 : 0;
+            const std::string id = metadata_json_value(metadata, "id").value_or(app_dir.filename().string());
+            const fs::path wrapper =
+                (scope == InstallScope::System ? fs::path("/usr/local/bin") : bin_dir()) / id;
+            const fs::path desktop =
+                (scope == InstallScope::System ? fs::path("/usr/local/share/applications") : applications_dir()) /
+                ("yai-" + id + ".desktop");
+            const InstallPaths paths{
+                app_dir,
+                app_dir / "current.AppImage",
+                app_dir / "extracted",
+                wrapper,
+                desktop,
+                metadata,
+            };
+            const std::string mode = metadata_json_value(metadata, "install_mode").value_or("unknown");
+            warnings += check_installed_app_files(id, paths, mode) > 0 ? 1 : 0;
+        }
     }
     return warnings;
 }
 
 int check_path_setup() {
-    const fs::path local_bin = expand_home_path(".local/bin");
+    const fs::path local_bin = bin_dir();
     const char* path_env = std::getenv("PATH");
     const std::string path = path_env == nullptr ? "" : path_env;
     if (path.find(local_bin.string()) != std::string::npos) {
@@ -152,5 +169,3 @@ void doctor_app(int argc) {
     warnings += check_installed_apps();
     print_doctor_summary(warnings);
 }
-
-

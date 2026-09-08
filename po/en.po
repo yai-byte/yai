@@ -2158,6 +2158,21 @@ msgid ""
 msgstr ""
 "yai: could not download CI artifact from any AppImage job for "
 
+msgid ""
+"package {id} is installed system-wide; manage it with sudo: sudo yai {command} {id}"
+msgstr ""
+"package {id} is installed system-wide; manage it with sudo: sudo yai {command} {id}"
+
+msgid ""
+"running as root; installing system-wide under /usr/local\n"
+msgstr ""
+"running as root; installing system-wide under /usr/local\n"
+
+msgid ""
+"Run with sudo to install apps system-wide (under /usr/local).\n"
+msgstr ""
+"Run with sudo to install apps system-wide (under /usr/local).\n"
+
 
 msgid ""
 "yai: could not find AppImage CI job in latest pipeline for "

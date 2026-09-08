@@ -151,6 +151,7 @@ std::optional<fs::path> install_desktop_icon_file(const InstallPaths& paths, con
     }
     const fs::path installed = paths.app_dir / ("desktop-icon" + ext);
     copy_file_overwrite(source, installed);
+    chmod(installed.c_str(), install_data_mode());
     return installed;
 }
 } // namespace
@@ -457,10 +458,12 @@ void write_desktop_entry(const InstallPaths& paths, const std::string& name) {
     const std::optional<std::string> upstream_desktop = upstream_desktop_entry_content(paths, name);
     if (upstream_desktop.has_value()) {
         write_text_file(paths.desktop, *upstream_desktop);
+        chmod(paths.desktop.c_str(), install_data_mode());
         return;
     }
 
     const std::string desktop = default_desktop_entry(paths, name);
     write_text_file(paths.desktop, desktop);
+    chmod(paths.desktop.c_str(), install_data_mode());
 }
 

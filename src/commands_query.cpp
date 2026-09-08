@@ -7,21 +7,9 @@
 namespace {
 std::unordered_set<std::string> installed_package_id_set() {
     std::unordered_set<std::string> ids;
-    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
-    if (!fs::exists(apps_dir)) {
-        return ids;
-    }
-
-    for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
-        if (!entry.is_directory()) {
-            continue;
-        }
-        const InstallPaths paths = paths_for(entry.path().filename().string());
-        const fs::path metadata = readable_metadata_path(paths);
-        if (!fs::exists(metadata)) {
-            continue;
-        }
-        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
+    for (const auto& app : scan_installed_app_dirs()) {
+        const fs::path metadata = app.app_dir / "metadata.json";
+        const std::string id = metadata_json_value(metadata, "id").value_or(app.app_dir.filename().string());
         ids.insert(id);
     }
     return ids;
@@ -108,6 +96,7 @@ void remove_if_exists(const fs::path& path) {
 }
 
 void remove_installed_id(const std::string& id) {
+    require_current_user_can_manage(id, "remove");
     const InstallPaths paths = paths_for(id);
     // A directory without metadata.json is a leftover rather than an installed
     // package, but deleting it is the only way to reclaim its disk space, so
@@ -182,24 +171,13 @@ void remove_app(int argc, char** argv) {
 }
 
 void list_apps() {
-    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
-    if (!fs::exists(apps_dir)) {
-        return;
-    }
-
-    for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
-        if (!entry.is_directory()) {
-            continue;
-        }
-        const InstallPaths paths = paths_for(entry.path().filename().string());
-        const fs::path metadata = readable_metadata_path(paths);
-        if (!fs::exists(metadata)) {
-            continue;
-        }
-        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
+    for (const auto& app : scan_installed_app_dirs()) {
+        const fs::path metadata = app.app_dir / "metadata.json";
+        const std::string id = metadata_json_value(metadata, "id").value_or(app.app_dir.filename().string());
         const std::string name = metadata_json_value(metadata, "name").value_or(id);
         const std::string mode = metadata_json_value(metadata, "install_mode").value_or("unknown");
-        std::cout << id << "\t" << name << "\t" << mode << "\n";
+        const std::string scope = app.scope == InstallScope::System ? "system" : "user";
+        std::cout << id << "\t" << name << "\t" << mode << "\t" << scope << "\n";
     }
 }
 

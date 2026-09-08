@@ -62,22 +62,10 @@ ResolvedSource resolve_repo_update_source(const UpdateContext& context) {
 }
 
 std::vector<std::string> installed_package_ids() {
-    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
     std::vector<std::string> ids;
-    if (!fs::exists(apps_dir)) {
-        return ids;
-    }
-
-    for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
-        if (!entry.is_directory()) {
-            continue;
-        }
-        const InstallPaths paths = paths_for(entry.path().filename().string());
-        const fs::path metadata = readable_metadata_path(paths);
-        if (!fs::exists(metadata)) {
-            continue;
-        }
-        const std::string id = metadata_json_value(metadata, "id").value_or(entry.path().filename().string());
+    for (const auto& app : scan_installed_app_dirs()) {
+        const fs::path metadata = app.app_dir / "metadata.json";
+        const std::string id = metadata_json_value(metadata, "id").value_or(app.app_dir.filename().string());
         if (std::find(ids.begin(), ids.end(), id) == ids.end()) {
             ids.push_back(id);
         }

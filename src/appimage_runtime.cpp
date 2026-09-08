@@ -28,7 +28,8 @@ void chmod_user_executable(const fs::path& path) {
     if (stat(path.c_str(), &st) != 0) {
         throw std::runtime_error(tr("failed to stat ") + path.string() + tr(": ") + std::strerror(errno));
     }
-    const mode_t mode = st.st_mode | S_IXUSR;
+    const mode_t mode = st.st_mode |
+        (is_system_mode() ? (S_IXGRP | S_IXOTH | S_IRGRP | S_IROTH) : S_IXUSR);
     if (chmod(path.c_str(), mode) != 0) {
         throw std::runtime_error(tr("failed to chmod ") + path.string() + tr(": ") + std::strerror(errno));
     }

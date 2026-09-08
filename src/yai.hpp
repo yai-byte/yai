@@ -250,6 +250,29 @@ fs::path expand_home_path(const std::string& path);
 fs::path config_dir_path();
 fs::path network_config_path();
 fs::path github_blocklist_path();
+
+// System-wide install mode: when yai runs as root (euid 0) or YAI_SYSTEM_MODE=1
+// is set, artifacts go to FHS system paths instead of $HOME.
+bool is_system_mode();
+fs::path apps_root_dir();           // .../yai/apps  (system: /usr/local/share/yai/apps)
+fs::path bin_dir();                 // wrapper dir  (system: /usr/local/bin)
+fs::path applications_dir();        // desktop entries (system: /usr/local/share/applications)
+mode_t install_executable_mode();   // 0755 system / 0700 user
+mode_t install_data_mode();         // 0644 system / 0600 user
+enum class InstallScope { None, User, System };
+InstallScope installed_scope_of(const std::string& id);
+
+// Enumerates every installed app directory (user + system scope) that carries a
+// metadata.json, so read-only commands (list/update/search/doctor) can show
+// machine-wide installs to unprivileged users.
+struct InstalledAppDir {
+    fs::path app_dir;
+    InstallScope scope;
+};
+std::vector<InstalledAppDir> scan_installed_app_dirs();
+// Throws if id is installed system-wide but the current process is not root, so
+// write commands can tell the user to re-run with sudo.
+void require_current_user_can_manage(const std::string& id, const std::string& command);
 bool contains_line_break(const std::string& value);
 std::string trim(std::string value);
 std::string basename_from_url(const std::string& url);

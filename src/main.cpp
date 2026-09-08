@@ -43,7 +43,7 @@ void list_command(int, char**) {
 }
 
 // Public beta version; bump on each release and surface it via `yai --version`.
-const char* const kYaiVersion = "0.1.1";
+const char* const kYaiVersion = "0.2.0";
 
 // Thin adapter: prints the version string and exits cleanly.
 void version_command(int, char**) {
@@ -406,6 +406,9 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        if (is_system_mode()) {
+            std::cerr << tr("running as root; installing system-wide under /usr/local\n");
+        }
         dispatch_command(argc, argv);
         return 0;
     } catch (const std::exception& ex) {

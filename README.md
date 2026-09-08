@@ -433,6 +433,25 @@ multi-connection sparse writes do not inflate the downloaded byte count.
 yai installs into the **current user's** home directory. There are no global writes, no
 `setuid` binaries, and no kernel modules.
 
+**System-wide install (sudo).** When yai runs as root (effective uid 0) or with
+`YAI_SYSTEM_MODE=1` set, it switches to *system mode* and writes the same artifacts to
+standard FHS locations so every user on the machine can run them:
+
+| System path                                      | Purpose                                 |
+| ------------------------------------------------ | --------------------------------------- |
+| `/usr/local/bin/<id>`                            | Wrapper script (world-executable)       |
+| `/usr/local/share/applications/yai-<id>.desktop` | Desktop entry (machine-wide)            |
+| `/usr/local/share/yai/apps/<id>/...`             | AppImage, metadata, rollback, etc.      |
+| `/usr/local/share/yai/repos/...`                 | Repo indexes (machine-wide)             |
+| `/etc/yai/...`                                   | Config (network.conf, etc.)             |
+
+In system mode the AppImage, wrapper, and desktop entry are created `0755`/`0644`
+(owned by root) so all users can read and execute them. Normal users can still run
+`yai list`, `yai update`, and `yai doctor` to see machine-wide installs, but
+`install`/`upgrade`/`remove`/`rollback`/`repair` on a system-wide app require `sudo`.
+`YAI_SYSTEM_MODE=1` only changes path selection (it does not grant write access to
+system directories for unprivileged users) and is mainly useful for testing.
+
 | Path (relative to `$HOME`)                                      | Purpose                                         |
 | --------------------------------------------------------------- | ----------------------------------------------- |
 | `.local/bin/<id>`                                               | Shell wrapper script invoking the right mode    |

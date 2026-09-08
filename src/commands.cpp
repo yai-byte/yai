@@ -5,32 +5,21 @@
 std::vector<std::string> resolve_installed_package_ids(const std::string& pattern) {
     if (!has_glob_wildcards(pattern)) {
         const std::string id = sanitize_id(pattern);
-        const InstallPaths paths = paths_for(id);
-        if (!metadata_exists(paths)) {
+        if (installed_scope_of(id) == InstallScope::None) {
             throw std::runtime_error(tr("package is not installed: ") + id);
         }
         return {id};
     }
 
-    const fs::path apps_dir = expand_home_path(".local/share/yai/apps");
     std::vector<std::string> matches;
-    if (fs::exists(apps_dir)) {
-        for (const fs::directory_entry& entry : fs::directory_iterator(apps_dir)) {
-            if (!entry.is_directory()) {
-                continue;
-            }
-            const std::string dir_id = entry.path().filename().string();
-            const InstallPaths paths = paths_for(dir_id);
-            const fs::path metadata = readable_metadata_path(paths);
-            if (!fs::exists(metadata)) {
-                continue;
-            }
-            const std::string id = metadata_json_value(metadata, "id").value_or(dir_id);
-            if ((glob_match_case_insensitive(pattern, dir_id) ||
-                 glob_match_case_insensitive(pattern, id)) &&
-                std::find(matches.begin(), matches.end(), id) == matches.end()) {
-                matches.push_back(id);
-            }
+    for (const auto& app : scan_installed_app_dirs()) {
+        const fs::path metadata = app.app_dir / "metadata.json";
+        const std::string dir_id = app.app_dir.filename().string();
+        const std::string id = metadata_json_value(metadata, "id").value_or(dir_id);
+        if ((glob_match_case_insensitive(pattern, dir_id) ||
+             glob_match_case_insensitive(pattern, id)) &&
+            std::find(matches.begin(), matches.end(), id) == matches.end()) {
+            matches.push_back(id);
         }
     }
     std::sort(matches.begin(), matches.end());

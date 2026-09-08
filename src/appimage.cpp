@@ -76,4 +76,5 @@ void write_metadata(
         "  }\n"
         "}\n";
     write_text_file(paths.metadata, metadata);
+    chmod(paths.metadata.c_str(), install_data_mode());
 }

@@ -631,6 +631,7 @@ void upgrade_app(int argc, char** argv) {
         }
     }
     for (const std::string& id : ids) {
+        require_current_user_can_manage(id, "upgrade");
         InstallOptions options = command.options;
         options.target = id;
         upgrade_installed_target(options);

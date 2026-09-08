@@ -76,6 +76,9 @@ fs::path expand_home_path(const std::string& path) {
 }
 
 fs::path config_dir_path() {
+    if (is_system_mode()) {
+        return fs::path("/etc/yai");
+    }
     return expand_home_path(".config/yai");
 }
 
@@ -85,6 +88,103 @@ fs::path network_config_path() {
 
 fs::path github_blocklist_path() {
     return config_dir_path() / "github_blocklist.conf";
+}
+
+// --- System-wide install mode ---
+//
+// yai normally writes everything under $HOME. When it runs with effective uid 0
+// (e.g. `sudo yai ...`) or YAI_SYSTEM_MODE=1 is set, it instead writes to
+// standard FHS locations so the install is visible to every user. YAI_SYSTEM_MODE
+// is a test/override hook: it only changes path selection, it does not grant
+// write access to system directories for unprivileged users.
+
+bool is_system_mode() {
+    if (env_string("YAI_SYSTEM_MODE").value_or("") == "1") {
+        return true;
+    }
+    return geteuid() == 0;
+}
+
+fs::path apps_root_dir() {
+    if (is_system_mode()) {
+        return fs::path("/usr/local/share/yai/apps");
+    }
+    return expand_home_path(".local/share/yai/apps");
+}
+
+fs::path bin_dir() {
+    if (is_system_mode()) {
+        return fs::path("/usr/local/bin");
+    }
+    return expand_home_path(".local/bin");
+}
+
+fs::path applications_dir() {
+    if (is_system_mode()) {
+        return fs::path("/usr/local/share/applications");
+    }
+    return expand_home_path(".local/share/applications");
+}
+
+mode_t install_executable_mode() {
+    if (is_system_mode()) {
+        return S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;  // 0755
+    }
+    return S_IRUSR | S_IWUSR | S_IXUSR;  // 0700
+}
+
+mode_t install_data_mode() {
+    if (is_system_mode()) {
+        return S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;  // 0644
+    }
+    return S_IRUSR | S_IWUSR;  // 0600
+}
+
+InstallScope installed_scope_of(const std::string& id) {
+    const fs::path system_app =
+        fs::path("/usr/local/share/yai/apps") / id / "metadata.json";
+    if (fs::exists(system_app)) {
+        return InstallScope::System;
+    }
+    const fs::path user_app =
+        expand_home_path(".local/share/yai/apps") / id / "metadata.json";
+    if (fs::exists(user_app)) {
+        return InstallScope::User;
+    }
+    return InstallScope::None;
+}
+
+std::vector<InstalledAppDir> scan_installed_app_dirs() {
+    std::vector<InstalledAppDir> result;
+    const fs::path user_root = expand_home_path(".local/share/yai/apps");
+    const fs::path system_root = fs::path("/usr/local/share/yai/apps");
+    const auto scan = [&](const fs::path& root, InstallScope scope) {
+        std::error_code ec;
+        if (!fs::exists(root, ec)) {
+            return;
+        }
+        for (const auto& entry : fs::directory_iterator(root, ec)) {
+            if (!entry.is_directory()) {
+                continue;
+            }
+            std::error_code mec;
+            if (!fs::exists(entry.path() / "metadata.json", mec)) {
+                continue;
+            }
+            result.push_back({entry.path(), scope});
+        }
+    };
+    scan(user_root, InstallScope::User);
+    scan(system_root, InstallScope::System);
+    return result;
+}
+
+void require_current_user_can_manage(const std::string& id, const std::string& command) {
+    if (!is_system_mode() && installed_scope_of(id) == InstallScope::System) {
+        throw std::runtime_error(tr_format(
+            "package {id} is installed system-wide; manage it with sudo: sudo yai {command} {id}",
+            {{"{id}", id}, {"{command}", command}}));
+    }
 }
 
 bool contains_line_break(const std::string& value) {
@@ -407,7 +507,7 @@ void write_executable_file(const fs::path& path, const std::string& content) {
         }
         out << content;
     }
-    if (chmod(path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR) != 0) {
+    if (chmod(path.c_str(), install_executable_mode()) != 0) {
         throw std::runtime_error(tr("failed to chmod ") + path.string() + tr(": ") + std::strerror(errno));
     }
 }
@@ -589,13 +689,13 @@ std::string china_network_disclaimer() {
 }
 
 InstallPaths paths_for(const std::string& id) {
-    const fs::path app_dir = expand_home_path(".local/share/yai/apps") / id;
+    const fs::path app_dir = apps_root_dir() / id;
     return InstallPaths{
         app_dir,
         app_dir / "current.AppImage",
         app_dir / "extracted",
-        expand_home_path(".local/bin") / id,
-        expand_home_path(".local/share/applications") / ("yai-" + id + ".desktop"),
+        bin_dir() / id,
+        applications_dir() / ("yai-" + id + ".desktop"),
         app_dir / "metadata.json",
     };
 }
@@ -678,7 +778,7 @@ void clear_download_child() {
 void cleanup_orphan_downloads() {
     // Remove stale .part and .aria2 files left by previous interrupted runs.
     // Also remove .tmp files created by atomic writes.
-    const fs::path data_dir = expand_home_path(".local/share/yai");
+    const fs::path data_dir = apps_root_dir().parent_path();
     if (!fs::exists(data_dir)) {
         return;
     }

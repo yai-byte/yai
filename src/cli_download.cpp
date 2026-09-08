@@ -63,6 +63,7 @@ void print_usage() {
     std::cout << tr("  --index-strategy live  Skip the index, always crawl GitHub/website live\n");
     std::cout << tr("  YAI_REPO_INDEX=<url|path>  Override the index source\n");
     std::cout << tr("  YAI_INDEX_REGION=cn|global  Override Gitee/GitHub selection\n");
+    std::cout << tr("Run with sudo to install apps system-wide (under /usr/local).\n");
 }
 
 std::string read_option_value(int argc, char** argv, int& index, const std::string& option) {

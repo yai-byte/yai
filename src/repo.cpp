@@ -16,10 +16,16 @@ fs::path repo_index_path() {
     if (env != nullptr && std::string(env).empty() == false && !has_url_scheme(env)) {
         return fs::path(env);
     }
+    if (is_system_mode()) {
+        return fs::path("/usr/local/share/yai/repos/index.json");
+    }
     return expand_home_path(".local/share/yai/repos/index.json");
 }
 
 fs::path repos_dir_path() {
+    if (is_system_mode()) {
+        return fs::path("/usr/local/share/yai/repos");
+    }
     return expand_home_path(".local/share/yai/repos");
 }
 
@@ -241,6 +247,7 @@ void save_repo_packages_index(const std::vector<RepoPackage>& packages, const fs
         ensure_directory(path.parent_path());
     }
     write_text_file_atomic(path, repo_index_json_from_package_objects(objects));
+    chmod(path.c_str(), install_data_mode());
 }
 
 RepoPackage merge_repo_package_download_url_fields(
@@ -457,6 +464,7 @@ void rebuild_repo_index_from_cached_files(const std::vector<RepoEntry>& entries)
 
     ensure_directory(repos_dir_path());
     write_text_file_atomic(repo_index_path(), repo_index_json_from_package_objects(packages));
+    chmod(repo_index_path().c_str(), install_data_mode());
 }
 
 std::vector<RepoPackage> find_repo_packages(const std::string& id) {
