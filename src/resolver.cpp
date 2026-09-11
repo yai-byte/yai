@@ -3,6 +3,7 @@
 #include <chrono>
 #include <functional>
 #include <future>
+#include <unordered_map>
 
 // Install-source dispatch: package match helpers, staging, resolve_install_source
 // routing, and interactive network/mirror prompts. GitHub, URL/HTML, and website
@@ -587,16 +588,13 @@ ResolvedSource repo_github_release_source(const InstallOptions& options, const R
 }
 
 std::string repo_source_kind_for_type(const std::string& source_type) {
-    if (source_type == "direct_url") {
-        return "repo_direct_url";
-    }
-    if (source_type == "website_page") {
-        return "repo_website_page";
-    }
-    if (source_type == "github_release") {
-        return "repo_github_release";
-    }
-    return "repo_" + source_type;
+    static const std::unordered_map<std::string, std::string> kKnownKinds = {
+        {"direct_url", "repo_direct_url"},
+        {"website_page", "repo_website_page"},
+        {"github_release", "repo_github_release"},
+    };
+    const auto it = kKnownKinds.find(source_type);
+    return it != kKnownKinds.end() ? it->second : "repo_" + source_type;
 }
 
 ResolvedSource resolve_url_install_source(const InstallOptions& options) {
@@ -613,6 +611,39 @@ ResolvedSource resolve_url_install_source(const InstallOptions& options) {
     return with_install_arch(source, options);
 }
 
+// Build a ResolvedSource whose id/name/version/urls derive from one download
+// URL. Collapses the repeated field-filling boilerplate shared by every
+// repo-source resolver fallback below.
+ResolvedSource make_repo_source_from_url(
+    const InstallOptions& options,
+    const RepoPackage& package,
+    const std::string& url,
+    const std::string& kind = "repo_github_release") {
+    ResolvedSource source;
+    source.source_kind = kind;
+    source.id = repo_source_id(options, package);
+    source.name = repo_source_name(options, package);
+    source.version = basename_from_url(url);
+    source.source_url = url;
+    source.download_url = url;
+    return with_install_arch(source, options);
+}
+
+// Re-target package as a GitHub Release "owner/repo" and resolve its asset.
+// Callers guard on a '/' so a bare value falls through to the next candidate.
+ResolvedSource resolve_github_repo_path(
+    const InstallOptions& options,
+    const RepoPackage& package,
+    const std::string& repo_path) {
+    RepoPackage github_package = package;
+    const std::size_t slash = repo_path.find('/');
+    github_package.source_owner = repo_path.substr(0, slash);
+    github_package.source_repo = repo_path.substr(slash + 1);
+    github_package.source_type = "github_release";
+    github_package.asset_pattern = ".*\\.AppImage$";
+    return repo_github_release_source(options, github_package);
+}
+
 ResolvedSource resolve_repo_package_install_source_impl(
     const InstallOptions& options,
     const RepoPackage& package) {
@@ -624,13 +655,8 @@ ResolvedSource resolve_repo_package_install_source_impl(
         !(options.id_explicit && options.name_explicit && options.arch_explicit);
     if (prefer_index_url) {
         if (const auto url = repo_package_download_url_for_arch(package, arch)) {
-            ResolvedSource source;
-            source.source_kind = repo_source_kind_for_type(package.source_type);
-            source.id = repo_source_id(options, package);
-            source.name = repo_source_name(options, package);
-            source.version = basename_from_url(*url);
-            source.source_url = *url;
-            source.download_url = *url;
+            ResolvedSource source = make_repo_source_from_url(
+                options, package, *url, repo_source_kind_for_type(package.source_type));
             // Keep github_* identity for upgradeable metadata while still
             // downloading the preferred index URL directly. Mirror transport is
             // gated by source_uses_github_release_download (URL / live resolve).
@@ -642,11 +668,18 @@ ResolvedSource resolve_repo_package_install_source_impl(
                     source.github_asset = asset;
                 }
             }
-            return with_install_arch(source, options);
+            return source;
         }
     }
-    if (package.source_type == "direct_url") {
-        return repo_direct_url_source(options, package);
+    // Leaf resolvers keyed by source_type need no fallback orchestration.
+    using SourceResolver = ResolvedSource(*)(const InstallOptions&, const RepoPackage&);
+    static const std::unordered_map<std::string, SourceResolver> kLeafResolvers = {
+        {"direct_url", repo_direct_url_source},
+        {"website_page", repo_website_page_source},
+    };
+    const auto leaf = kLeafResolvers.find(package.source_type);
+    if (leaf != kLeafResolvers.end()) {
+        return leaf->second(options, package);
     }
     if (package.source_type == "unavailable") {
         // Before giving up, try AppImage GitHub data/ and apps/ lookups.
@@ -669,28 +702,16 @@ ResolvedSource resolve_repo_package_install_source_impl(
             if (!apps_entry->github_repo.empty()) {
                 std::cerr << tr("yai: found GitHub repo in apps/: ")
                           << apps_entry->github_repo << "\n";
-                RepoPackage github_package = package;
                 const std::size_t slash = apps_entry->github_repo.find('/');
                 if (slash != std::string::npos) {
-                    github_package.source_owner = apps_entry->github_repo.substr(0, slash);
-                    github_package.source_repo = apps_entry->github_repo.substr(slash + 1);
-                    github_package.source_type = "github_release";
-                    github_package.asset_pattern = ".*\\.AppImage$";
-                    return repo_github_release_source(options, github_package);
+                    return resolve_github_repo_path(options, package, apps_entry->github_repo);
                 }
             }
 
             if (!apps_entry->direct_url.empty()) {
                 std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
                                        {{"{name}", package.name}});
-                ResolvedSource source;
-                source.source_kind = "repo_github_release";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(apps_entry->direct_url);
-                source.source_url = apps_entry->direct_url;
-                source.download_url = apps_entry->direct_url;
-                return with_install_arch(source, options);
+                return make_repo_source_from_url(options, package, apps_entry->direct_url);
             }
 
             throw std::runtime_error(tr("apps/ entry has no usable source for ") + package.name);
@@ -703,9 +724,6 @@ ResolvedSource resolve_repo_package_install_source_impl(
         } catch (const std::exception&) {
             throw_unavailable_repo_source(package);
         }
-    }
-    if (package.source_type == "website_page") {
-        return repo_website_page_source(options, package);
     }
     try {
         return repo_github_release_source(options, package);
@@ -722,25 +740,12 @@ ResolvedSource resolve_repo_package_install_source_impl(
 
             if (catalog.github_repo.has_value()) {
                 std::cerr << tr("yai: found GitHub repo on AppImageHub: ") << *catalog.github_repo << "\n";
-                RepoPackage github_package = package;
-                const std::size_t slash = catalog.github_repo->find('/');
-                github_package.source_owner = catalog.github_repo->substr(0, slash);
-                github_package.source_repo = catalog.github_repo->substr(slash + 1);
-                github_package.source_type = "github_release";
-                github_package.asset_pattern = ".*\\.AppImage$";
-                return repo_github_release_source(options, github_package);
+                return resolve_github_repo_path(options, package, *catalog.github_repo);
             }
 
             if (catalog.direct_url.has_value()) {
                 std::cerr << tr("yai: found direct download URL on AppImageHub\n");
-                ResolvedSource source;
-                source.source_kind = "repo_github_release";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(*catalog.direct_url);
-                source.source_url = *catalog.direct_url;
-                source.download_url = *catalog.direct_url;
-                return with_install_arch(source, options);
+                return make_repo_source_from_url(options, package, *catalog.direct_url);
             }
 
             if (catalog.homepage.has_value()) {
@@ -749,14 +754,7 @@ ResolvedSource resolve_repo_package_install_source_impl(
                 homepage_package.source_url = *catalog.homepage;
                 const std::string download_url =
                     resolve_website_appimage_download(homepage_package, options.target_arch);
-                ResolvedSource source;
-                source.source_kind = "repo_github_release";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(download_url);
-                source.source_url = download_url;
-                source.download_url = download_url;
-                return with_install_arch(source, options);
+                return make_repo_source_from_url(options, package, download_url);
             }
 
             throw std::runtime_error(tr("AppImageHub catalog has no usable source for ") + package.name);
@@ -772,27 +770,15 @@ ResolvedSource resolve_repo_package_install_source_impl(
             if (!data_entry->direct_url.empty()) {
                 std::cerr << tr_format("yai: found direct download URL in data/ for {name}\n",
                                        {{"{name}", package.name}});
-                ResolvedSource source;
-                source.source_kind = "repo_github_release";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(data_entry->direct_url);
-                source.source_url = data_entry->direct_url;
-                source.download_url = data_entry->direct_url;
-                return with_install_arch(source, options);
+                return make_repo_source_from_url(options, package, data_entry->direct_url);
             }
 
             if (!data_entry->github_repo.empty()) {
                 std::cerr << tr("yai: found GitHub repo in data/: ")
                           << data_entry->github_repo << "\n";
-                RepoPackage github_package = package;
                 const std::size_t slash = data_entry->github_repo.find('/');
                 if (slash != std::string::npos) {
-                    github_package.source_owner = data_entry->github_repo.substr(0, slash);
-                    github_package.source_repo = data_entry->github_repo.substr(slash + 1);
-                    github_package.source_type = "github_release";
-                    github_package.asset_pattern = ".*\\.AppImage$";
-                    return repo_github_release_source(options, github_package);
+                    return resolve_github_repo_path(options, package, data_entry->github_repo);
                 }
             }
 
@@ -809,28 +795,16 @@ ResolvedSource resolve_repo_package_install_source_impl(
             if (!apps_entry->github_repo.empty()) {
                 std::cerr << tr("yai: found GitHub repo in apps/: ")
                           << apps_entry->github_repo << "\n";
-                RepoPackage github_package = package;
                 const std::size_t slash = apps_entry->github_repo.find('/');
                 if (slash != std::string::npos) {
-                    github_package.source_owner = apps_entry->github_repo.substr(0, slash);
-                    github_package.source_repo = apps_entry->github_repo.substr(slash + 1);
-                    github_package.source_type = "github_release";
-                    github_package.asset_pattern = ".*\\.AppImage$";
-                    return repo_github_release_source(options, github_package);
+                    return resolve_github_repo_path(options, package, apps_entry->github_repo);
                 }
             }
 
             if (!apps_entry->direct_url.empty()) {
                 std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
                                        {{"{name}", package.name}});
-                ResolvedSource source;
-                source.source_kind = "repo_github_release";
-                source.id = repo_source_id(options, package);
-                source.name = repo_source_name(options, package);
-                source.version = basename_from_url(apps_entry->direct_url);
-                source.source_url = apps_entry->direct_url;
-                source.download_url = apps_entry->direct_url;
-                return with_install_arch(source, options);
+                return make_repo_source_from_url(options, package, apps_entry->direct_url);
             }
 
             throw std::runtime_error(tr("apps/ entry has no usable source for ") + package.name);

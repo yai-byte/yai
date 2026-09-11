@@ -574,12 +574,7 @@ std::vector<std::string> html_appimage_urls(const std::string& html, const std::
 } // namespace
 
 bool vector_contains(const std::vector<std::string>& values, const std::string& value) {
-    for (const std::string& item : values) {
-        if (item == value) {
-            return true;
-        }
-    }
-    return false;
+    return std::find(values.begin(), values.end(), value) != values.end();
 }
 
 bool package_name_matches_url(const RepoPackage& package, const std::string& url) {
@@ -598,17 +593,16 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
     const std::string name = to_lower(package.name);
     std::vector<std::string> urls;
 
-    // Specific curated hints for projects with known download URLs
-    if (id.find("kdenlive") != std::string::npos || name.find("kdenlive") != std::string::npos) {
-        urls.push_back("https://kdenlive.org/en/download/");
-        urls.push_back("https://download.kde.org/stable/kdenlive/");
-    }
-    if (id.find("krita") != std::string::npos || name.find("krita") != std::string::npos) {
-        urls.push_back("https://krita.org/en/download/");
-        urls.push_back("https://download.kde.org/stable/krita/");
-    }
-    if (id.find("gimp") != std::string::npos || name.find("gimp") != std::string::npos) {
-        urls.push_back("https://www.gimp.org/downloads/");
+    // Specific curated hints for projects with known download URLs.
+    static const std::pair<std::string, std::vector<std::string>> kCuratedHints[] = {
+        {"kdenlive", {"https://kdenlive.org/en/download/", "https://download.kde.org/stable/kdenlive/"}},
+        {"krita",    {"https://krita.org/en/download/", "https://download.kde.org/stable/krita/"}},
+        {"gimp",     {"https://www.gimp.org/downloads/"}},
+    };
+    for (const auto& [keyword, hint_urls] : kCuratedHints) {
+        if (id.find(keyword) != std::string::npos || name.find(keyword) != std::string::npos) {
+            urls.insert(urls.end(), hint_urls.begin(), hint_urls.end());
+        }
     }
 
     // Build seed URLs for hint generation. When the source URL is an AppImageHub
@@ -648,17 +642,13 @@ std::vector<std::string> official_download_hint_urls(const RepoPackage& package)
         // a pattern like /release/{name}/, /download/{name}/, or similar.
         if (!id.empty()) {
             const std::string proj = id;
-            urls.push_back(base + proj + "/");
-            urls.push_back(base + "download/" + proj + "/");
-            urls.push_back(base + "downloads/" + proj + "/");
-            urls.push_back(base + "release/" + proj + "/");
-            urls.push_back(base + "releases/" + proj + "/");
-            urls.push_back(base + proj + "/download");
-            urls.push_back(base + proj + "/downloads");
-            urls.push_back(base + proj + "/release");
-            urls.push_back(base + proj + "/releases");
-            urls.push_back(base + proj + "/platforms");
-            urls.push_back(base + proj + "/linux");
+            const std::string slash_proj = "/" + proj + "/";
+            for (const char* mid : {"", "download", "downloads", "release", "releases"}) {
+                urls.push_back(base + mid + slash_proj);
+            }
+            for (const char* tail : {"/download", "/downloads", "/release", "/releases", "/platforms", "/linux"}) {
+                urls.push_back(base + proj + tail);
+            }
         }
 
         // Generate version-aware URLs when version is available.
@@ -821,51 +811,21 @@ bool should_follow_download_page(
         !package_name_matches_url(package, lower)) {
         return false;
     }
-    if (lower.find("bugs.") != std::string::npos ||
-        lower.find("bugtracker") != std::string::npos ||
-        lower.find("donat") != std::string::npos ||
-        lower.find("forum") != std::string::npos ||
-        lower.find("reddit.com") != std::string::npos ||
-        lower.find("old.reddit.com") != std::string::npos ||
-        lower.find("lemmy.") != std::string::npos ||
-        lower.find("discord.") != std::string::npos ||
-        lower.find("twitter.com") != std::string::npos ||
-        lower.find("x.com") != std::string::npos ||
-        lower.find("facebook.com") != std::string::npos ||
-        lower.find("youtube.com") != std::string::npos ||
-        lower.find("wiki.") != std::string::npos ||
-        lower.find("/wiki/") != std::string::npos ||
-        lower.find("/contribute") != std::string::npos ||
-        lower.find("/community") != std::string::npos ||
-        lower.find("/about") != std::string::npos ||
-        lower.find("/blog") != std::string::npos ||
-        lower.find("/news") != std::string::npos ||
-        lower.find("/support") != std::string::npos ||
-        lower.find("/help") != std::string::npos ||
-        lower.find("/docs/") != std::string::npos ||
-        lower.find("/documentation") != std::string::npos ||
-        lower.find("/tutorial") != std::string::npos ||
-        lower.find("/develop") != std::string::npos ||
-        lower.find("/code") != std::string::npos ||
-        lower.find("/source") != std::string::npos ||
-        lower.find("/git") != std::string::npos ||
-        lower.find("/roadmap") != std::string::npos ||
-        lower.find("/report") != std::string::npos ||
-        lower.find("/translat") != std::string::npos ||
-        lower.find("/learn") != std::string::npos ||
-        lower.find("/changelog") != std::string::npos ||
-        lower.find("/contact") != std::string::npos ||
-        lower.find("/press") != std::string::npos ||
-        lower.find("/privacy") != std::string::npos ||
-        lower.find("/license") != std::string::npos ||
-        lower.find("/sitemap") != std::string::npos ||
-        lower.find(".css") != std::string::npos ||
-        lower.find(".js") != std::string::npos ||
-        lower.find(".png") != std::string::npos ||
-        lower.find(".jpg") != std::string::npos ||
-        lower.find(".jpeg") != std::string::npos ||
-        lower.find(".svg") != std::string::npos) {
-        return false;
+    // Block discussion/social/static-resource pages so catalog noise cannot
+    // become a candidate source. Any fragment match rejects the URL.
+    static const char* const kBlockedUrlFragments[] = {
+        "bugs.", "bugtracker", "donat", "forum", "reddit.com", "old.reddit.com",
+        "lemmy.", "discord.", "twitter.com", "x.com", "facebook.com", "youtube.com",
+        "wiki.", "/wiki/", "/contribute", "/community", "/about", "/blog", "/news",
+        "/support", "/help", "/docs/", "/documentation", "/tutorial", "/develop",
+        "/code", "/source", "/git", "/roadmap", "/report", "/translat", "/learn",
+        "/changelog", "/contact", "/press", "/privacy", "/license", "/sitemap",
+        ".css", ".js", ".png", ".jpg", ".jpeg", ".svg",
+    };
+    for (const char* fragment : kBlockedUrlFragments) {
+        if (lower.find(fragment) != std::string::npos) {
+            return false;
+        }
     }
     if (is_kde_stable_download_url(lower)) {
         return true;
