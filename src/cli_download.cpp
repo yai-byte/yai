@@ -483,7 +483,7 @@ void remove_download_temps(const fs::path& part, const fs::path& headers) {
     const bool headers_removed = remove_best_effort(headers);
     const bool aria_removed = remove_best_effort(part.string() + ".aria2");
     if (!part_removed || !headers_removed || !aria_removed) {
-        std::cerr << tr("yai: warning: failed to clean temporary download files\n");
+        yai_debug_stream() << tr("yai: warning: failed to clean temporary download files\n");
     }
 }
 
@@ -541,7 +541,7 @@ HttpValidators download_file(const std::string& url, const fs::path& target, con
             const bool headers_removed = remove_best_effort(headers);
             const bool aria_removed = remove_best_effort(part.string() + ".aria2");
             if (!headers_removed || !aria_removed) {
-                std::cerr << tr("yai: warning: failed to clean temporary download metadata\n");
+                yai_debug_stream() << tr("yai: warning: failed to clean temporary download metadata\n");
             }
             std::error_code ec;
             fs::rename(part, target, ec);
@@ -556,7 +556,7 @@ HttpValidators download_file(const std::string& url, const fs::path& target, con
                 throw;
             }
             if (i + 1 < downloaders.size()) {
-                std::cerr << tr("yai: downloader failed, trying next: ")
+                yai_debug_stream() << tr("yai: downloader failed, trying next: ")
                           << last_error << "\n";
             }
         }

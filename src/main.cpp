@@ -324,9 +324,9 @@ void run_batch_command(const BatchCommand& batch) {
     ui.shutdown();
 
     if (was_interrupted()) {
-        std::cerr << tr("yai: operation interrupted by user\n");
+        yai_debug_stream() << tr("yai: operation interrupted by user\n");
         if (failed > 0) {
-            std::cerr << tr_format("yai: {failed} of {total} batch task(s) did not complete\n",
+            yai_debug_stream() << tr_format("yai: {failed} of {total} batch task(s) did not complete\n",
                 {{"{failed}", std::to_string(failed)},
                  {"{total}", std::to_string(results.size())}});
         }
@@ -412,7 +412,7 @@ int main(int argc, char** argv) {
         dispatch_command(argc, argv);
         return 0;
     } catch (const std::exception& ex) {
-        std::cerr << tr("yai: ") << ex.what() << "\n";
+        yai_debug_stream() << tr("yai: ") << ex.what() << "\n";
         return 1;
     }
 }

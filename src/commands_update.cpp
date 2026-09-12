@@ -393,8 +393,8 @@ void update_app(int argc, char** argv) {
                 use_index = false;
             }
         } catch (const std::exception& ex) {
-            std::cerr << tr("yai: failed to fetch remote index: ") << ex.what() << "\n";
-            std::cerr << tr("yai: falling back to live resolve\n");
+            yai_debug_stream() << tr("yai: failed to fetch remote index: ") << ex.what() << "\n";
+            yai_debug_stream() << tr("yai: falling back to live resolve\n");
             use_index = false;
         }
     } else {

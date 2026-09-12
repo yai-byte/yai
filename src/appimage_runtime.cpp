@@ -71,7 +71,7 @@ RepairResult detect_run_mode(const InstallPaths& paths) {
     // Runtime mode detection is a non-interactive install/repair heuristic. It only
     // decides which wrapper yai can generate safely; it is not a general AppImage
     // health check and does not prove the GUI app will be usable after launch.
-    std::cerr << tr("yai: probing direct AppImage mode\n");
+    yai_debug_stream() << tr("yai: probing direct AppImage mode\n");
     const ProcessResult direct = run_process_capture({paths.appimage.string(), "--appimage-version"});
     const ProcessResult direct_launch = run_process_capture_timeout({paths.appimage.string()}, 1500);
     const bool direct_fuse =
@@ -79,16 +79,16 @@ RepairResult detect_run_mode(const InstallPaths& paths) {
     if ((direct.exit_code == 0 || direct_launch.exit_code == 0 || direct_launch.timed_out) && !direct_fuse) {
         const bool removed = remove_all_best_effort(paths.extracted_dir);
         (void)removed; // Direct mode does not need stale extracted files.
-        std::cerr << tr("yai: selected direct AppImage mode\n");
+        yai_debug_stream() << tr("yai: selected direct AppImage mode\n");
         return RepairResult{"direct", output_has_fuse_error(direct.output), direct.output};
     }
     if (direct_fuse) {
-        std::cerr << tr("yai: direct mode reported a FUSE problem; trying extract-and-run mode\n");
+        yai_debug_stream() << tr("yai: direct mode reported a FUSE problem; trying extract-and-run mode\n");
     } else {
-        std::cerr << tr("yai: direct mode did not pass runtime probe; trying extract-and-run mode\n");
+        yai_debug_stream() << tr("yai: direct mode did not pass runtime probe; trying extract-and-run mode\n");
     }
 
-    std::cerr << tr("yai: probing extract-and-run AppImage mode\n");
+    yai_debug_stream() << tr("yai: probing extract-and-run AppImage mode\n");
     const ProcessResult extract_and_run = run_process_capture(
         {paths.appimage.string(), "--appimage-version"},
         std::nullopt,
@@ -106,13 +106,13 @@ RepairResult detect_run_mode(const InstallPaths& paths) {
         !extract_and_run_fuse) {
         const bool removed = remove_all_best_effort(paths.extracted_dir);
         (void)removed; // extract-and-run uses the AppImage file, not an extracted AppRun.
-        std::cerr << tr("yai: selected extract-and-run AppImage mode\n");
+        yai_debug_stream() << tr("yai: selected extract-and-run AppImage mode\n");
         return RepairResult{
             "extract_and_run",
             direct_fuse || extract_and_run_fuse,
             extract_and_run.output};
     }
-    std::cerr << tr("yai: extract-and-run mode did not pass runtime probe; extracting AppImage\n");
+    yai_debug_stream() << tr("yai: extract-and-run mode did not pass runtime probe; extracting AppImage\n");
 
     RepairResult extracted = extract_appimage(paths);
     if (extracted.mode == "extracted") {
@@ -121,7 +121,7 @@ RepairResult detect_run_mode(const InstallPaths& paths) {
             extracted.fuse_error_detected = true;
             return RepairResult{"failed", true, extracted_launch.output};
         }
-        std::cerr << tr("yai: selected extracted AppRun mode\n");
+        yai_debug_stream() << tr("yai: selected extracted AppRun mode\n");
         extracted.fuse_error_detected =
             extracted.fuse_error_detected ||
             direct_fuse ||

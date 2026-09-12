@@ -26,7 +26,7 @@ public:
         : package_id_(package_id), interactive_(isatty(STDERR_FILENO) != 0) {
         // Search status is diagnostic output. Keep it on stderr so search, info,
         // and other tabular stdout contracts remain script-friendly.
-        std::cerr << tr("yai: website search for ") << package_id_ << "\n";
+        yai_debug_stream() << tr("yai: website search for ") << package_id_ << "\n";
     }
 
     void queued() {

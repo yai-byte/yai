@@ -207,7 +207,7 @@ std::string download_with_strategy(
             return candidate;
         } catch (const std::exception& ex) {
             last_error = ex.what();
-            std::cerr << tr("yai: download failed from ")
+            yai_debug_stream() << tr("yai: download failed from ")
                       << candidate << tr(": ") << last_error << "\n";
         }
     }

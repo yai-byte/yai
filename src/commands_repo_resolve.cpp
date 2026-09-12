@@ -378,7 +378,7 @@ void repo_resolve_app(int argc, char** argv) {
                 upsert_repo_package_download_urls(packages[index]);
             }
         }
-        std::cerr << tr_format("yai: repo resolve interrupted; {count} package(s) saved\n",
+        yai_debug_stream() << tr_format("yai: repo resolve interrupted; {count} package(s) saved\n",
             {{"{count}", std::to_string(updated_indices.size())}});
         throw std::runtime_error(tr("repo resolve interrupted"));
     }

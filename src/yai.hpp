@@ -25,6 +25,7 @@
 #include <optional>
 #include <regex>
 #include <sstream>
+#include <streambuf>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -33,6 +34,36 @@
 #include <vector>
 
 namespace fs = std::filesystem;
+
+// --- Debug-trace facility -------------------------------------------------
+// "yai: ..." debug traces are routed through yai_debug_stream() so they stay
+// silent by default and only print when YAI_DEBUG is set (e.g. YAI_DEBUG=1).
+// This keeps verbose resolution/fallback tracing out of normal runs while
+// remaining available for troubleshooting.
+
+// Silent sink: swallows everything written to it when debugging is off, so
+// debug << chains are still evaluated but discarded with no side effects.
+class yai_nullbuf : public std::streambuf {
+public:
+    int overflow(int c) override { return c; }
+};
+
+inline yai_nullbuf yai_debug_nullbuf;
+inline std::ostream yai_debug_sink(&yai_debug_nullbuf);
+
+// Reads and caches YAI_DEBUG once (any non-empty value enables). Default off.
+inline bool yai_debug_enabled() {
+    static const bool enabled = []() {
+        const char* e = std::getenv("YAI_DEBUG");
+        return e != nullptr && e[0] != '\0';
+    }();
+    return enabled;
+}
+
+// Unified debug-trace outlet: std::cerr when enabled, otherwise a silent sink.
+inline std::ostream& yai_debug_stream() {
+    return yai_debug_enabled() ? std::cerr : yai_debug_sink;
+}
 
 struct InstallOptions {
     // Normalized CLI input shared by install, update, and download paths. It is
