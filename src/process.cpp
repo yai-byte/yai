@@ -717,6 +717,78 @@ int register_poll_slot(pollfd pfds[3], nfds_t& nfds, bool open, int fd) {
     return slot;
 }
 
+// Non-blocking reaping of the child via WNOHANG. Marks the child exited once it
+// has terminated and throws on unexpected waitpid errors.
+static void collect_child_exit(pid_t pid, bool& exited, int& status) {
+    if (exited) {
+        return;
+    }
+    const pid_t result = waitpid_nointr(pid, &status, WNOHANG);
+    if (result == pid) {
+        exited = true;
+    } else if (result < 0) {
+        throw std::runtime_error(std::string(tr("batch stream: waitpid failed: ")) +
+                                 std::strerror(errno));
+    }
+}
+
+// Result of polling the batch stream pipes for one loop iteration.
+enum class PollOutcome {
+    Events,    // poll returned; pfds carries revents to dispatch
+    Retry,     // transient (EINTR) or child still running with no open fds
+    Complete,  // all pipes closed and child exited; caller may break
+};
+
+// Polls the prepared pfds for the open batch pipes. Returns Retry to ask the
+// caller to `continue` (EINTR, or no fds open while the child runs), Complete
+// when there is nothing left to wait for, or Events once poll has returned.
+static PollOutcome poll_stream_ready(pollfd pfds[3], nfds_t nfds, bool exited) {
+    if (nfds == 0) {
+        if (!exited) {
+            usleep(50 * 1000);
+            return PollOutcome::Retry;
+        }
+        return PollOutcome::Complete;
+    }
+    const int timeout_ms = exited ? 0 : 200;
+    const int result = poll(pfds, nfds, timeout_ms);
+    if (result < 0) {
+        if (errno == EINTR) {
+            return PollOutcome::Retry;
+        }
+        throw std::runtime_error(std::string(tr("batch stream: poll failed: ")) +
+                                 std::strerror(errno));
+    }
+    return PollOutcome::Events;
+}
+
+// Drains a single ready poll slot: flushes buffered output on POLLERR/POLLNVAL,
+// reads available bytes on POLLIN/POLLHUP, and closes the fd once the stream
+// ends (read_batch_stream_fd returns true on EOF).
+static void drain_stream_slot(const pollfd& pfd, int& fd, bool& open_flag, std::string& buffer,
+                              BatchStreamChannel channel, std::size_t index,
+                              const std::string& target, BatchTerminalUi& ui) {
+    if (!open_flag) {
+        return;
+    }
+    const short revents = pfd.revents;
+    if ((revents & (POLLERR | POLLNVAL)) != 0) {
+        dispatch_batch_stream_buffer(buffer, channel, index, target, ui, true);
+        close_fd_best_effort(fd);
+        fd = -1;
+        open_flag = false;
+        return;
+    }
+    if ((revents & (POLLIN | POLLHUP)) == 0) {
+        return;
+    }
+    if (read_batch_stream_fd(fd, buffer, channel, index, target, ui)) {
+        close_fd_best_effort(fd);
+        fd = -1;
+        open_flag = false;
+    }
+}
+
 // Spawns one batch child process and streams its stdout/stderr line-by-line
 // to the terminal UI. Handles timeout, output cap, and interrupt. Returns
 // exit code, captured output, and timing information for the UI to render.
@@ -823,15 +895,7 @@ StreamingBatchResult run_batch_task_streaming(
             if (was_interrupted()) {
                 throw std::runtime_error(tr("Operation interrupted by user"));
             }
-            if (!exited) {
-                const pid_t wait_result = waitpid_nointr(pid, &status, WNOHANG);
-                if (wait_result == pid) {
-                    exited = true;
-                } else if (wait_result < 0) {
-                    throw std::runtime_error(
-                        std::string(tr("batch stream: waitpid failed: ")) + std::strerror(errno));
-                }
-            }
+            collect_child_exit(pid, exited, status);
 
             pollfd pfds[3];
             nfds_t nfds = 0;
@@ -839,49 +903,26 @@ StreamingBatchResult run_batch_task_streaming(
             const int stderr_slot = register_poll_slot(pfds, nfds, stderr_open, stderr_pipe[0]);
             const int event_slot = register_poll_slot(pfds, nfds, event_open, event_pipe[0]);
 
-            const int timeout_ms = (nfds == 0) ? 0 : (exited ? 0 : 200);
-            if (nfds > 0) {
-                const int ready = poll(pfds, nfds, timeout_ms);
-                if (ready < 0) {
-                    if (errno == EINTR) {
-                        continue;
-                    }
-                    throw std::runtime_error(
-                        std::string(tr("batch stream: poll failed: ")) + std::strerror(errno));
-                }
-            } else if (!exited) {
-                usleep(50 * 1000);
+            const PollOutcome outcome = poll_stream_ready(pfds, nfds, exited);
+            if (outcome == PollOutcome::Retry) {
                 continue;
-            } else {
+            }
+            if (outcome == PollOutcome::Complete) {
                 break;
             }
 
-            auto handle_slot = [&](int slot, int& fd, bool& open_flag, std::string& buffer,
-                                   BatchStreamChannel channel) {
-                if (slot < 0 || !open_flag) {
-                    return;
-                }
-                const short revents = pfds[slot].revents;
-                if ((revents & (POLLERR | POLLNVAL)) != 0) {
-                    dispatch_batch_stream_buffer(buffer, channel, index, target, ui, true);
-                    close_fd_best_effort(fd);
-                    fd = -1;
-                    open_flag = false;
-                    return;
-                }
-                if ((revents & (POLLIN | POLLHUP)) == 0) {
-                    return;
-                }
-                if (read_batch_stream_fd(fd, buffer, channel, index, target, ui)) {
-                    close_fd_best_effort(fd);
-                    fd = -1;
-                    open_flag = false;
-                }
-            };
-
-            handle_slot(stdout_slot, stdout_pipe[0], stdout_open, stdout_buf, BatchStreamChannel::Log);
-            handle_slot(stderr_slot, stderr_pipe[0], stderr_open, stderr_buf, BatchStreamChannel::Log);
-            handle_slot(event_slot, event_pipe[0], event_open, event_buf, BatchStreamChannel::Event);
+            if (stdout_slot >= 0) {
+                drain_stream_slot(pfds[stdout_slot], stdout_pipe[0], stdout_open, stdout_buf,
+                                  BatchStreamChannel::Log, index, target, ui);
+            }
+            if (stderr_slot >= 0) {
+                drain_stream_slot(pfds[stderr_slot], stderr_pipe[0], stderr_open, stderr_buf,
+                                  BatchStreamChannel::Log, index, target, ui);
+            }
+            if (event_slot >= 0) {
+                drain_stream_slot(pfds[event_slot], event_pipe[0], event_open, event_buf,
+                                  BatchStreamChannel::Event, index, target, ui);
+            }
         }
 
         if (!exited) {
