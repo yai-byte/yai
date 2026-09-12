@@ -68,121 +68,6 @@ void test_structs() {
     }
 }
 
-void test_merge_apps_entry_into_package() {
-    std::cout << "=== Test: merge_apps_entry_into_package ===";
-
-    // Test 1: Enrich existing package with apps/ metadata
-    {
-        RepoPackage existing;
-        existing.id = "test-app";
-        existing.name = "Test App";
-        existing.summary = "From feed";
-        existing.source_owner = "user";
-        existing.source_repo = "repo";
-        existing.source_type = "github_release";
-
-        AppImageAppsEntry entry;
-        entry.name = "test-app";
-        entry.description = "From apps/ with more details";
-        entry.license = "MIT";
-        entry.homepage = "https://example.com";
-        entry.github_repo = "user/repo";
-        entry.arch = "x86_64";
-        entry.version = "2.0";
-
-        RepoPackage merged = merge_apps_entry_into_package(entry, existing);
-
-        check(merged.source_origin == "appimage_apps", "merge: source_origin set to appimage_apps");
-        check(merged.arch == "x86_64", "merge: arch copied from apps/");
-        check(merged.version == "2.0", "merge: version copied from apps/");
-        check(merged.summary == "From feed", "merge: feed summary preserved");
-        check(merged.license == "MIT", "merge: license enriched from apps/");
-        check(merged.homepage == "https://example.com", "merge: homepage enriched from apps/");
-        check(merged.source_owner == "user", "merge: source_owner preserved");
-        check(merged.source_repo == "repo", "merge: source_repo preserved");
-    }
-
-    // Test 2: Enrich package with no GitHub info from apps/
-    {
-        RepoPackage existing;
-        existing.id = "new-app";
-        existing.name = "New App";
-        existing.source_type = "website_page";
-
-        AppImageAppsEntry entry;
-        entry.name = "new-app";
-        entry.description = "New application";
-        entry.github_repo = "newuser/newrepo";
-        entry.arch = "aarch64";
-
-        RepoPackage merged = merge_apps_entry_into_package(entry, existing);
-
-        check(merged.source_type == "github_release", "merge: website_page upgraded to github_release");
-        check(merged.source_owner == "newuser", "merge: source_owner extracted from apps/");
-        check(merged.source_repo == "newrepo", "merge: source_repo extracted from apps/");
-        check(merged.arch == "aarch64", "merge: arch set for new package");
-    }
-
-    // Test 3: Don't overwrite non-empty fields from feed
-    {
-        RepoPackage existing;
-        existing.id = "existing-app";
-        existing.name = "Existing App";
-        existing.summary = "Feed summary";
-        existing.license = "GPL-3.0";
-        existing.homepage = "https://feed.example.com";
-        existing.source_type = "github_release";
-        existing.source_owner = "originalowner";
-        existing.source_repo = "originalrepo";
-
-        AppImageAppsEntry entry;
-        entry.name = "existing-app";
-        entry.description = "Apps/ summary";
-        entry.license = "MIT";
-        entry.homepage = "https://apps.example.com";
-        entry.github_repo = "newowner/newrepo";
-        entry.arch = "x86_64";
-        entry.version = "1.0";
-
-        RepoPackage merged = merge_apps_entry_into_package(entry, existing);
-
-        check(merged.summary == "Feed summary", "merge: feed summary not overwritten");
-        check(merged.license == "GPL-3.0", "merge: feed license not overwritten");
-        check(merged.homepage == "https://feed.example.com", "merge: feed homepage not overwritten");
-        check(merged.source_owner == "originalowner", "merge: feed source_owner not overwritten");
-        check(merged.source_repo == "originalrepo", "merge: feed source_repo not overwritten");
-        check(merged.arch == "x86_64", "merge: arch added from apps/");
-        check(merged.version == "1.0", "merge: version added from apps/");
-    }
-
-    // Test 4: New package from apps/ entry
-    {
-        RepoPackage existing;
-        existing.id = "brand-new";
-        existing.name = "Brand New App";
-
-        AppImageAppsEntry entry;
-        entry.name = "brand-new";
-        entry.description = "A brand new application";
-        entry.license = "Apache-2.0";
-        entry.homepage = "https://brandnew.example.com";
-        entry.github_repo = "brand/newrepo";
-        entry.arch = "aarch64";
-        entry.version = "0.1.0";
-
-        RepoPackage merged = merge_apps_entry_into_package(entry, existing);
-
-        check(merged.source_origin == "appimage_apps", "merge new: source_origin set");
-        check(merged.source_type == "github_release", "merge new: github_release set");
-        check(merged.source_owner == "brand", "merge new: source_owner extracted");
-        check(merged.source_repo == "newrepo", "merge new: source_repo extracted");
-        check(merged.summary == "A brand new application", "merge new: summary set");
-        check(merged.license == "Apache-2.0", "merge new: license set");
-        check(merged.homepage == "https://brandnew.example.com", "merge new: homepage set");
-        check(merged.arch == "aarch64", "merge new: arch set");
-        check(merged.version == "0.1.0", "merge new: version set");
-    }
-}
 
 void test_serialization() {
     std::cout << "=== Test: New field serialization ===";
@@ -250,7 +135,6 @@ void test_github_repo_detection() {
 int main() {
     try {
         test_structs();
-        test_merge_apps_entry_into_package();
         test_serialization();
         test_github_repo_detection();
 

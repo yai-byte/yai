@@ -138,6 +138,60 @@ UpdatePreviewResult preview_from_url_freshness(
     return UpdatePreviewResult{id, current_version, "", "error", probe.detail};
 }
 
+// Shared resolver path for the repo-backed sources (repo_website_page and
+// repo_direct_url): build the update context, resolve the live source, and
+// translate the outcome into an UpdatePreviewResult. website_page sources
+// expose no real download URL, so a stable identity means "already up to
+// date" rather than a URL re-check.
+UpdatePreviewResult preview_from_resolved_repo_source(
+    const std::string& id,
+    const std::string& source_kind,
+    const InstallPaths& paths,
+    const std::string& current_version,
+    const std::string& name,
+    const std::string& source_url,
+    const std::string& github_owner,
+    const std::string& github_repo,
+    const std::string& installed_arch,
+    const fs::path& metadata) {
+    try {
+        const UpdateContext context{
+            InstallOptions{},
+            id,
+            paths,
+            source_kind,
+            current_version,
+            name,
+            source_url,
+            github_owner,
+            github_repo,
+            installed_arch};
+        const ResolvedSource source = resolve_repo_update_source(context);
+        if (update_source_identity_changed(context, source)) {
+            return UpdatePreviewResult{
+                id,
+                current_version,
+                source.version,
+                "upgradable",
+                tr("source: ") + source.source_url};
+        }
+        if (source_kind == "repo_website_page") {
+            return UpdatePreviewResult{
+                id,
+                current_version,
+                source.version,
+                "current",
+                tr("already up to date")};
+        }
+        const std::string candidate =
+            !source.source_url.empty() ? source.source_url : source_url;
+        return preview_from_url_freshness(
+            id, current_version, source.version, candidate, metadata);
+    } catch (const std::exception& ex) {
+        return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
+    }
+}
+
 UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) {
     const InstallPaths paths = paths_for(id);
     if (!metadata_exists(paths)) {
@@ -204,72 +258,10 @@ UpdatePreviewResult build_update_preview(const std::string& id, bool use_index) 
         return preview_from_url_freshness(id, current_version, current_version, candidate, metadata);
     }
 
-    if (source_kind == "repo_website_page") {
-        try {
-            UpdateContext context{
-                InstallOptions{},
-                id,
-                paths,
-                source_kind,
-                current_version,
-                name,
-                source_url,
-                github_owner,
-                github_repo,
-                installed_arch};
-            ResolvedSource source = resolve_repo_update_source(context);
-            if (update_source_identity_changed(context, source)) {
-                return UpdatePreviewResult{
-                    id,
-                    current_version,
-                    source.version,
-                    "upgradable",
-                    tr("source: ") + source.source_url};
-            }
-            return UpdatePreviewResult{
-                id,
-                current_version,
-                source.version,
-                "current",
-                tr("already up to date")};
-        } catch (const std::exception& ex) {
-            return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
-        }
-    }
-
-    if (source_kind == "repo_direct_url") {
-        try {
-            UpdateContext context{
-                InstallOptions{},
-                id,
-                paths,
-                source_kind,
-                current_version,
-                name,
-                source_url,
-                github_owner,
-                github_repo,
-                installed_arch};
-            ResolvedSource source = resolve_repo_update_source(context);
-            if (update_source_identity_changed(context, source)) {
-                return UpdatePreviewResult{
-                    id,
-                    current_version,
-                    source.version,
-                    "upgradable",
-                    tr("source: ") + source.source_url};
-            }
-            const std::string candidate =
-                !source.source_url.empty() ? source.source_url : source_url;
-            return preview_from_url_freshness(
-                id,
-                current_version,
-                source.version,
-                candidate,
-                metadata);
-        } catch (const std::exception& ex) {
-            return UpdatePreviewResult{id, current_version, "", "error", ex.what()};
-        }
+    if (source_kind == "repo_website_page" || source_kind == "repo_direct_url") {
+        return preview_from_resolved_repo_source(
+            id, source_kind, paths, current_version, name,
+            source_url, github_owner, github_repo, installed_arch, metadata);
     }
 
     if ((source_kind != "github_release" && source_kind != "repo_github_release") ||

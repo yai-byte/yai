@@ -26,11 +26,15 @@ fi
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # 1) usage mentions system-wide install via sudo (language-neutral match)
+# `yai` exits non-zero when run with no args; with `set -o pipefail` that would
+# fail the pipeline regardless of whether grep matched, so disable pipefail here.
+set +o pipefail
 if "$YAI" 2>&1 | grep -qiE "system-wide|系统级"; then
   echo "ok: usage mentions system-wide install"
 else
   fail "usage does not mention system-wide / sudo install"
 fi
+set -o pipefail
 
 # 2) system mode resolves paths without crashing (isolated HOME)
 tmp="$(mktemp -d)"

@@ -174,15 +174,14 @@ int main(int argc, char** argv) {
             "reject bad ints");
         require(batch_event_fd() < 0, "unset event fd");
 
-        const std::string single_style = format_download_progress_line(
-            12345,
-            67890,
-            1024.0,
-            1.5,
-            60.0,
-            45.0,
-            80,
-            0);
+        DownloadProgressSnapshot single_snap;
+        single_snap.downloaded = 12345;
+        single_snap.total = 67890;
+        single_snap.bytes_per_second = 1024.0;
+        single_snap.elapsed = 1.5;
+        single_snap.total_seconds = 60.0;
+        single_snap.left_seconds = 45.0;
+        const std::string single_style = format_download_progress_line(single_snap, 80, 0);
         require(single_style.find("Downloaded:") != std::string::npos, "progress line has Downloaded");
         require(single_style.find('[') != std::string::npos, "progress line has bar");
     }
@@ -201,7 +200,9 @@ int main(int argc, char** argv) {
         std::size_t last_width = 0;
         DownloadProgressState prog_state;
         const auto start = std::chrono::steady_clock::now();
-        render_download_progress(part, headers, start, 0, last_width, prog_state);
+        const auto snap = download_progress_snapshot(part, headers, start, prog_state);
+        require(snap.has_value(), "snapshot built");
+        render_download_progress(*snap, 0, last_width);
         clear_download_progress(last_width);
 
         require(close(fds[1]) == 0, "close write");
