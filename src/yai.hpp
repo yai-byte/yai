@@ -217,6 +217,15 @@ struct DownloadProgressState {
     double bytes_per_second = 0.0;
 };
 
+struct DownloadProgressSnapshot {
+    std::uintmax_t downloaded = 0;
+    std::optional<std::uintmax_t> total;
+    double elapsed = 0.0;
+    double bytes_per_second = 0.0;
+    double total_seconds = -1.0;
+    double left_seconds = -1.0;
+};
+
 struct RepairResult {
     // Runtime-mode probe result propagated to command code so it can write the
     // matching wrapper and tell users when FUSE caused a fallback.
@@ -385,14 +394,18 @@ std::string progress_bar(
     std::uintmax_t downloaded,
     std::size_t width,
     int tick);
-void render_download_progress(
+// Builds a progress snapshot from on-disk/aria2 state, or nullopt if unavailable.
+std::optional<DownloadProgressSnapshot> download_progress_snapshot(
     const fs::path& part,
     const fs::path& headers,
     const std::chrono::steady_clock::time_point& start,
-    int tick,
-    std::size_t& last_width,
     DownloadProgressState& state,
     std::optional<std::uint16_t> aria2_rpc_port = std::nullopt);
+// Renders a progress snapshot to stderr (TTY) or writes a batch progress event.
+void render_download_progress(
+    const DownloadProgressSnapshot& snapshot,
+    int tick,
+    std::size_t& last_width);
 void clear_download_progress(std::size_t& last_width);
 
 struct BatchProgressEvent {
@@ -412,12 +425,7 @@ std::string format_batch_progress_clear_event();
 int batch_event_fd();
 // Same layout as single-package TTY progress (stats left, bar right), sized to columns.
 std::string format_download_progress_line(
-    std::uintmax_t downloaded,
-    std::optional<std::uintmax_t> total,
-    double bytes_per_second,
-    double elapsed,
-    double total_seconds,
-    double left_seconds,
+    const DownloadProgressSnapshot& snapshot,
     std::size_t columns,
     int tick);
 
@@ -573,6 +581,9 @@ std::optional<int> json_find_int(const std::string& text, const std::string& key
 // the given key. Useful for IDs that exceed int range (e.g. GitLab pipeline
 // IDs) or when a field may be either a quoted string or a bare number.
 std::optional<std::string> json_find_number_as_string(const std::string& text, const std::string& key);
+// Tries json_find_string, then falls back to json_find_number_as_string
+// (GitLab IDs are returned as bare numbers). Empty when neither matches.
+std::optional<std::string> json_find_string_or_number(const std::string& text, const std::string& key);
 std::map<std::string, std::string> json_find_string_map(const std::string& object_text, const std::string& key);
 std::vector<std::string> json_top_level_objects(const std::string& array_text);
 fs::path repo_index_path();

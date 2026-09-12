@@ -347,17 +347,6 @@ std::string progress_bar(
     return bar;
 }
 
-namespace {
-
-struct DownloadProgressSnapshot {
-    std::uintmax_t downloaded = 0;
-    std::optional<std::uintmax_t> total;
-    double elapsed = 0.0;
-    double bytes_per_second = 0.0;
-    double total_seconds = -1.0;
-    double left_seconds = -1.0;
-};
-
 std::optional<DownloadProgressSnapshot> download_progress_snapshot(
     const fs::path& part,
     const fs::path& headers,
@@ -413,6 +402,8 @@ std::optional<DownloadProgressSnapshot> download_progress_snapshot(
     // downloaded bytes and current speed.
     return snapshot;
 }
+
+namespace {
 
 bool download_progress_knows_total(const DownloadProgressSnapshot& snapshot) {
     return snapshot.total.has_value() && *snapshot.total > 0;
@@ -492,49 +483,28 @@ void write_event_line(int event_fd, const std::string& line) {
 } // namespace
 
 std::string format_download_progress_line(
-    std::uintmax_t downloaded,
-    std::optional<std::uintmax_t> total,
-    double bytes_per_second,
-    double elapsed,
-    double total_seconds,
-    double left_seconds,
+    const DownloadProgressSnapshot& snapshot,
     std::size_t columns,
     int tick) {
-    DownloadProgressSnapshot snapshot;
-    snapshot.downloaded = downloaded;
-    snapshot.total = total;
-    snapshot.bytes_per_second = bytes_per_second;
-    snapshot.elapsed = elapsed;
-    snapshot.total_seconds = total_seconds;
-    snapshot.left_seconds = left_seconds;
     const std::string stats = format_download_progress_stats(snapshot);
     return render_progress_line(stats, snapshot, columns, tick);
 }
 
 void render_download_progress(
-    const fs::path& part,
-    const fs::path& headers,
-    const std::chrono::steady_clock::time_point& start,
+    const DownloadProgressSnapshot& snapshot,
     int tick,
-    std::size_t& last_width,
-    DownloadProgressState& state,
-    std::optional<std::uint16_t> aria2_rpc_port) {
+    std::size_t& last_width) {
     const int event_fd = batch_event_fd();
-    const std::optional<DownloadProgressSnapshot> snapshot =
-        download_progress_snapshot(part, headers, start, state, aria2_rpc_port);
-    if (!snapshot.has_value()) {
-        return;
-    }
 
     if (event_fd >= 0) {
         BatchProgressEvent event;
         event.kind = BatchProgressEvent::Kind::Progress;
-        event.done = snapshot->downloaded;
-        event.total = snapshot->total;
-        event.rate_bps = snapshot->bytes_per_second;
-        event.elapsed = snapshot->elapsed;
-        event.total_seconds = snapshot->total_seconds;
-        event.left_seconds = snapshot->left_seconds;
+        event.done = snapshot.downloaded;
+        event.total = snapshot.total;
+        event.rate_bps = snapshot.bytes_per_second;
+        event.elapsed = snapshot.elapsed;
+        event.total_seconds = snapshot.total_seconds;
+        event.left_seconds = snapshot.left_seconds;
         write_event_line(event_fd, format_batch_progress_event(event) + "\n");
         return;
     }
@@ -547,15 +517,7 @@ void render_download_progress(
     }
 
     write_progress_line(
-        format_download_progress_line(
-            snapshot->downloaded,
-            snapshot->total,
-            snapshot->bytes_per_second,
-            snapshot->elapsed,
-            snapshot->total_seconds,
-            snapshot->left_seconds,
-            terminal_width(),
-            tick),
+        format_download_progress_line(snapshot, terminal_width(), tick),
         last_width);
 }
 

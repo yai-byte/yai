@@ -12,6 +12,29 @@
 //     walking the project's latest successful pipeline and re-downloading the
 //     AppImage-bearing job's artifact zip.
 
+namespace {
+
+// Scores a candidate AppImage URL against the target arch and, if it beats the
+// current best, records it. Returns the score, or -1 when url is not an
+// AppImage download link (so callers can still emit their own log line).
+int consider_appimage_candidate(
+    const std::string& url,
+    const std::string& effective_arch,
+    std::string& best_url,
+    int& best_score) {
+    if (!is_appimage_download_url(url)) {
+        return -1;
+    }
+    const int score = appimage_asset_score(basename_from_url(url), effective_arch);
+    if (score > best_score) {
+        best_score = score;
+        best_url = url;
+    }
+    return score;
+}
+
+}  // namespace
+
 // Resolve AppImage download URL from a GitLab project using the GitLab API.
 // GitLab releases pages are JavaScript-rendered, so HTML scraping cannot find
 // download links. The GitLab API returns structured data about release assets
@@ -78,17 +101,13 @@ std::string resolve_gitlab_appimage_download(
                 if (candidate_url.empty()) continue;
 
                 // Check if this looks like an AppImage download
-                if (is_appimage_download_url(candidate_url)) {
-                    int score = appimage_asset_score(basename_from_url(candidate_url), effective_arch);
+                const int score = consider_appimage_candidate(candidate_url, effective_arch, best_url, best_score);
+                if (score >= 0) {
                     std::cerr << tr_format(
                         "yai:   found AppImage link: {url} (score={score}, name={name})\n",
                         {{"{url}", candidate_url},
                          {"{score}", std::to_string(score)},
                          {"{name}", name}});
-                    if (score > best_score) {
-                        best_score = score;
-                        best_url = candidate_url;
-                    }
                 }
             }
         }
@@ -112,15 +131,11 @@ std::string resolve_gitlab_appimage_download(
                     continue;
                 }
                 std::string url = description.substr(paren_start, paren_end - paren_start);
-                if (is_appimage_download_url(url)) {
-                    int score = appimage_asset_score(basename_from_url(url), effective_arch);
+                const int score = consider_appimage_candidate(url, effective_arch, best_url, best_score);
+                if (score >= 0) {
                     std::cerr << tr_format(
                         "yai:   found AppImage in description: {url} (score={score})\n",
                         {{"{url}", url}, {"{score}", std::to_string(score)}});
-                    if (score > best_score) {
-                        best_score = score;
-                        best_url = url;
-                    }
                 }
                 pos = paren_end + 1;
             }
@@ -255,11 +270,7 @@ std::string fetch_gitlab_latest_pipeline_id(
         return "";
     }
 
-    std::string pipeline_id = json_find_string(pipelines[0], "id").value_or("");
-    if (pipeline_id.empty()) {
-        // GitLab API returns IDs as numbers; json_find_string only accepts quoted strings.
-        pipeline_id = json_find_number_as_string(pipelines[0], "id").value_or("");
-    }
+    std::string pipeline_id = json_find_string_or_number(pipelines[0], "id").value_or("");
     std::cerr << tr("yai: latest successful pipeline: ") << pipeline_id << "\n";
     return pipeline_id;
 }
@@ -297,11 +308,7 @@ std::vector<GitLabJob> fetch_gitlab_appimage_jobs(
         if (to_lower(job_name).find("appimage") == std::string::npos) {
             continue;
         }
-        std::string job_id = json_find_string(job_json, "id").value_or("");
-        if (job_id.empty()) {
-            // GitLab API returns IDs as numbers; json_find_string only accepts quoted strings.
-            job_id = json_find_number_as_string(job_json, "id").value_or("");
-        }
+        std::string job_id = json_find_string_or_number(job_json, "id").value_or("");
         if (job_id.empty()) {
             continue;
         }

@@ -319,6 +319,14 @@ std::optional<std::string> json_find_number_as_string(const std::string& text, c
     return text.substr(*start, pos - *start);
 }
 
+std::optional<std::string> json_find_string_or_number(const std::string& text, const std::string& key) {
+    const std::optional<std::string> s = json_find_string(text, key);
+    if (s.has_value() && !s->empty()) {
+        return s;
+    }
+    return json_find_number_as_string(text, key);
+}
+
 std::vector<std::string> json_top_level_objects(const std::string& array_text) {
     std::vector<std::string> objects;
     if (array_text.size() < 2 || array_text.front() != '[') {

@@ -656,7 +656,11 @@ ProcessResult run_process_capture_download_progress(
             clear_download_progress(last_width);
             throw std::runtime_error(std::string(tr("download process poll: waitpid failed: ")) + std::strerror(errno));
         }
-        render_download_progress(part, headers, start, tick, last_width, progress_state, aria2_rpc_port);
+        const auto progress_snapshot =
+            download_progress_snapshot(part, headers, start, progress_state, aria2_rpc_port);
+        if (progress_snapshot.has_value()) {
+            render_download_progress(*progress_snapshot, tick, last_width);
+        }
         ++tick;
         usleep(200 * 1000);
     }

@@ -36,15 +36,14 @@ std::string BatchTerminalUi::format_footer_row(std::size_t index, const Progress
     const std::size_t columns = terminal_width();
     const std::size_t prefix_width = display_width(prefix);
     const std::size_t body_columns = columns > prefix_width ? columns - prefix_width : 0;
-    return prefix + format_download_progress_line(
-               row.event.done,
-               row.event.total,
-               row.event.rate_bps,
-               row.event.elapsed,
-               row.event.total_seconds,
-               row.event.left_seconds,
-               body_columns,
-               row.tick);
+    DownloadProgressSnapshot snapshot;
+    snapshot.downloaded = row.event.done;
+    snapshot.total = row.event.total;
+    snapshot.bytes_per_second = row.event.rate_bps;
+    snapshot.elapsed = row.event.elapsed;
+    snapshot.total_seconds = row.event.total_seconds;
+    snapshot.left_seconds = row.event.left_seconds;
+    return prefix + format_download_progress_line(snapshot, body_columns, row.tick);
 }
 
 void BatchTerminalUi::redraw_footer_locked() {
