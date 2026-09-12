@@ -644,6 +644,119 @@ ResolvedSource resolve_github_repo_path(
     return repo_github_release_source(options, github_package);
 }
 
+// Builds the two last-resort fallbacks for packages recorded as "unavailable"
+// in the local index: AppImage GitHub data/ and apps/ lookups.
+std::vector<std::function<ResolvedSource()>> build_unavailable_fallbacks(
+    const InstallOptions& options,
+    const RepoPackage& package,
+    const std::string& arch) {
+    std::vector<std::function<ResolvedSource()>> fallbacks;
+
+    fallbacks.push_back([&]() -> ResolvedSource {
+        return resolve_appimage_data_fallback(options, package, arch, /*rich=*/false);
+    });
+
+    fallbacks.push_back([&]() -> ResolvedSource {
+        std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
+        auto apps_entry = lookup_appimage_apps_entry(package.name);
+        if (!apps_entry.has_value()) {
+            throw std::runtime_error(tr("no apps/ entry for ") + package.name);
+        }
+        if (!apps_entry->github_repo.empty()) {
+            std::cerr << tr("yai: found GitHub repo in apps/: ")
+                      << apps_entry->github_repo << "\n";
+            const std::size_t slash = apps_entry->github_repo.find('/');
+            if (slash != std::string::npos) {
+                return resolve_github_repo_path(options, package, apps_entry->github_repo);
+            }
+        }
+        if (!apps_entry->direct_url.empty()) {
+            std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
+                                   {{"{name}", package.name}});
+            return make_repo_source_from_url(options, package, apps_entry->direct_url);
+        }
+        throw std::runtime_error(tr("apps/ entry has no usable source for ") + package.name);
+    });
+
+    return fallbacks;
+}
+
+// Builds the GitHub-release fallbacks (AppImageHub catalog, data/, apps/) tried
+// when a primary github_release source resolution fails.
+std::vector<std::function<ResolvedSource()>> build_github_release_fallbacks(
+    const InstallOptions& options,
+    const RepoPackage& package) {
+    std::vector<std::function<ResolvedSource()>> fallbacks;
+
+    fallbacks.push_back([&]() -> ResolvedSource {
+        std::cerr << tr("yai: fetching AppImageHub catalog for ") << package.name << "\n";
+        const AppImageCatalogSources catalog = fetch_appimage_catalog_sources(package.name);
+        if (catalog.github_repo.has_value()) {
+            std::cerr << tr("yai: found GitHub repo on AppImageHub: ") << *catalog.github_repo << "\n";
+            return resolve_github_repo_path(options, package, *catalog.github_repo);
+        }
+        if (catalog.direct_url.has_value()) {
+            std::cerr << tr("yai: found direct download URL on AppImageHub\n");
+            return make_repo_source_from_url(options, package, *catalog.direct_url);
+        }
+        if (catalog.homepage.has_value()) {
+            std::cerr << tr("yai: found homepage on AppImageHub: ") << *catalog.homepage << "\n";
+            RepoPackage homepage_package = package;
+            homepage_package.source_url = *catalog.homepage;
+            const std::string download_url =
+                resolve_website_appimage_download(homepage_package, options.target_arch);
+            return make_repo_source_from_url(options, package, download_url);
+        }
+        throw std::runtime_error(tr("AppImageHub catalog has no usable source for ") + package.name);
+    });
+
+    fallbacks.push_back([&]() -> ResolvedSource {
+        std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
+        auto data_entry = lookup_appimage_data_entry(package.name);
+        if (!data_entry.has_value()) {
+            throw std::runtime_error(tr("no data/ entry for ") + package.name);
+        }
+        if (!data_entry->direct_url.empty()) {
+            std::cerr << tr_format("yai: found direct download URL in data/ for {name}\n",
+                                   {{"{name}", package.name}});
+            return make_repo_source_from_url(options, package, data_entry->direct_url);
+        }
+        if (!data_entry->github_repo.empty()) {
+            std::cerr << tr("yai: found GitHub repo in data/: ")
+                      << data_entry->github_repo << "\n";
+            const std::size_t slash = data_entry->github_repo.find('/');
+            if (slash != std::string::npos) {
+                return resolve_github_repo_path(options, package, data_entry->github_repo);
+            }
+        }
+        throw std::runtime_error(tr("data/ entry has no usable source for ") + package.name);
+    });
+
+    fallbacks.push_back([&]() -> ResolvedSource {
+        std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
+        auto apps_entry = lookup_appimage_apps_entry(package.name);
+        if (!apps_entry.has_value()) {
+            throw std::runtime_error(tr("no apps/ entry for ") + package.name);
+        }
+        if (!apps_entry->github_repo.empty()) {
+            std::cerr << tr("yai: found GitHub repo in apps/: ")
+                      << apps_entry->github_repo << "\n";
+            const std::size_t slash = apps_entry->github_repo.find('/');
+            if (slash != std::string::npos) {
+                return resolve_github_repo_path(options, package, apps_entry->github_repo);
+            }
+        }
+        if (!apps_entry->direct_url.empty()) {
+            std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
+                                   {{"{name}", package.name}});
+            return make_repo_source_from_url(options, package, apps_entry->direct_url);
+        }
+        throw std::runtime_error(tr("apps/ entry has no usable source for ") + package.name);
+    });
+
+    return fallbacks;
+}
+
 ResolvedSource resolve_repo_package_install_source_impl(
     const InstallOptions& options,
     const RepoPackage& package) {
@@ -687,44 +800,15 @@ ResolvedSource resolve_repo_package_install_source_impl(
         // no primary download URL recorded in the local index.
         std::cerr << tr("yai: trying parallel fallbacks for unavailable package: ")
                   << package.name << "\n";
-
-        auto make_data_fallback = [&]() -> ResolvedSource {
-            return resolve_appimage_data_fallback(options, package, arch, /*rich=*/false);
-        };
-
-        auto make_apps_fallback = [&]() -> ResolvedSource {
-            std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
-            auto apps_entry = lookup_appimage_apps_entry(package.name);
-            if (!apps_entry.has_value()) {
-                throw std::runtime_error(tr("no apps/ entry for ") + package.name);
-            }
-
-            if (!apps_entry->github_repo.empty()) {
-                std::cerr << tr("yai: found GitHub repo in apps/: ")
-                          << apps_entry->github_repo << "\n";
-                const std::size_t slash = apps_entry->github_repo.find('/');
-                if (slash != std::string::npos) {
-                    return resolve_github_repo_path(options, package, apps_entry->github_repo);
-                }
-            }
-
-            if (!apps_entry->direct_url.empty()) {
-                std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
-                                       {{"{name}", package.name}});
-                return make_repo_source_from_url(options, package, apps_entry->direct_url);
-            }
-
-            throw std::runtime_error(tr("apps/ entry has no usable source for ") + package.name);
-        };
-
         try {
             return resolve_parallel_fallback(
                 package.name,
-                {make_data_fallback, make_apps_fallback});
+                build_unavailable_fallbacks(options, package, arch));
         } catch (const std::exception&) {
             throw_unavailable_repo_source(package);
         }
     }
+
     try {
         return repo_github_release_source(options, package);
     } catch (const std::exception& github_ex) {
@@ -733,87 +817,10 @@ ResolvedSource resolve_repo_package_install_source_impl(
         }
         std::cerr << tr("yai: GitHub release resolution failed for ")
                   << package.name << tr(". Trying parallel fallbacks...\n");
-
-        auto make_catalog_fallback = [&]() -> ResolvedSource {
-            std::cerr << tr("yai: fetching AppImageHub catalog for ") << package.name << "\n";
-            const AppImageCatalogSources catalog = fetch_appimage_catalog_sources(package.name);
-
-            if (catalog.github_repo.has_value()) {
-                std::cerr << tr("yai: found GitHub repo on AppImageHub: ") << *catalog.github_repo << "\n";
-                return resolve_github_repo_path(options, package, *catalog.github_repo);
-            }
-
-            if (catalog.direct_url.has_value()) {
-                std::cerr << tr("yai: found direct download URL on AppImageHub\n");
-                return make_repo_source_from_url(options, package, *catalog.direct_url);
-            }
-
-            if (catalog.homepage.has_value()) {
-                std::cerr << tr("yai: found homepage on AppImageHub: ") << *catalog.homepage << "\n";
-                RepoPackage homepage_package = package;
-                homepage_package.source_url = *catalog.homepage;
-                const std::string download_url =
-                    resolve_website_appimage_download(homepage_package, options.target_arch);
-                return make_repo_source_from_url(options, package, download_url);
-            }
-
-            throw std::runtime_error(tr("AppImageHub catalog has no usable source for ") + package.name);
-        };
-
-        auto make_data_fallback = [&]() -> ResolvedSource {
-            std::cerr << tr("yai: trying AppImage GitHub data/ lookup for download fallback...\n");
-            auto data_entry = lookup_appimage_data_entry(package.name);
-            if (!data_entry.has_value()) {
-                throw std::runtime_error(tr("no data/ entry for ") + package.name);
-            }
-
-            if (!data_entry->direct_url.empty()) {
-                std::cerr << tr_format("yai: found direct download URL in data/ for {name}\n",
-                                       {{"{name}", package.name}});
-                return make_repo_source_from_url(options, package, data_entry->direct_url);
-            }
-
-            if (!data_entry->github_repo.empty()) {
-                std::cerr << tr("yai: found GitHub repo in data/: ")
-                          << data_entry->github_repo << "\n";
-                const std::size_t slash = data_entry->github_repo.find('/');
-                if (slash != std::string::npos) {
-                    return resolve_github_repo_path(options, package, data_entry->github_repo);
-                }
-            }
-
-            throw std::runtime_error(tr("data/ entry has no usable source for ") + package.name);
-        };
-
-        auto make_apps_fallback = [&]() -> ResolvedSource {
-            std::cerr << tr("yai: trying AppImage GitHub apps/ lookup for GitHub repo fallback...\n");
-            auto apps_entry = lookup_appimage_apps_entry(package.name);
-            if (!apps_entry.has_value()) {
-                throw std::runtime_error(tr("no apps/ entry for ") + package.name);
-            }
-
-            if (!apps_entry->github_repo.empty()) {
-                std::cerr << tr("yai: found GitHub repo in apps/: ")
-                          << apps_entry->github_repo << "\n";
-                const std::size_t slash = apps_entry->github_repo.find('/');
-                if (slash != std::string::npos) {
-                    return resolve_github_repo_path(options, package, apps_entry->github_repo);
-                }
-            }
-
-            if (!apps_entry->direct_url.empty()) {
-                std::cerr << tr_format("yai: found direct download URL in apps/ for {name}\n",
-                                       {{"{name}", package.name}});
-                return make_repo_source_from_url(options, package, apps_entry->direct_url);
-            }
-
-            throw std::runtime_error(tr("apps/ entry has no usable source for ") + package.name);
-        };
-
         try {
             return resolve_parallel_fallback(
                 package.name,
-                {make_catalog_fallback, make_data_fallback, make_apps_fallback});
+                build_github_release_fallbacks(options, package));
         } catch (const std::exception&) {
             throw std::runtime_error(
                 tr("GitHub release resolution failed for '") + package.name +

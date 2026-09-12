@@ -682,6 +682,41 @@ ProcessResult run_process_capture_download_progress(
     return ProcessResult{128, output};
 }
 
+// Opens three pipes (stdout/stderr/event). On any failure it best-effort
+// closes every descriptor already created and rethrows, so callers never leak
+// a half-open pipe set.
+void open_stream_pipes(int stdout_pipe[2], int stderr_pipe[2], int event_pipe[2]) {
+    auto safe_pipe = [](int fds[2]) {
+        if (pipe(fds) != 0) {
+            throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(errno));
+        }
+    };
+    try {
+        safe_pipe(stdout_pipe);
+        safe_pipe(stderr_pipe);
+        safe_pipe(event_pipe);
+    } catch (...) {
+        close_fd_best_effort(stdout_pipe[0]);
+        close_fd_best_effort(stdout_pipe[1]);
+        close_fd_best_effort(stderr_pipe[0]);
+        close_fd_best_effort(stderr_pipe[1]);
+        close_fd_best_effort(event_pipe[0]);
+        close_fd_best_effort(event_pipe[1]);
+        throw;
+    }
+}
+
+// Registers an open pipe into the pollfd array and returns its slot index, or
+// -1 when the pipe is closed. Advances nfds for the caller.
+int register_poll_slot(pollfd pfds[3], nfds_t& nfds, bool open, int fd) {
+    if (!open) {
+        return -1;
+    }
+    const int slot = static_cast<int>(nfds);
+    pfds[nfds++] = pollfd{fd, POLLIN, 0};
+    return slot;
+}
+
 // Spawns one batch child process and streams its stdout/stderr line-by-line
 // to the terminal UI. Handles timeout, output cap, and interrupt. Returns
 // exit code, captured output, and timing information for the UI to render.
@@ -714,19 +749,7 @@ StreamingBatchResult run_batch_task_streaming(
         event_pipe[0] = event_pipe[1] = -1;
     };
 
-    if (pipe(stdout_pipe) != 0) {
-        throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(errno));
-    }
-    if (pipe(stderr_pipe) != 0) {
-        const int pipe_errno = errno;
-        close_pipes_best_effort();
-        throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(pipe_errno));
-    }
-    if (pipe(event_pipe) != 0) {
-        const int pipe_errno = errno;
-        close_pipes_best_effort();
-        throw std::runtime_error(std::string(tr("pipe failed: ")) + std::strerror(pipe_errno));
-    }
+    open_stream_pipes(stdout_pipe, stderr_pipe, event_pipe);
 
     const pid_t pid = fork();
     if (pid < 0) {
@@ -812,21 +835,9 @@ StreamingBatchResult run_batch_task_streaming(
 
             pollfd pfds[3];
             nfds_t nfds = 0;
-            int stdout_slot = -1;
-            int stderr_slot = -1;
-            int event_slot = -1;
-            if (stdout_open) {
-                stdout_slot = static_cast<int>(nfds);
-                pfds[nfds++] = pollfd{stdout_pipe[0], POLLIN, 0};
-            }
-            if (stderr_open) {
-                stderr_slot = static_cast<int>(nfds);
-                pfds[nfds++] = pollfd{stderr_pipe[0], POLLIN, 0};
-            }
-            if (event_open) {
-                event_slot = static_cast<int>(nfds);
-                pfds[nfds++] = pollfd{event_pipe[0], POLLIN, 0};
-            }
+            const int stdout_slot = register_poll_slot(pfds, nfds, stdout_open, stdout_pipe[0]);
+            const int stderr_slot = register_poll_slot(pfds, nfds, stderr_open, stderr_pipe[0]);
+            const int event_slot = register_poll_slot(pfds, nfds, event_open, event_pipe[0]);
 
             const int timeout_ms = (nfds == 0) ? 0 : (exited ? 0 : 200);
             if (nfds > 0) {

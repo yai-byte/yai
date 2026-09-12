@@ -26,6 +26,13 @@ std::string base64_decode(const std::string& encoded) {
     return decoded;
 }
 
+// Returns true if the string is an absolute URL (http/https/file scheme).
+bool is_url(const std::string& s) {
+    return s.find("http://") == 0 ||
+           s.find("https://") == 0 ||
+           s.find("file://") == 0;
+}
+
 // Extract YAML frontmatter (between --- markers) from markdown content
 std::string extract_yaml_frontmatter(const std::string& content) {
     const std::string delimiter = "---";
@@ -455,19 +462,14 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
             if (trimmed.front() == '#') {
                 // Extract URL from comment (remove # and whitespace)
                 std::string comment_content = trim(trimmed.substr(1));
-                if (!comment_content.empty() &&
-                    (comment_content.find("http://") == 0 ||
-                     comment_content.find("https://") == 0 ||
-                     comment_content.find("file://") == 0)) {
+                if (!comment_content.empty() && is_url(comment_content)) {
                     comment_urls.push_back(comment_content);
                 }
                 continue;
             }
 
             // Non-comment line should be a URL
-            if (trimmed.find("http://") == 0 ||
-                trimmed.find("https://") == 0 ||
-                trimmed.find("file://") == 0) {
+            if (is_url(trimmed)) {
                 if (primary_url.empty()) {
                     primary_url = trimmed;
                 }
@@ -493,33 +495,20 @@ std::optional<AppImageDataEntry> parse_appimage_data_entry(
             }
         }
 
-        // If primary URL didn't give us what we need, check comments
-        if (entry.github_repo.empty()) {
-            for (const auto& comment_url : comment_urls) {
-                if (looks_like_github_repo_url(comment_url)) {
-                    entry.github_repo = extract_github_repo(comment_url);
-                    break;
-                }
+        // Scan comments once for any still-missing fields. The direct-download
+        // check mirrors the original guard: only fill direct_url when neither it
+        // nor gitlab_project was already found from the primary URL.
+        const bool gitlab_missing = entry.gitlab_project.empty();
+        for (const auto& comment_url : comment_urls) {
+            if (entry.github_repo.empty() && looks_like_github_repo_url(comment_url)) {
+                entry.github_repo = extract_github_repo(comment_url);
             }
-        }
-
-        // If still no direct_url but found gitlab_project, that's sufficient
-        if (entry.direct_url.empty() && entry.gitlab_project.empty()) {
-            for (const auto& comment_url : comment_urls) {
-                if (looks_like_direct_download_url(comment_url)) {
-                    entry.direct_url = comment_url;
-                    break;
-                }
+            if (entry.direct_url.empty() && gitlab_missing &&
+                looks_like_direct_download_url(comment_url)) {
+                entry.direct_url = comment_url;
             }
-        }
-
-        // Check comments for GitLab project URLs
-        if (entry.gitlab_project.empty()) {
-            for (const auto& comment_url : comment_urls) {
-                if (looks_like_gitlab_url(comment_url)) {
-                    entry.gitlab_project = extract_gitlab_project(comment_url);
-                    break;
-                }
+            if (entry.gitlab_project.empty() && looks_like_gitlab_url(comment_url)) {
+                entry.gitlab_project = extract_gitlab_project(comment_url);
             }
         }
 
