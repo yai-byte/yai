@@ -69,6 +69,18 @@ ensure_linuxdeploy() {
         LINUXDEPLOY="$(command -v linuxdeploy)"
         return 0
     fi
+    # yai-installed copy (wrapper on PATH already covered above). Use the real
+    # AppImage directly so an install done via `yai install linuxdeploy` is reused
+    # even when ~/.local/bin is not on the script's PATH.
+    local yai_app
+    for yai_app in \
+        "$HOME/.local/share/yai/apps/linuxdeploy/current.AppImage" \
+        "/usr/local/share/yai/apps/linuxdeploy/current.AppImage"; do
+        if [ -x "$yai_app" ]; then
+            LINUXDEPLOY="$yai_app"
+            return 0
+        fi
+    done
     local f="$TOOLS/linuxdeploy-x86_64.AppImage"
     if [ -x "$f" ]; then
         LINUXDEPLOY="$f"
@@ -331,7 +343,7 @@ package_flatpak() {
     rel="$(realpath --relative-to="$mdir" "$ROOT")"
 
     cat > "$manifest" <<EOF
-id: com.github.yai-byte.yai
+id: com.github.yai_byte.yai
 runtime: org.freedesktop.Platform
 runtime-version: '23.08'
 sdk: org.freedesktop.Sdk
@@ -352,9 +364,9 @@ modules:
         path: $rel
 EOF
 
-    flatpak-builder --repo="$mdir/repo" "$mdir/builddir" "$manifest" >/dev/null
+    flatpak-builder --disable-rofiles-fuse --repo="$mdir/repo" "$mdir/builddir" "$manifest" >/dev/null
     flatpak build-bundle "$mdir/repo" \
-        "$DIST/yai-$ver.flatpak" com.github.yai-byte.yai
+        "$DIST/yai-$ver.flatpak" com.github.yai_byte.yai
     ok "dist/yai-$ver.flatpak"
 }
 
