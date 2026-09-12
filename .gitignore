@@ -8,3 +8,6 @@ fuck-u-code-report.json
 .superpowers/sdd/Makefile.pre-*
 package-lock.json
 .codebuddy/
+packaging/dist/
+packaging/tools/
+packaging/build/

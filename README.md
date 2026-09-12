@@ -127,6 +127,37 @@ install -m 0755 yai ~/.local/bin/yai
 
 ***
 
+## Packaging
+
+`yai` is a single binary plus its `po` translation catalogs, so it packages cleanly into
+every common Linux format. `packaging/package.sh` builds the binary and emits all artifacts
+into `packaging/dist/`:
+
+```bash
+bash packaging/package.sh                 # build all: tar.gz, deb, rpm, AppImage, Flatpak
+bash packaging/package.sh --format deb --format rpm   # a subset
+bash packaging/package.sh --version 1.2.3 --arch x86_64
+```
+
+* The version is read from `kYaiVersion` in `src/main.cpp` (override with `--version`).
+* `--arch` defaults to `uname -m` (`x86_64` is mapped to `amd64` for the deb).
+* Every tool required by the chosen formats is checked up front; the script prints the
+  install command and exits non-zero if anything is missing. `linuxdeploy` is not a distro
+  package, so it is auto-downloaded into `packaging/tools/` when absent.
+
+Translations are always installed to `usr/share/yai/po/` inside each package, which
+`src/i18n.cpp` resolves automatically via `<exe_dir>/../share/yai/po`.
+
+| Format   | Tool                | Output                                  |
+| -------- | ------------------- | --------------------------------------- |
+| tar.gz   | `tar`               | `yai-<ver>-<arch>.tar.gz`               |
+| deb      | `dpkg-deb`          | `yai_<ver>_<arch>.deb`                  |
+| rpm      | `rpmbuild`          | `yai-<ver>-1.<arch>.rpm`                |
+| AppImage | `linuxdeploy`       | `yai-<ver>-<arch>.AppImage`            |
+| Flatpak  | `flatpak-builder`   | `yai-<ver>.flatpak`                     |
+
+***
+
 ## Installing Applications
 
 `yai install` accepts several kinds of targets:
