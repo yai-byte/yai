@@ -581,6 +581,14 @@ constexpr int kFetchAppImageGithubResolveTimeoutMs = 15000;
 
 std::string fetch_text(const std::string& url);
 std::string fetch_text(const std::string& url, int timeout_ms);
+// Like fetch_text, but streams the response body through the same live
+// progress bar used for AppImage downloads (rendered to stderr when attached to
+// a TTY). Used so index.json fetches show download progress instead of waiting
+// silently. The downloader defaults to "auto" (aria2c/wget2/wget/curl).
+std::string fetch_text_with_progress(
+    const std::string& url,
+    int timeout_ms,
+    const std::string& downloader = "auto");
 std::string fetch_text_limited(
     const std::string& url,
     int timeout_ms,

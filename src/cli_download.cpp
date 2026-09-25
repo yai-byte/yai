@@ -565,6 +565,73 @@ HttpValidators download_file(const std::string& url, const fs::path& target, con
     throw std::runtime_error(tr("all selected downloaders failed: ") + last_error);
 }
 
+std::string fetch_text_with_progress(
+    const std::string& url,
+    int timeout_ms,
+    const std::string& downloader) {
+    // Mirror download_file: stage the response body into a temp .part file
+    // while rendering the same live progress bar used for AppImage downloads,
+    // then return the body as text. This gives index.json fetches a visible
+    // progress indicator instead of waiting silently. Progress is suppressed
+    // automatically when stderr is not a TTY or inside a batch UI event sink,
+    // so non-interactive callers behave exactly as before.
+    const fs::path part = fs::temp_directory_path() /
+        ("yai-index-" + std::to_string(getpid()) + "-" +
+         std::to_string(
+             std::chrono::steady_clock::now().time_since_epoch().count()) +
+         ".part");
+    const fs::path headers = fs::path(part.string() + ".headers");
+
+    const std::vector<std::string> downloaders = available_downloaders(downloader, url);
+    std::string last_error;
+    for (std::size_t i = 0; i < downloaders.size(); ++i) {
+        check_interrupt();
+        const std::string& selected = downloaders[i];
+        remove_required(part, tr("preparing temporary index download"));
+        remove_required(headers, tr("preparing temporary index headers"));
+        remove_required(part.string() + ".aria2", tr("preparing temporary aria2 state"));
+        try {
+            if (selected == "curl") {
+                // curl shares the index fetch's timeout via --max-time; wget and
+                // aria2 fall back to run_downloader's native behavior.
+                DownloadToolCommand cmd = build_downloader_command("curl", url, part, headers);
+                const std::string max_time =
+                    std::to_string(timeout_ms <= 0 ? 1 : (timeout_ms + 999) / 1000);
+                cmd.args.insert(cmd.args.end() - 1, "--max-time");
+                cmd.args.insert(cmd.args.end() - 1, max_time);
+                const ProcessResult result =
+                    run_process_capture_download_progress(cmd.args, part, headers, cmd.aria2_rpc_port);
+                if (result.exit_code != 0) {
+                    const std::string detail = trim(result.output);
+                    throw std::runtime_error(
+                        "curl" + tr(" failed with exit code ") +
+                        std::to_string(result.exit_code) +
+                        (detail.empty() ? "" : tr(": ") + detail));
+                }
+            } else {
+                if (selected != "curl") {
+                    prefetch_download_headers(url, headers);
+                }
+                run_downloader(selected, url, part, headers);
+            }
+            const std::string text = read_text_file(part);
+            remove_download_temps(part, headers);
+            return text;
+        } catch (const std::exception& ex) {
+            last_error = selected + ": " + ex.what();
+            remove_download_temps(part, headers);
+            if (was_interrupted()) {
+                throw;
+            }
+            if (i + 1 < downloaders.size()) {
+                yai_debug_stream() << tr("yai: index downloader failed, trying next: ")
+                                  << last_error << "\n";
+            }
+        }
+    }
+    throw std::runtime_error(tr("failed to fetch index ") + url + tr(": ") + last_error);
+}
+
 namespace {
 
 int curl_max_time_seconds(int timeout_ms) {

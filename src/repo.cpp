@@ -359,7 +359,7 @@ std::vector<std::string> repo_package_objects_from_index(const std::string& inde
 
 std::string load_repo_source_text(const std::string& location) {
     if (has_url_scheme(location)) {
-        return fetch_text(location, kFetchTextFeedTimeoutMs);
+        return fetch_text_with_progress(location, kFetchTextFeedTimeoutMs);
     }
     return read_text_file(location);
 }
@@ -575,11 +575,11 @@ std::string fetch_remote_repo_index_text() {
     const char* env = std::getenv("YAI_REPO_INDEX");
     if (env != nullptr && std::string(env) != "") {
         if (has_url_scheme(env)) {
-            return fetch_text(env, kFetchRepoIndexTimeoutMs);
+            return fetch_text_with_progress(env, kFetchRepoIndexTimeoutMs);
         }
         return read_text_file(env);
     }
-    return fetch_text(default_repo_index_url(), kFetchRepoIndexTimeoutMs);
+    return fetch_text_with_progress(default_repo_index_url(), kFetchRepoIndexTimeoutMs);
 }
 
 std::string repo_index_updated_at(const std::string& index_text) {
