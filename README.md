@@ -148,6 +148,36 @@ bash packaging/package.sh --version 1.2.3 --arch x86_64
 Translations are always installed to `usr/share/yai/po/` inside each package, which
 `src/i18n.cpp` resolves automatically via `<exe_dir>/../share/yai/po`.
 
+Desktop integration assets live in `data/yai.svg` (the Figma-exported app icon) and
+`data/yai.desktop` (the menu entry). Every format installs the icon to
+`usr/share/icons/hicolor/scalable/apps/yai.svg` and the desktop entry to
+`usr/share/applications/yai.desktop`, so the app appears in the desktop menu with its
+icon. The AppImage additionally renders a 256×256 PNG (via `rsvg-convert`, `inkscape`, or
+`convert`, whichever is available) for broader file-manager compatibility; the Flatpak
+bundle uses the app-id `com.github.yai_byte.yai` for both the icon and the desktop file.
+Note: `data/yai.svg` must be present (export your Figma icon there) or the script exits.
+
+### Signing (GPG)
+
+Pass `--sign` to GPG-sign every artifact. By default the first available GPG secret key
+is used; pick one explicitly with `--sign-key <KEYID>` or the `YAI_SIGN_KEY` environment
+variable. The `gpg` tool is required. `dpkg-sig` is used for an *embedded* deb signature
+when available (Debian/Ubuntu); on hosts without it (e.g. Fedora, where `dpkg-sig` is not
+in the dnf repos) the `.deb` instead gets a detached `*.sig`, like the portable formats.
+
+```bash
+bash packaging/package.sh --sign --sign-key 0xABC123   # all five formats, signed
+YAI_SIGN_KEY=0xABC123 bash packaging/package.sh --sign --format deb rpm
+```
+
+* `tar.gz` and `AppImage` get a detached binary signature `*.sig` next to the file
+  (`gpg --verify yai-<ver>-<arch>.tar.gz.sig yai-<ver>-<arch>.tar.gz`).
+* `deb` is signed in place with `dpkg-sig` when available (`dpkg-sig --verify yai_*.deb`);
+  otherwise a detached `yai_*.deb.sig` is produced (`gpg --verify yai_*.deb.sig yai_*.deb`).
+  `rpm` is signed with `rpmsign` (`rpm --checksig yai-*.rpm`, after importing your public key).
+* `flatpak` is signed with `flatpak-builder --gpg-sign` / `flatpak build-bundle --gpg-sign`,
+  so the exported repo and the `.flatpak` bundle both carry the signature.
+
 | Format   | Tool                | Output                                  |
 | -------- | ------------------- | --------------------------------------- |
 | tar.gz   | `tar`               | `yai-<ver>-<arch>.tar.gz`               |

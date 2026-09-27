@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=yai
+Comment=AppImage Package Manager
+Exec=yai
+Terminal=true
+Type=Application
+Icon=yai
+Categories=Utility;
