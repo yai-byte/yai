@@ -10,13 +10,14 @@
 # (<exe_dir>/../share/yai/po).
 #
 # Desktop integration assets (data/yai.svg, data/yai.desktop) are installed to
-# <prefix>/share/icons/hicolor/scalable/apps/yai.svg and
-# <prefix>/share/applications/yai.desktop in every format; the AppImage also
+# <prefix>/share/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg and
+# <prefix>/share/applications/com.github.yai_byte.yai.desktop in every format; the AppImage also
 # renders a 256x256 PNG, and the Flatpak bundle uses the app-id name.
 #
 # Usage:
 #   bash packaging/package.sh [--version X.Y.Z] [--arch ARCH] [--format FMT]...
-#                            [--sign] [--sign-key KEYID] [--help]
+#                            [--sign] [--sign-key KEYID] [--sign-only]
+#                            [--embed-sign] [--help]
 #
 #   --version X.Y.Z   Override the version (default: kYaiVersion in src/main.cpp).
 #   --arch ARCH       Target architecture (default: uname -m). x86_64 -> amd64 for deb.
@@ -24,6 +25,9 @@
 #                     Default: build all five formats.
 #   --sign            GPG-sign every produced artifact (off by default).
 #   --sign-key KEYID  GPG key to sign with (default: first secret key, or $YAI_SIGN_KEY).
+#   --sign-only       Do not build; GPG-sign artifacts already in packaging/dist/.
+#   --embed-sign      Embed the GPG signature into the AppImage via appimagetool
+#                     (self-verifiable by AppImageKit) instead of a detached .sig.
 #   --help            Show this help.
 #
 # Tooling policy: every required tool for the selected formats is checked up
@@ -50,6 +54,8 @@ ARCH_RAW="$(uname -m)"
 FORMATS=()
 SIGN=0
 SIGN_KEY="${YAI_SIGN_KEY:-}"
+SIGN_ONLY=0
+APPIMAGE_EMBED_SIGN=0
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -167,6 +173,7 @@ stage_tree() {
     local dest="$1"
     mkdir -p "$dest/usr/bin" "$dest/usr/share/yai/po" \
              "$dest/usr/share/applications" \
+             "$dest/usr/share/metainfo" \
              "$dest/usr/share/icons/hicolor/scalable/apps"
     install -m755 "$ROOT/yai" "$dest/usr/bin/yai"
     local p found=0
@@ -180,9 +187,11 @@ stage_tree() {
         exit 1
     fi
     install -m644 "$ROOT/data/yai.svg" \
-        "$dest/usr/share/icons/hicolor/scalable/apps/yai.svg"
+        "$dest/usr/share/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg"
     install -m644 "$ROOT/data/yai.desktop" \
-        "$dest/usr/share/applications/yai.desktop"
+        "$dest/usr/share/applications/com.github.yai_byte.yai.desktop"
+    install -m644 "$ROOT/data/yai.metainfo.xml" \
+        "$dest/usr/share/metainfo/com.github.yai_byte.yai.metainfo.xml"
 }
 
 # ---------------------------------------------------------------------------
@@ -222,6 +231,57 @@ sign_rpm() {
     [ -n "$SIGN_KEY" ] && args+=(--key-id "$SIGN_KEY")
     rpmsign --addsign "${args[@]}" "$rpm" >/dev/null
     ok "signed $(basename "$rpm") (embedded via rpmsign)"
+}
+
+# sign_appimage <appimage> -> GPG-sign the AppImage. By default writes a detached
+# signature (<appimage>.sig). With --embed-sign, embeds the signature directly into
+# the AppImage via appimagetool so AppImageKit can self-verify it at runtime.
+sign_appimage() {
+    local ai="$1"
+    if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ]; then
+        if ! command -v appimagetool >/dev/null 2>&1; then
+            log "appimagetool not found; falling back to detached GPG signature"
+            sign_detached "$ai"
+            return 0
+        fi
+        local args=()
+        [ -n "$SIGN_KEY" ] && args+=(--sign-key "$SIGN_KEY")
+        appimagetool --sign "${args[@]}" "$ai" >/dev/null
+        ok "signed $(basename "$ai") (embedded via appimagetool)"
+    else
+        sign_detached "$ai"
+    fi
+}
+
+# sign_existing <ver> <arch> -> sign artifacts already present in $DIST (used by
+# --sign-only). Flatpak bundles are signed at bundle time by flatpak-builder and
+# cannot be re-signed from the file alone, so they are skipped with a note.
+sign_existing() {
+    local ver="$1" arch="$2"
+    local debarch f signed=0
+    debarch="$(deb_arch "$arch")"
+
+    f="$DIST/yai-$ver-$arch.tar.gz"
+    if [ -f "$f" ]; then sign_detached "$f"; signed=1; fi
+
+    f="$DIST/yai_${ver}_${debarch}.deb"
+    if [ -f "$f" ]; then sign_deb "$f"; signed=1; fi
+
+    f="$(find "$DIST" -maxdepth 1 -name "yai-$ver-*.rpm" 2>/dev/null | head -n1 || true)"
+    if [ -n "$f" ] && [ -f "$f" ]; then sign_rpm "$f"; signed=1; fi
+
+    f="$DIST/yai-$ver-$arch.AppImage"
+    if [ -f "$f" ]; then sign_appimage "$f"; signed=1; fi
+
+    f="$DIST/yai-$ver.flatpak"
+    if [ -f "$f" ]; then
+        log "flatpak already present; --sign-only cannot re-sign a .flatpak bundle (signed at bundle time) — skipping"
+    fi
+
+    if [ "$signed" -eq 0 ]; then
+        err "no signable artifacts found in $DIST for version $ver / arch $arch"
+        exit 1
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -282,6 +342,7 @@ package_rpm() {
     done
     install -m644 "$ROOT/data/yai.svg" "$srcpkg/yai.svg"
     install -m644 "$ROOT/data/yai.desktop" "$srcpkg/yai.desktop"
+    install -m644 "$ROOT/data/yai.metainfo.xml" "$srcpkg/yai.metainfo.xml"
     tar czf "$topdir/SOURCES/yai-$ver.tar.gz" -C "$BUILD/srcpkg" "yai-$ver"
 
     cat > "$topdir/SPECS/yai.spec" <<EOF
@@ -312,15 +373,17 @@ mkdir -p %{buildroot}%{_bindir} %{buildroot}%{_datadir}/yai/po
 install -m755 yai %{buildroot}%{_bindir}/yai
 install -m644 po/en.po %{buildroot}%{_datadir}/yai/po/en.po
 install -m644 po/zh.po %{buildroot}%{_datadir}/yai/po/zh.po
-install -Dm644 yai.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/yai.svg
-install -Dm644 yai.desktop %{buildroot}%{_datadir}/applications/yai.desktop
+install -Dm644 yai.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg
+install -Dm644 yai.desktop %{buildroot}%{_datadir}/applications/com.github.yai_byte.yai.desktop
+install -Dm644 yai.metainfo.xml %{buildroot}%{_datadir}/metainfo/com.github.yai_byte.yai.metainfo.xml
 
 %files
 %{_bindir}/yai
 %{_datadir}/yai/po/en.po
 %{_datadir}/yai/po/zh.po
-%{_datadir}/icons/hicolor/scalable/apps/yai.svg
-%{_datadir}/applications/yai.desktop
+%{_datadir}/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg
+%{_datadir}/applications/com.github.yai_byte.yai.desktop
+%{_datadir}/metainfo/com.github.yai_byte.yai.metainfo.xml
 
 %changelog
 * $(LC_ALL=C date '+%a %b %d %Y') yai-byte <yai@example.com> - $ver-1
@@ -374,13 +437,13 @@ package_appimage() {
     local appdir="$BUILD/appimage/AppDir"
     rm -rf "$appdir"
     stage_tree "$appdir"
-    render_icon_png "$appdir/usr/share/icons/hicolor/256x256/apps/yai.png" \
+    render_icon_png "$appdir/usr/share/icons/hicolor/256x256/apps/com.github.yai_byte.yai.png" \
         "$ROOT/data/yai.svg"
 
     ( cd "$BUILD/appimage"
       ARCH="$arch" "$LINUXDEPLOY" \
         --appdir "$appdir" \
-        --desktop-file "$appdir/usr/share/applications/yai.desktop" \
+        --desktop-file "$appdir/usr/share/applications/com.github.yai_byte.yai.desktop" \
         --output appimage >/dev/null
     )
     local produced
@@ -391,7 +454,7 @@ package_appimage() {
     fi
     mv "$produced" "$DIST/yai-$ver-$arch.AppImage"
     ok "dist/yai-$ver-$arch.AppImage"
-    [ "$SIGN" -eq 1 ] && sign_detached "$DIST/yai-$ver-$arch.AppImage"
+    [ "$SIGN" -eq 1 ] && sign_appimage "$DIST/yai-$ver-$arch.AppImage"
 }
 
 package_flatpak() {
@@ -423,6 +486,7 @@ modules:
       - install -Dm644 po/zh.po /app/share/yai/po/zh.po
       - install -Dm644 data/yai.svg /app/share/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg
       - mkdir -p /app/share/applications && sed 's/^Icon=yai/Icon=com.github.yai_byte.yai/' data/yai.desktop > /app/share/applications/com.github.yai_byte.yai.desktop
+      - mkdir -p /app/share/metainfo && sed -e 's|<id>yai</id>|<id>com.github.yai_byte.yai</id>|' -e 's|<launchable type="desktop-id">yai.desktop</launchable>|<launchable type="desktop-id">com.github.yai_byte.yai.desktop</launchable>|' data/yai.metainfo.xml > /app/share/metainfo/com.github.yai_byte.yai.metainfo.xml
     sources:
       - type: dir
         path: $rel
@@ -450,6 +514,8 @@ while [ $# -gt 0 ]; do
         --format)  FORMATS+=("${2:-}"); [ -n "${FORMATS[-1]}" ] || { err "--format needs a value"; exit 1; }; shift 2 ;;
         --sign)    SIGN=1; shift ;;
         --sign-key) SIGN_KEY="${2:-}"; [ -n "$SIGN_KEY" ] || { err "--sign-key needs a value"; exit 1; }; shift 2 ;;
+        --sign-only) SIGN_ONLY=1; shift ;;
+        --embed-sign) APPIMAGE_EMBED_SIGN=1; shift ;;
         --help|-h) usage ;;
         *) err "unknown argument: $1"; usage ;;
     esac
@@ -468,6 +534,34 @@ for f in "${FORMATS[@]}"; do
         exit 1
     fi
 done
+
+# ---------------------------------------------------------------------------
+# Sign-only mode: sign artifacts already in $DIST, do not rebuild. This is the
+# typical workflow when the AppImage was built on an older system (e.g. a VM or
+# container) to keep glibc requirements low, then brought back to the host where
+# the GPG secret key lives.
+# ---------------------------------------------------------------------------
+if [ "$SIGN_ONLY" -eq 1 ]; then
+    SIGN=1
+    extract_version
+    require_tool gpg "apt-get install gnupg / dnf install gnupg2" || exit 1
+    if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ] && printf '%s\n' "${FORMATS[@]}" | grep -qx appimage; then
+        require_tool appimagetool "download appimagetool from https://github.com/AppImage/AppImageKit/releases" || exit 1
+    fi
+    if [ -z "$SIGN_KEY" ]; then
+        SIGN_KEY="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '$1=="sec"{print $5; exit}')"
+        if [ -z "$SIGN_KEY" ]; then
+            err "no GPG secret key available and --sign-key was not given; cannot sign."
+            exit 1
+        fi
+        log "signing with default GPG secret key $SIGN_KEY"
+    fi
+    log "sign-only: signing existing artifacts in $DIST (version=$VERSION arch=$ARCH_RAW)"
+    sign_existing "$VERSION" "$ARCH_RAW"
+    echo
+    log "done. signed artifacts in $DIST."
+    exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # Pre-flight tool checks (all required).
@@ -497,6 +591,9 @@ if [ "$SIGN" -eq 1 ]; then
             log "dpkg-sig not found; the .deb will get a detached GPG signature (yai_*.deb.sig)"
         fi
     fi
+    if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ] && printf '%s\n' "${FORMATS[@]}" | grep -qx appimage; then
+        require_tool appimagetool "download appimagetool from https://github.com/AppImage/AppImageKit/releases" || exit 1
+    fi
     # rpmsign ships with the rpm package (already required for the rpm format).
     if [ -z "$SIGN_KEY" ]; then
         SIGN_KEY="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '$1=="sec"{print $5; exit}')"
@@ -525,6 +622,10 @@ if [ ! -f "$ROOT/data/yai.desktop" ]; then
     err "required asset $ROOT/data/yai.desktop missing"
     exit 1
 fi
+if [ ! -f "$ROOT/data/yai.metainfo.xml" ]; then
+    err "required asset $ROOT/data/yai.metainfo.xml missing"
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Package
@@ -549,7 +650,7 @@ for f in "${FORMATS[@]}"; do
         tar.gz)   ok "dist/yai-$VERSION-$ARCH_RAW.tar.gz"; [ "$SIGN" -eq 1 ] && ok "dist/yai-$VERSION-$ARCH_RAW.tar.gz.sig" ;;
         deb)      ok "dist/yai_${VERSION}_$(deb_arch "$ARCH_RAW").deb (signed)" ;;
         rpm)      ok "dist/yai-$VERSION-1.$ARCH_RAW.rpm (signed)" ;;
-        appimage) ok "dist/yai-$VERSION-$ARCH_RAW.AppImage"; [ "$SIGN" -eq 1 ] && ok "dist/yai-$VERSION-$ARCH_RAW.AppImage.sig" ;;
+        appimage) ok "dist/yai-$VERSION-$ARCH_RAW.AppImage"; [ "$SIGN" -eq 1 ] && { if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ]; then ok "dist/yai-$VERSION-$ARCH_RAW.AppImage (signed, embedded)"; else ok "dist/yai-$VERSION-$ARCH_RAW.AppImage.sig"; fi; } ;;
         flatpak)  ok "dist/yai-$VERSION.flatpak (signed)" ;;
     esac
 done

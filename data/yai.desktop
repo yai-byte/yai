@@ -4,5 +4,5 @@ Comment=AppImage Package Manager
 Exec=yai
 Terminal=true
 Type=Application
-Icon=yai
+Icon=com.github.yai_byte.yai
 Categories=Utility;

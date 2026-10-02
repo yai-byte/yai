@@ -148,14 +148,18 @@ bash packaging/package.sh --version 1.2.3 --arch x86_64
 Translations are always installed to `usr/share/yai/po/` inside each package, which
 `src/i18n.cpp` resolves automatically via `<exe_dir>/../share/yai/po`.
 
-Desktop integration assets live in `data/yai.svg` (the Figma-exported app icon) and
-`data/yai.desktop` (the menu entry). Every format installs the icon to
-`usr/share/icons/hicolor/scalable/apps/yai.svg` and the desktop entry to
-`usr/share/applications/yai.desktop`, so the app appears in the desktop menu with its
-icon. The AppImage additionally renders a 256×256 PNG (via `rsvg-convert`, `inkscape`, or
-`convert`, whichever is available) for broader file-manager compatibility; the Flatpak
-bundle uses the app-id `com.github.yai_byte.yai` for both the icon and the desktop file.
-Note: `data/yai.svg` must be present (export your Figma icon there) or the script exits.
+Desktop integration assets live in `data/yai.svg` (the Figma-exported app icon),
+`data/yai.desktop` (the menu entry) and `data/yai.metainfo.xml` (the AppStream
+metadata). Every format installs the icon to
+`usr/share/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg`, the desktop entry to
+`usr/share/applications/com.github.yai_byte.yai.desktop`, and the metadata to
+`usr/share/metainfo/com.github.yai_byte.yai.metainfo.xml`, so the app appears in the desktop menu with its
+icon and shows up in software centers. The AppImage additionally renders a 256×256 PNG
+(via `rsvg-convert`, `inkscape`, or `convert`, whichever is available) for broader
+file-manager compatibility; the Flatpak bundle uses the app-id `com.github.yai_byte.yai`
+for the icon, desktop file and metainfo.
+Note: `data/yai.svg`, `data/yai.desktop` and `data/yai.metainfo.xml` must all be
+present or the script exits.
 
 ### Signing (GPG)
 
