@@ -1,6 +1,6 @@
 CXX ?= g++
 CXXFLAGS ?= -std=c++17 -Wall -Wextra -Wpedantic -O2 -pthread
-LDFLAGS ?=
+LDFLAGS ?= -lstdc++fs
 
 TARGET := yai
 SRC := \

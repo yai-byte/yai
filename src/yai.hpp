@@ -16,7 +16,17 @@
 #include <cstring>
 #include <atomic>
 #include <fcntl.h>
+
+// yai relies on the full C++17 <filesystem> API: directory_entry::is_regular_file /
+// is_directory, fs::weakly_canonical, path::lexically_normal, etc. These are only
+// in GCC 8+ (the older <experimental/filesystem> on g++-7 is missing them), so we
+// require a modern compiler but keep an OLD glibc by building inside an old distro
+// (e.g. Ubuntu 18.04 + g++-8, or Ubuntu 20.04 + g++-9) for portable AppImages.
+#if !__has_include(<filesystem>)
+#error "yai needs a C++17 <filesystem>; build with GCC 8 or newer (e.g. g++-8 / g++-9)."
+#endif
 #include <filesystem>
+namespace fs = std::filesystem;
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -32,8 +42,6 @@
 #include <thread>
 #include <utility>
 #include <vector>
-
-namespace fs = std::filesystem;
 
 // --- Debug-trace facility -------------------------------------------------
 // "yai: ..." debug traces are routed through yai_debug_stream() so they stay

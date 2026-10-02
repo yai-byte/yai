@@ -37,6 +37,12 @@
 
 set -euo pipefail
 
+# Create world-readable artifacts by default. When the build runs inside a
+# virt-manager VM, shared filesystems surface the output to the host mapped to
+# the qemu service user; a restrictive umask would leave them 0600/0700 and
+# unreadable on the host. 022 -> 0644 files / 0755 dirs.
+umask 022
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -112,6 +118,35 @@ ensure_linuxdeploy() {
     fi
     chmod +x "$f"
     LINUXDEPLOY="$f"
+}
+
+# ensure_appimage_tooling -> sets APPIMAGETOOL and RUNTIME_FILE (paths) or errors.
+# Both are fetched via curl, which works behind the sandbox's egress filter. This
+# deliberately bypasses appimagetool's own runtime downloader, which fails in
+# restricted networks ("Failed to download runtime: server returned status code 0").
+ensure_appimage_tooling() {
+    [ -n "${APPIMAGETOOL:-}" ] && [ -n "${RUNTIME_FILE:-}" ] && return 0
+    require_tool curl "apt-get install curl / dnf install curl" || return 1
+    mkdir -p "$TOOLS"
+    if [ ! -x "$TOOLS/appimagetool-x86_64.AppImage" ]; then
+        log "appimagetool not found; downloading to $TOOLS/appimagetool-x86_64.AppImage"
+        if ! curl -fSL --retry 3 -o "$TOOLS/appimagetool-x86_64.AppImage" \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"; then
+            err "failed to download appimagetool."
+            return 1
+        fi
+        chmod +x "$TOOLS/appimagetool-x86_64.AppImage"
+    fi
+    if [ ! -f "$TOOLS/runtime-x86_64" ]; then
+        log "AppImage runtime not found; downloading to $TOOLS/runtime-x86_64"
+        if ! curl -fSL --retry 3 -o "$TOOLS/runtime-x86_64" \
+            "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64"; then
+            err "failed to download AppImage runtime."
+            return 1
+        fi
+    fi
+    APPIMAGETOOL="$TOOLS/appimagetool-x86_64.AppImage"
+    RUNTIME_FILE="$TOOLS/runtime-x86_64"
 }
 
 # debian-ish architecture from raw (x86_64 -> amd64, aarch64 -> arm64, ...)
@@ -239,14 +274,19 @@ sign_rpm() {
 sign_appimage() {
     local ai="$1"
     if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ]; then
-        if ! command -v appimagetool >/dev/null 2>&1; then
+        local tool="${APPIMAGETOOL:-}"
+        if [ -z "$tool" ] && command -v appimagetool >/dev/null 2>&1; then
+            tool="$(command -v appimagetool)"
+        fi
+        if [ -z "$tool" ]; then
             log "appimagetool not found; falling back to detached GPG signature"
             sign_detached "$ai"
             return 0
         fi
         local args=()
         [ -n "$SIGN_KEY" ] && args+=(--sign-key "$SIGN_KEY")
-        appimagetool --sign "${args[@]}" "$ai" >/dev/null
+        # appimagetool is itself an AppImage; run FUSE-less if needed.
+        APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --sign "${args[@]}" "$ai" >/dev/null
         ok "signed $(basename "$ai") (embedded via appimagetool)"
     else
         sign_detached "$ai"
@@ -293,9 +333,9 @@ package_targz() {
     log "packaging tar.gz"
     rm -rf "$stage"
     stage_tree "$stage"
-    tar czf "$DIST/yai-$ver-$arch.tar.gz" -C "$stage" .
+    tar czf "$DIST/yai-$ver-$arch.tar.gz" -C "$stage" . || { err "tar failed"; return 1; }
     ok "dist/yai-$ver-$arch.tar.gz"
-    [ "$SIGN" -eq 1 ] && sign_detached "$DIST/yai-$ver-$arch.tar.gz"
+    if [ "$SIGN" -eq 1 ]; then sign_detached "$DIST/yai-$ver-$arch.tar.gz"; fi
 }
 
 package_deb() {
@@ -321,9 +361,9 @@ Description: Fast, dependency-light AppImage package manager
  applications, resolving download URLs from GitHub releases, custom
  repository indexes, AppImageHub feeds and project websites.
 EOF
-    dpkg-deb --build --root-owner-group "$d" "$DIST/yai_${ver}_${debarch}.deb" >/dev/null
+    dpkg-deb --build --root-owner-group "$d" "$DIST/yai_${ver}_${debarch}.deb" >/dev/null || { err "dpkg-deb build failed"; return 1; }
     ok "dist/yai_${ver}_${debarch}.deb"
-    [ "$SIGN" -eq 1 ] && sign_deb "$DIST/yai_${ver}_${debarch}.deb"
+    if [ "$SIGN" -eq 1 ]; then sign_deb "$DIST/yai_${ver}_${debarch}.deb"; fi
 }
 
 package_rpm() {
@@ -397,18 +437,19 @@ EOF
         --define "_srcrpmdir $topdir/SRPMS" \
         --define "_rpmdir $topdir/RPMS" \
         --define "_builddir $topdir/BUILD" \
-        "$topdir/SPECS/yai.spec" >/dev/null
+        "$topdir/SPECS/yai.spec" >/dev/null \
+        || { err "rpmbuild failed"; return 1; }
 
     # rpmbuild writes to RPMS/<arch>/yai-<ver>-1.<arch>.rpm
     local rpm
     rpm="$(find "$topdir/RPMS" -name "yai-$ver-*.rpm" | head -n1)"
     if [ -z "$rpm" ]; then
         err "rpmbuild produced no rpm under $topdir/RPMS"
-        exit 1
+        return 1
     fi
     cp "$rpm" "$DIST/"
     ok "dist/$(basename "$rpm")"
-    [ "$SIGN" -eq 1 ] && sign_rpm "$DIST/$(basename "$rpm")"
+    if [ "$SIGN" -eq 1 ]; then sign_rpm "$DIST/$(basename "$rpm")"; fi
 }
 
 # render_icon_png <out_png> <src_svg> -> render a 256x256 PNG via an available
@@ -433,28 +474,50 @@ render_icon_png() {
 package_appimage() {
     local ver="$1" arch="$2"
     log "packaging AppImage"
-    ensure_linuxdeploy || exit 1
+    ensure_appimage_tooling || return 1
     local appdir="$BUILD/appimage/AppDir"
     rm -rf "$appdir"
     stage_tree "$appdir"
     render_icon_png "$appdir/usr/share/icons/hicolor/256x256/apps/com.github.yai_byte.yai.png" \
         "$ROOT/data/yai.svg"
-
-    ( cd "$BUILD/appimage"
-      ARCH="$arch" "$LINUXDEPLOY" \
-        --appdir "$appdir" \
-        --desktop-file "$appdir/usr/share/applications/com.github.yai_byte.yai.desktop" \
-        --output appimage >/dev/null
-    )
-    local produced
-    produced="$(find "$BUILD/appimage" -maxdepth 1 -name '*.AppImage' | head -n1)"
-    if [ -z "$produced" ]; then
-        err "linuxdeploy produced no .AppImage in $BUILD/appimage"
-        exit 1
+    # AppRun: appimagetool launches AppDir/AppRun at runtime.
+    ln -sf usr/bin/yai "$appdir/AppRun"
+    # Point the desktop Icon at the shipped icon id so appimagetool can resolve it.
+    sed -i 's/^Icon=yai/Icon=com.github.yai_byte.yai/' \
+        "$appdir/usr/share/applications/com.github.yai_byte.yai.desktop"
+    # .DirIcon: a PNG thumbnail for broad file-manager compatibility.
+    if [ -f "$appdir/usr/share/icons/hicolor/256x256/apps/com.github.yai_byte.yai.png" ]; then
+        ln -sf "usr/share/icons/hicolor/256x256/apps/com.github.yai_byte.yai.png" "$appdir/.DirIcon"
     fi
-    mv "$produced" "$DIST/yai-$ver-$arch.AppImage"
+    # appimagetool resolves the entry point and icon from symlinks at the AppDir
+    # root (mirrors what linuxdeploy deploys there).
+    ln -sf "usr/share/applications/com.github.yai_byte.yai.desktop" "$appdir/com.github.yai_byte.yai.desktop"
+    ln -sf "usr/share/icons/hicolor/scalable/apps/com.github.yai_byte.yai.svg" "$appdir/com.github.yai_byte.yai.svg"
+
+    local out="$BUILD/appimage/yai-$ver-$arch.AppImage"
+    local ldlog="$BUILD/appimage/appimagetool.log"
+    set +e
+    ( cd "$BUILD/appimage"
+      # appimagetool is itself an AppImage; in FUSE-less VMs/containers let it
+      # extract-and-run. We pass the runtime explicitly to avoid its internal
+      # downloader, which fails behind restricted egress ("status code 0").
+      ARCH="$arch" APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
+        --runtime-file "$RUNTIME_FILE" \
+        "$appdir" "$out"
+    ) >"$ldlog" 2>&1
+    local rc=$?
+    set -e
+    if [ "$rc" -ne 0 ] || [ ! -f "$out" ]; then
+        err "appimagetool failed (rc=$rc); see $ldlog"
+        log "--- contents of $BUILD/appimage ---"
+        ls -la "$BUILD/appimage" || true
+        log "--- appimagetool.log (tail) ---"
+        tail -n 40 "$ldlog" || true
+        return 1
+    fi
+    mv "$out" "$DIST/yai-$ver-$arch.AppImage"
     ok "dist/yai-$ver-$arch.AppImage"
-    [ "$SIGN" -eq 1 ] && sign_appimage "$DIST/yai-$ver-$arch.AppImage"
+    if [ "$SIGN" -eq 1 ]; then sign_appimage "$DIST/yai-$ver-$arch.AppImage"; fi
 }
 
 package_flatpak() {
@@ -498,9 +561,11 @@ EOF
         [ -n "${GNUPGHOME:-}" ] && gpg_args+=(--gpg-homedir="$GNUPGHOME")
     fi
 
-    flatpak-builder --disable-rofiles-fuse "${gpg_args[@]}" --repo="$mdir/repo" "$mdir/builddir" "$manifest" >/dev/null
+    flatpak-builder --disable-rofiles-fuse "${gpg_args[@]}" --repo="$mdir/repo" "$mdir/builddir" "$manifest" >/dev/null \
+        || { err "flatpak-builder failed"; return 1; }
     flatpak build-bundle "${gpg_args[@]}" "$mdir/repo" \
-        "$DIST/yai-$ver.flatpak" com.github.yai_byte.yai
+        "$DIST/yai-$ver.flatpak" com.github.yai_byte.yai \
+        || { err "flatpak build-bundle failed"; return 1; }
     ok "dist/yai-$ver.flatpak"
 }
 
@@ -546,7 +611,7 @@ if [ "$SIGN_ONLY" -eq 1 ]; then
     extract_version
     require_tool gpg "apt-get install gnupg / dnf install gnupg2" || exit 1
     if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ] && printf '%s\n' "${FORMATS[@]}" | grep -qx appimage; then
-        require_tool appimagetool "download appimagetool from https://github.com/AppImage/AppImageKit/releases" || exit 1
+        ensure_appimage_tooling || exit 1
     fi
     if [ -z "$SIGN_KEY" ]; then
         SIGN_KEY="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '$1=="sec"{print $5; exit}')"
@@ -569,18 +634,35 @@ fi
 require_tool make  "apt-get install make / dnf install make" || exit 1
 require_tool g++   "apt-get install g++ / dnf install gcc-c++" || exit 1
 require_tool tar   "apt-get install tar / dnf install tar" || exit 1
+
+# Per-format tool checks: a missing tool SKIPS that format (with a warning)
+# instead of aborting the whole run, so a default invocation still produces every
+# format it can. This is what previously left only tar.gz behind when e.g.
+# dpkg-deb / rpmbuild / flatpak-builder were absent on the build host.
+drop_format() {
+    local f="$1" reason="$2" out=()
+    log "skipping format '$f': $reason"
+    for x in "${FORMATS[@]}"; do
+        if [ "$x" != "$f" ]; then out+=("$x"); fi
+    done
+    FORMATS=("${out[@]}")
+}
 if printf '%s\n' "${FORMATS[@]}" | grep -qx deb; then
-    require_tool dpkg-deb "apt-get install dpkg" || exit 1
+    command -v dpkg-deb >/dev/null 2>&1 || drop_format deb "dpkg-deb not found (apt-get install dpkg)"
 fi
 if printf '%s\n' "${FORMATS[@]}" | grep -qx rpm; then
-    require_tool rpmbuild "apt-get install rpm / dnf install rpm-build" || exit 1
+    command -v rpmbuild >/dev/null 2>&1 || drop_format rpm "rpmbuild not found (dnf install rpm-build)"
 fi
 if printf '%s\n' "${FORMATS[@]}" | grep -qx appimage; then
     # linuxdeploy is fetched on demand; just need curl for that.
-    require_tool curl "apt-get install curl / dnf install curl" || exit 1
+    command -v curl >/dev/null 2>&1 || drop_format appimage "curl not found (apt-get install curl)"
 fi
 if printf '%s\n' "${FORMATS[@]}" | grep -qx flatpak; then
-    require_tool flatpak-builder "flatpak install flathub org.flatpak.Builder" || exit 1
+    command -v flatpak-builder >/dev/null 2>&1 || drop_format flatpak "flatpak-builder not found (flatpak install flathub org.flatpak.Builder)"
+fi
+if [ ${#FORMATS[@]} -eq 0 ]; then
+    err "no formats left after tool checks"
+    exit 1
 fi
 
 # Signing prerequisites (only when --sign is requested).
@@ -592,7 +674,7 @@ if [ "$SIGN" -eq 1 ]; then
         fi
     fi
     if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ] && printf '%s\n' "${FORMATS[@]}" | grep -qx appimage; then
-        require_tool appimagetool "download appimagetool from https://github.com/AppImage/AppImageKit/releases" || exit 1
+        ensure_appimage_tooling || exit 1
     fi
     # rpmsign ships with the rpm package (already required for the rpm format).
     if [ -z "$SIGN_KEY" ]; then
@@ -630,15 +712,25 @@ fi
 # ---------------------------------------------------------------------------
 # Package
 # ---------------------------------------------------------------------------
+failed=()
 for f in "${FORMATS[@]}"; do
-    case "$f" in
+    if ! case "$f" in
         tar.gz)   package_targz   "$VERSION" "$ARCH_RAW" ;;
         deb)      package_deb      "$VERSION" "$ARCH_RAW" ;;
         rpm)      package_rpm      "$VERSION" "$ARCH_RAW" ;;
         appimage) package_appimage "$VERSION" "$ARCH_RAW" ;;
         flatpak)  package_flatpak  "$VERSION" "$ARCH_RAW" ;;
-    esac
+    esac; then
+        failed+=("$f")
+        err "format '$f' failed; continuing with the rest"
+    fi
 done
+
+# ---------------------------------------------------------------------------
+# Relax permissions so artifacts are readable regardless of which user
+# virt-manager/qemu maps them to on the host. Best-effort; never abort.
+# ---------------------------------------------------------------------------
+chmod -R a+rX,u+rw,g+rw "$DIST" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # Summary
@@ -646,11 +738,19 @@ done
 echo
 log "done. artifacts in $DIST:"
 for f in "${FORMATS[@]}"; do
+    if [ ${#failed[@]} -gt 0 ] && printf '%s\n' "${failed[@]}" | grep -qx "$f"; then
+        err "dist: format '$f' FAILED — no artifact produced"
+        continue
+    fi
     case "$f" in
         tar.gz)   ok "dist/yai-$VERSION-$ARCH_RAW.tar.gz"; [ "$SIGN" -eq 1 ] && ok "dist/yai-$VERSION-$ARCH_RAW.tar.gz.sig" ;;
-        deb)      ok "dist/yai_${VERSION}_$(deb_arch "$ARCH_RAW").deb (signed)" ;;
-        rpm)      ok "dist/yai-$VERSION-1.$ARCH_RAW.rpm (signed)" ;;
+        deb)      if [ "$SIGN" -eq 1 ]; then ok "dist/yai_${VERSION}_$(deb_arch "$ARCH_RAW").deb (signed)"; else ok "dist/yai_${VERSION}_$(deb_arch "$ARCH_RAW").deb"; fi ;;
+        rpm)      if [ "$SIGN" -eq 1 ]; then ok "dist/yai-$VERSION-1.$ARCH_RAW.rpm (signed)"; else ok "dist/yai-$VERSION-1.$ARCH_RAW.rpm"; fi ;;
         appimage) ok "dist/yai-$VERSION-$ARCH_RAW.AppImage"; [ "$SIGN" -eq 1 ] && { if [ "$APPIMAGE_EMBED_SIGN" -eq 1 ]; then ok "dist/yai-$VERSION-$ARCH_RAW.AppImage (signed, embedded)"; else ok "dist/yai-$VERSION-$ARCH_RAW.AppImage.sig"; fi; } ;;
-        flatpak)  ok "dist/yai-$VERSION.flatpak (signed)" ;;
+        flatpak)  if [ "$SIGN" -eq 1 ]; then ok "dist/yai-$VERSION.flatpak (signed)"; else ok "dist/yai-$VERSION.flatpak"; fi ;;
     esac
 done
+if [ ${#failed[@]} -gt 0 ]; then
+    err "the following formats failed: ${failed[*]}"
+    exit 1
+fi
