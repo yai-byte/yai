@@ -51,7 +51,7 @@ void list_command(int argc, char** argv) {
 }
 
 // Public beta version; bump on each release and surface it via `yai --version`.
-const char* const kYaiVersion = "0.2.3";
+const char* const kYaiVersion = "0.2.4";
 
 // Thin adapter: prints the version string and exits cleanly.
 void version_command(int, char**) {

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 export YAI_LANG=en
+# Website-search traces (yai: website search for ...) are routed through
+# yai_debug_stream(), which is silent unless YAI_DEBUG is set. These assertions
+# verify that diagnostic output, so enable it.
+export YAI_DEBUG=1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
