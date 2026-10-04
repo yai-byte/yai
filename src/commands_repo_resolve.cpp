@@ -63,6 +63,11 @@ std::vector<std::string> resolve_arches(const RepoResolveOptions& options) {
 }
 
 bool package_type_selected(const RepoResolveOptions& options, const std::string& source_type) {
+    // --skip-github excludes github_release packages so resolve spends no GitHub
+    // API tokens. It takes precedence over an explicit --type as well.
+    if (options.skip_github && source_type == "github_release") {
+        return false;
+    }
     if (options.types.empty()) {
         for (const char* allowed : kDefaultResolveTypes) {
             if (source_type == allowed) {
@@ -125,13 +130,14 @@ bool resolve_one_package(
         }
 
         tasks.push_back(std::async(std::launch::async,
-            [&package, arch, arch_index, &results]() {
+            [&package, arch, arch_index, &results, overwrite]() {
                 try {
                     InstallOptions opt;
                     opt.target = package.id;
                     opt.target_arch = arch;
                     opt.arch_explicit = true;
                     opt.recrawl = true;
+                    opt.overwrite = overwrite;
                     results[arch_index].source = resolve_repo_package_install_source(opt, package);
                     results[arch_index].success = true;
                 } catch (...) {
@@ -273,6 +279,7 @@ RepoResolveOptions parse_repo_resolve_options(int argc, char** argv) {
         {"--concurrency", true,  [](RepoResolveOptions& o, const std::string& v){ o.concurrency = parse_concurrency_value(v); }},
         {"--show",        true,  [](RepoResolveOptions& o, const std::string& v){ parse_show_mask(v, o); }},
         {"--overwrite",   false, [](RepoResolveOptions& o, const std::string&){ o.overwrite = true; }},
+        {"--skip-github", false, [](RepoResolveOptions& o, const std::string&){ o.skip_github = true; }},
         {"--aggressive",  false, [](RepoResolveOptions& o, const std::string&){ o.aggressive = true; }},
         {"--summary",     false, [](RepoResolveOptions& o, const std::string&){ o.summary = true; }},
         {"--no-summary",  false, [](RepoResolveOptions& o, const std::string&){ o.summary = false; }},

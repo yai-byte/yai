@@ -1,5 +1,11 @@
 #include "yai.hpp"
 
+#include <chrono>
+#include <cstdlib>
+#include <future>
+#include <mutex>
+#include <unordered_map>
+
 // GitHub release resolution, blocklists, and mirror-aware download strategy.
 
 std::string trimmed_env_url(const char* env_name, const std::string& default_value) {
@@ -79,18 +85,192 @@ void enforce_github_release_policy(const std::string& owner, const std::string& 
     }
 }
 
+namespace {
+
+// In-process + on-disk caches for GitHub /releases/latest responses.
+//
+// Scheme A (in-process): the same owner/repo is fetched at most once per yai
+// process, even when resolve_github_latest runs concurrently across many arches
+// or packages. A shared_future lets concurrent waiters block on a single fetch.
+//
+// Scheme B (on-disk TTL): a recent response is reused across separate yai runs
+// so repeated `repo resolve` / `upgrade` invocations spend ~0 GitHub API
+// tokens. It is disabled whenever YAI_GITHUB_API_BASE is overridden (tests and
+// GitHub Enterprise mocks change their responses between runs) or the TTL is 0.
+
+std::mutex g_github_latest_mutex;
+std::unordered_map<std::string, std::shared_future<std::string>> g_github_latest_cache;
+
+constexpr std::chrono::seconds kDefaultGithubLatestCacheTtl(3600);
+
+std::chrono::seconds github_latest_cache_ttl() {
+    const char* env = std::getenv("YAI_GITHUB_CACHE_TTL_SECONDS");
+    if (env == nullptr || std::string(env).empty()) {
+        return kDefaultGithubLatestCacheTtl;
+    }
+    const long value = std::strtol(env, nullptr, 10);
+    if (value <= 0) {
+        return std::chrono::seconds(0);
+    }
+    return std::chrono::seconds(value);
+}
+
+// Only the real GitHub API gets an on-disk cache: tests and enterprise setups
+// override YAI_GITHUB_API_BASE with a backend whose contents change between
+// runs, so persisting those responses would serve stale data.
+bool github_disk_cache_enabled(const std::string& api_base) {
+    return api_base == "https://api.github.com" && github_latest_cache_ttl() > std::chrono::seconds(0);
+}
+
+fs::path github_latest_cache_dir() {
+    return config_dir_path() / "cache" / "github-releases-latest";
+}
+
+std::string github_latest_cache_key(const std::string& api_base, const std::string& owner, const std::string& repo) {
+    return api_base + "\n" + owner + "/" + repo;
+}
+
+fs::path github_latest_cache_file(const std::string& owner, const std::string& repo) {
+    return github_latest_cache_dir() / (owner + "+" + repo + ".json");
+}
+
+bool github_latest_cache_fresh(const fs::path& file, std::chrono::seconds ttl) {
+    std::error_code ec;
+    const auto mtime = fs::last_write_time(file, ec);
+    if (ec) {
+        return false;
+    }
+    const auto age = std::chrono::duration_cast<std::chrono::seconds>(
+        fs::file_time_type::clock::now() - mtime);
+    return age <= ttl;
+}
+
+void write_github_latest_cache_file(const fs::path& file, const std::string& json) {
+    std::error_code ec;
+    fs::create_directories(file.parent_path(), ec);
+    if (ec) {
+        yai_debug_stream() << tr("yai: cannot create GitHub cache dir: ") << ec.message() << "\n";
+        return;
+    }
+    try {
+        write_text_file_atomic(file, json);
+    } catch (const std::exception& ex) {
+        yai_debug_stream() << tr("yai: cannot write GitHub cache: ") << ex.what() << "\n";
+    }
+}
+
+// Fetches the /releases/latest JSON, consulting the on-disk TTL cache first and
+// falling back to a stale on-disk response when the network is unreachable (so a
+// rate-limited `repo resolve` still succeeds). When force_refresh is set (repo
+// resolve --overwrite) the on-disk cache is bypassed entirely: a fresh response
+// is fetched (and written back) and a network failure is surfaced instead of
+// masking it with stale data. Throws only when no usable response exists.
+std::string fetch_github_releases_latest_json_impl(
+    const std::string& api_base, const std::string& owner, const std::string& repo,
+    bool force_refresh) {
+    const std::string api_url = api_base + "/repos/" + owner + "/" + repo + "/releases/latest";
+    const bool disk_enabled = github_disk_cache_enabled(api_base);
+    const std::chrono::seconds ttl = github_latest_cache_ttl();
+    const fs::path cache_file = github_latest_cache_file(owner, repo);
+
+    // force_refresh skips reading the on-disk TTL cache (including the stale
+    // fallback) but still writes the fresh response and shares the in-process
+    // cache with concurrent arches within this run.
+    if (!force_refresh && disk_enabled && fs::exists(cache_file)) {
+        if (github_latest_cache_fresh(cache_file, ttl)) {
+            try {
+                const std::string cached = read_text_file(cache_file);
+                if (!cached.empty()) {
+                    yai_debug_stream() << tr("yai: github release cache hit (disk): ")
+                              << owner << "/" << repo << "\n";
+                    return cached;
+                }
+            } catch (const std::exception& ex) {
+                yai_debug_stream() << tr("yai: cannot read GitHub cache, refetching: ")
+                          << ex.what() << "\n";
+            }
+        }
+        // Stale on-disk cache present: try the network, but fall back to the
+        // stale copy if the API is unreachable so resolution still succeeds.
+        try {
+            const std::string json = fetch_text(api_url);
+            write_github_latest_cache_file(cache_file, json);
+            return json;
+        } catch (const std::exception& ex) {
+            yai_debug_stream() << tr("yai: github fetch failed; using stale cache: ")
+                      << ex.what() << "\n";
+            try {
+                const std::string cached = read_text_file(cache_file);
+                if (!cached.empty()) {
+                    return cached;
+                }
+            } catch (...) {
+            }
+            throw;
+        }
+    }
+
+    const std::string json = fetch_text(api_url);
+    if (disk_enabled) {
+        write_github_latest_cache_file(cache_file, json);
+    }
+    return json;
+}
+
+// In-process deduplicating wrapper. Concurrent callers for the same owner/repo
+// share one fetch; a failed fetch is evicted so later callers retry instead of
+// permanently caching the error.
+std::string fetch_github_releases_latest_json(
+    const std::string& api_base, const std::string& owner, const std::string& repo,
+    bool force_refresh) {
+    const std::string key = github_latest_cache_key(api_base, owner, repo);
+    std::shared_future<std::string> future;
+    std::shared_ptr<std::promise<std::string>> promise;
+
+    {
+        std::lock_guard<std::mutex> lock(g_github_latest_mutex);
+        auto it = g_github_latest_cache.find(key);
+        if (it != g_github_latest_cache.end()) {
+            future = it->second;
+        } else {
+            promise = std::make_shared<std::promise<std::string>>();
+            future = promise->get_future().share();
+            g_github_latest_cache.emplace(key, future);
+        }
+    }
+
+    if (promise == nullptr) {
+        return future.get();
+    }
+
+    try {
+        const std::string json = fetch_github_releases_latest_json_impl(api_base, owner, repo, force_refresh);
+        promise->set_value(json);
+        return json;
+    } catch (...) {
+        promise->set_exception(std::current_exception());
+        {
+            std::lock_guard<std::mutex> lock(g_github_latest_mutex);
+            g_github_latest_cache.erase(key);
+        }
+        throw;
+    }
+}
+
+}  // namespace
+
 GitHubRelease resolve_github_latest(
     const std::string& repo_target,
     const std::string& asset_pattern,
-    const std::string& arch) {
+    const std::string& arch,
+    bool force_refresh) {
     const std::size_t slash = repo_target.find('/');
     const std::string owner = repo_target.substr(0, slash);
     const std::string repo = repo_target.substr(slash + 1);
     enforce_github_release_policy(owner, repo);
-    const std::string api_url = github_api_base() + "/repos/" + owner + "/" + repo + "/releases/latest";
     std::string json;
     try {
-        json = fetch_text(api_url);
+        json = fetch_github_releases_latest_json(github_api_base(), owner, repo, force_refresh);
     } catch (const std::exception& ex) {
         const std::string& msg = ex.what();
         const bool is_rate_limit =

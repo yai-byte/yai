@@ -578,7 +578,8 @@ ResolvedSource repo_github_release_source(const InstallOptions& options, const R
     const GitHubRelease release = resolve_github_latest(
         package.source_owner + "/" + package.source_repo,
         package.asset_pattern,
-        options.target_arch);
+        options.target_arch,
+        options.overwrite);
     return source_from_github_release(
         options,
         release,

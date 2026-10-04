@@ -92,6 +92,7 @@ struct InstallOptions {
     bool downloader_explicit = false;
     bool yes = false;
     bool recrawl = false;
+    bool overwrite = false;
 };
 
 struct GitHubReleaseAsset {
@@ -177,6 +178,7 @@ struct RepoResolveOptions {
     std::vector<std::string> types;  // empty → github_release, website_page, direct_url
     std::vector<std::string> packages; // empty → all
     bool overwrite = false;
+    bool skip_github = false;  // skip github_release packages entirely (no GitHub API)
     int concurrency = 0;  // 0 = auto-detect based on CPU cores
     bool aggressive = false;  // Force aggressive concurrency (8-16 threads)
     bool show_success = false;
@@ -733,7 +735,8 @@ void enforce_github_release_policy(const std::string& owner, const std::string& 
 GitHubRelease resolve_github_latest(
     const std::string& repo_target,
     const std::string& asset_pattern = "",
-    const std::string& arch = "");
+    const std::string& arch = "",
+    bool force_refresh = false);
 std::string mirror_url_for(const std::string& mirror_template, const ResolvedSource& source);
 std::string download_with_strategy(
     ResolvedSource& source,

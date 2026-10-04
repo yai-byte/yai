@@ -20,7 +20,7 @@ void print_usage() {
         << tr("  yai repo update [name]\n")
         << tr("  yai repo remove <name-or-pattern> [--yes]\n")
         << tr("  yai repo resolve [--output <path>] [--arch <arch|all>] [--type <type>]\n")
-        << tr("                   [--package <id>] [--overwrite] [--concurrency <n>] [--aggressive]\n")
+        << tr("                   [--package <id>] [--overwrite] [--skip-github] [--concurrency <n>] [--aggressive]\n")
         << tr("                   [--show <xyz>] [--summary|--no-summary]\n")
         << tr("                   Concurrency: auto-detect (default), or 1-32 threads.\n")
         << tr("                   --aggressive: 2x CPU cores (max 16) for fast networks.\n")
