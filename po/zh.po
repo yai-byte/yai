@@ -2398,3 +2398,42 @@ msgid ""
 msgstr ""
 "yai：{total} 个批处理任务中有 {failed} 个未完成\n"
 
+
+msgid "                   [--package <id>] [--overwrite] [--skip-github] [--concurrency <n>] [--aggressive]\n"
+msgstr "                   [--package <id>] [--overwrite] [--skip-github] [--concurrency <n>] [--aggressive]\n"
+
+msgid "failed to fetch index "
+msgstr "获取索引失败： "
+
+msgid "list does not accept arguments"
+msgstr "list 不接受参数"
+
+msgid "preparing temporary index download"
+msgstr "准备临时索引下载"
+
+msgid "preparing temporary index headers"
+msgstr "准备临时索引响应头"
+
+msgid "yai: cannot create GitHub cache dir: "
+msgstr "yai：无法创建 GitHub 缓存目录： "
+
+msgid "yai: cannot read GitHub cache, refetching: "
+msgstr "yai：无法读取 GitHub 缓存，重新获取： "
+
+msgid "yai: cannot write GitHub cache: "
+msgstr "yai：无法写入 GitHub 缓存： "
+
+msgid "yai: github fetch failed; using stale cache: "
+msgstr "yai：GitHub 获取失败；使用过期缓存： "
+
+msgid "yai: github release cache hit (disk): "
+msgstr "yai：GitHub Release 缓存命中（磁盘）： "
+
+msgid "yai: index downloader failed, trying next: "
+msgstr "yai：索引下载器失败，尝试下一个： "
+
+msgid "curl failed with exit code {code}{suffix}"
+msgstr "curl 以退出码 {code} 失败{suffix}"
+
+msgid "yai "
+msgstr "yai "

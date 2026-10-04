@@ -2401,3 +2401,42 @@ msgid ""
 msgstr ""
 "yai: {failed} of {total} batch task(s) did not complete\n"
 
+
+msgid "                   [--package <id>] [--overwrite] [--skip-github] [--concurrency <n>] [--aggressive]\n"
+msgstr "                   [--package <id>] [--overwrite] [--skip-github] [--concurrency <n>] [--aggressive]\n"
+
+msgid "failed to fetch index "
+msgstr "failed to fetch index "
+
+msgid "list does not accept arguments"
+msgstr "list does not accept arguments"
+
+msgid "preparing temporary index download"
+msgstr "preparing temporary index download"
+
+msgid "preparing temporary index headers"
+msgstr "preparing temporary index headers"
+
+msgid "yai: cannot create GitHub cache dir: "
+msgstr "yai: cannot create GitHub cache dir: "
+
+msgid "yai: cannot read GitHub cache, refetching: "
+msgstr "yai: cannot read GitHub cache, refetching: "
+
+msgid "yai: cannot write GitHub cache: "
+msgstr "yai: cannot write GitHub cache: "
+
+msgid "yai: github fetch failed; using stale cache: "
+msgstr "yai: github fetch failed; using stale cache: "
+
+msgid "yai: github release cache hit (disk): "
+msgstr "yai: github release cache hit (disk): "
+
+msgid "yai: index downloader failed, trying next: "
+msgstr "yai: index downloader failed, trying next: "
+
+msgid "curl failed with exit code {code}{suffix}"
+msgstr "curl failed with exit code {code}{suffix}"
+
+msgid "yai "
+msgstr "yai "

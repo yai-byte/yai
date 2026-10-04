@@ -603,10 +603,11 @@ std::string fetch_text_with_progress(
                     run_process_capture_download_progress(cmd.args, part, headers, cmd.aria2_rpc_port);
                 if (result.exit_code != 0) {
                     const std::string detail = trim(result.output);
-                    throw std::runtime_error(
-                        "curl" + tr(" failed with exit code ") +
-                        std::to_string(result.exit_code) +
-                        (detail.empty() ? "" : tr(": ") + detail));
+                    const std::string curl_detail = detail.empty() ? "" : tr(": ") + detail;
+                    throw std::runtime_error(tr_format(
+                        "curl failed with exit code {code}{suffix}",
+                        {{"{code}", std::to_string(result.exit_code)},
+                         {"{suffix}", curl_detail}}));
                 }
             } else {
                 if (selected != "curl") {

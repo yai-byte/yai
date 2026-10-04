@@ -38,7 +38,15 @@ void doctor_command(int argc, char**) {
 }
 
 // Thin adapter: lists locally installed apps.
-void list_command(int, char**) {
+void list_command(int argc, char** argv) {
+    for (int i = 2; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            print_usage();
+            return;
+        }
+        throw std::runtime_error(tr("list does not accept arguments"));
+    }
     list_apps();
 }
 
@@ -47,7 +55,7 @@ const char* const kYaiVersion = "0.2.3";
 
 // Thin adapter: prints the version string and exits cleanly.
 void version_command(int, char**) {
-    std::cout << "yai " << kYaiVersion << "\n";
+    std::cout << tr("yai ") << kYaiVersion << "\n";
 }
 
 // Thin adapter: prints top-level usage/help text.
@@ -364,6 +372,17 @@ const CommandEntry COMMANDS[] = {
 // COMMANDS and invokes the matching handler. Throws on unknown commands.
 void dispatch_command(int argc, char** argv) {
     const std::string command = argv[1];
+
+    // A help flag after any subcommand (e.g. `yai download -h`) prints the
+    // top-level usage and exits successfully, mirroring `yai -h`/`yai help`.
+    for (int i = 2; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            print_usage();
+            return;
+        }
+    }
+
     if (command == "--version" || command == "-V" || command == "version") {
         version_command(argc, argv);
         return;
@@ -412,7 +431,7 @@ int main(int argc, char** argv) {
         dispatch_command(argc, argv);
         return 0;
     } catch (const std::exception& ex) {
-        yai_debug_stream() << tr("yai: ") << ex.what() << "\n";
+        std::cerr << tr("yai: ") << ex.what() << "\n";
         return 1;
     }
 }

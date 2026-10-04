@@ -367,7 +367,11 @@ void update_app(int argc, char** argv) {
             }
         } else if (arg == "--index-freshness") {
             const std::string value = read_option_value(argc, argv, i, arg);
-            freshness = std::stoi(value);
+            try {
+                freshness = std::stoi(value);
+            } catch (const std::exception&) {
+                throw std::runtime_error(tr("--index-freshness must be a positive integer"));
+            }
             if (freshness <= 0) {
                 throw std::runtime_error(tr("--index-freshness must be a positive integer"));
             }

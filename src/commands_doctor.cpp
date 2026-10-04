@@ -106,11 +106,11 @@ int check_tool_available(
     const ProcessResult result = run_process_capture(args);
     if (std::find(accepted_exit_codes.begin(), accepted_exit_codes.end(), result.exit_code) !=
         accepted_exit_codes.end()) {
-        std::cout << tr(ok_message);
+        std::cout << ok_message;
         return 0;
     }
 
-    std::cout << tr(warn_message);
+    std::cout << warn_message;
     return 1;
 }
 
@@ -157,12 +157,12 @@ void doctor_app(int argc) {
     warnings += check_path_setup();
     warnings += check_tool_available(
         {"curl", "--version"},
-        "OK   curl is available\n",
-        "WARN curl is not available; URL installs will fail\n");
+        tr("OK   curl is available\n"),
+        tr("WARN curl is not available; URL installs will fail\n"));
     warnings += check_tool_available(
         {"update-desktop-database", "--help"},
-        "OK   update-desktop-database is available\n",
-        "WARN update-desktop-database is not available; desktop cache refresh will be skipped\n",
+        tr("OK   update-desktop-database is available\n"),
+        tr("WARN update-desktop-database is not available; desktop cache refresh will be skipped\n"),
         {0, 1});
     warnings += check_fuse_access();
     warnings += check_idle_inhibitor();
