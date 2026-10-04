@@ -28,6 +28,9 @@
 #   --sign-only       Do not build; GPG-sign artifacts already in packaging/dist/.
 #   --embed-sign      Embed the GPG signature into the AppImage via appimagetool
 #                     (self-verifiable by AppImageKit) instead of a detached .sig.
+#   --update-url URL  Embed AppImage update information (appimagetool -u), e.g.
+#                     "zsync|https://example.org/yai-x86_64.AppImage.zsync".
+#                     Requires publishing the matching .zsync next to the AppImage.
 #   --help            Show this help.
 #
 # Tooling policy: every required tool for the selected formats is checked up
@@ -62,6 +65,7 @@ SIGN=0
 SIGN_KEY="${YAI_SIGN_KEY:-}"
 SIGN_ONLY=0
 APPIMAGE_EMBED_SIGN=0
+APPIMAGE_UPDATE_URL="${YAI_APPIMAGE_UPDATE_URL:-}"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -286,7 +290,9 @@ sign_appimage() {
         local args=()
         [ -n "$SIGN_KEY" ] && args+=(--sign-key "$SIGN_KEY")
         # appimagetool is itself an AppImage; run FUSE-less if needed.
-        APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --sign "${args[@]}" "$ai" >/dev/null
+        local ui_args=()
+        [ -n "$APPIMAGE_UPDATE_URL" ] && ui_args+=(-u "$APPIMAGE_UPDATE_URL")
+        APPIMAGE_EXTRACT_AND_RUN=1 "$tool" --sign "${args[@]}" "${ui_args[@]}" "$ai" >/dev/null
         ok "signed $(basename "$ai") (embedded via appimagetool)"
     else
         sign_detached "$ai"
@@ -501,8 +507,10 @@ package_appimage() {
       # appimagetool is itself an AppImage; in FUSE-less VMs/containers let it
       # extract-and-run. We pass the runtime explicitly to avoid its internal
       # downloader, which fails behind restricted egress ("status code 0").
+      local ui_args=(--runtime-file "$RUNTIME_FILE")
+      [ -n "$APPIMAGE_UPDATE_URL" ] && ui_args+=(-u "$APPIMAGE_UPDATE_URL")
       ARCH="$arch" APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
-        --runtime-file "$RUNTIME_FILE" \
+        "${ui_args[@]}" \
         "$appdir" "$out"
     ) >"$ldlog" 2>&1
     local rc=$?
@@ -518,6 +526,23 @@ package_appimage() {
     mv "$out" "$DIST/yai-$ver-$arch.AppImage"
     ok "dist/yai-$ver-$arch.AppImage"
     if [ "$SIGN" -eq 1 ]; then sign_appimage "$DIST/yai-$ver-$arch.AppImage"; fi
+
+    # Generate a .zsync control file so AppImageUpdate can delta-update this
+    # AppImage over HTTP. Only meaningful when update info is embedded, and
+    # requires the `zsync` package (zsyncmake). Host the resulting .zsync at the
+    # exact URL passed to --update-url. Best-effort; never abort the build.
+    if [ -n "$APPIMAGE_UPDATE_URL" ]; then
+        if command -v zsyncmake >/dev/null 2>&1; then
+            local zs="$DIST/yai-$ver-$arch.AppImage.zsync"
+            if zsyncmake -u "$(basename "$zs")" "$DIST/yai-$ver-$arch.AppImage" >/dev/null 2>&1; then
+                ok "dist/$(basename "$zs")"
+            else
+                log "zsyncmake failed; skipping .zsync (update info still embedded)"
+            fi
+        else
+            log "zsyncmake not found (apt-get install zsync); skipping .zsync generation"
+        fi
+    fi
 }
 
 package_flatpak() {
@@ -581,6 +606,7 @@ while [ $# -gt 0 ]; do
         --sign-key) SIGN_KEY="${2:-}"; [ -n "$SIGN_KEY" ] || { err "--sign-key needs a value"; exit 1; }; shift 2 ;;
         --sign-only) SIGN_ONLY=1; shift ;;
         --embed-sign) APPIMAGE_EMBED_SIGN=1; shift ;;
+        --update-url) APPIMAGE_UPDATE_URL="${2:-}"; [ -n "$APPIMAGE_UPDATE_URL" ] || { err "--update-url needs a value"; exit 1; }; shift 2 ;;
         --help|-h) usage ;;
         *) err "unknown argument: $1"; usage ;;
     esac
